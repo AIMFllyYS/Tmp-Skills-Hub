@@ -13,6 +13,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --force",
+    "test": "tsc -b && vitest run",
     "dev": "tsx src/index.ts"
   },
   "dependencies": {

@@ -77,7 +77,7 @@ const init = defineCommand({
   },
   async run({ args }) {
     // 写操作铁律(cli-commands-v0.md §2):非交互环境必须显式 --yes,否则拒绝执行
-    if (!args.dryRun && !requireWriteAuth(args)) return;
+    if (!args.dryRun && !requireWriteAuth(args, "init")) return;
     const storeRoot = await resolveStoreRootForInit(args);
     if (storeRoot === null) return;
     const home = resolveHome(args.home);
@@ -99,6 +99,8 @@ const init = defineCommand({
     if (args.json) {
       console.log(
         JSON.stringify({
+          ok: true,
+          command: "init",
           storeRoot,
           pointerFile: pointerWritten,
           layoutCreated: layout.created,
@@ -171,6 +173,8 @@ const doctor = defineCommand({
     if (args.json) {
       console.log(
         JSON.stringify({
+          ok: true,
+          command: "doctor",
           store: {
             resolved: store.ok,
             storeRoot: store.ok ? store.storeRoot : null,
