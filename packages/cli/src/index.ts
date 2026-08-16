@@ -316,12 +316,13 @@ const archive = defineCommand({
 });
 
 const ui = defineCommand({
-  meta: { name: "ui", description: "启动本地查看服务(App 壳的数据源)" },
+  meta: { name: "ui", description: "启动本地查看服务(App 壳的数据源;仅绑 127.0.0.1)" },
   args: {
     port: { type: "string", description: "监听端口", default: String(DEFAULT_UI_PORT) },
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
   },
   run({ args }) {
-    startUiServer(Number(args.port));
+    void startUiServer(Number(args.port), args.home);
   },
 });
 
