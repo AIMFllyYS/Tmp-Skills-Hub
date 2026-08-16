@@ -2,35 +2,38 @@ import { useState } from "react";
 import { getAction } from "../actions/registry.js";
 import type { ClientInfo } from "../skills/types.js";
 
+
 interface BatchBarProps {
   count: number;
   clients: ClientInfo[];
+  groups: { id: string; name: string }[];
   busy: boolean;
   onClear: () => void;
   onEnableTo: (clientId: string) => void;
   onDisableFrom: (clientId: string) => void;
+  onAddToGroup: (groupId: string) => void;
   onArchive: () => void;
   /** 客户端视角:动作锁定到这一个 client,不再弹出菜单 */
   lockedClientId?: string | undefined;
 }
 
-function ClientMenu({
+function PickMenu({
   label,
-  clients,
+  items,
   disabled,
   onPick,
 }: {
   label: string;
-  clients: ClientInfo[];
+  items: { id: string; name: string }[];
   disabled: boolean;
-  onPick: (clientId: string) => void;
+  onPick: (id: string) => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
       <button
         type="button"
-        disabled={disabled || clients.length === 0}
+        disabled={disabled || items.length === 0}
         onClick={() => setOpen((v) => !v)}
         className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong hover:text-ink-strong disabled:opacity-50"
       >
@@ -38,17 +41,17 @@ function ClientMenu({
       </button>
       {open && (
         <ul className="absolute bottom-full left-0 z-20 mb-1 min-w-36 border border-line bg-white py-1">
-          {clients.map((c) => (
-            <li key={c.clientId}>
+          {items.map((item) => (
+            <li key={item.id}>
               <button
                 type="button"
                 className="block w-full px-3 py-1 text-left text-xs text-ink-mid hover:bg-surface hover:text-ink-strong"
                 onClick={() => {
                   setOpen(false);
-                  onPick(c.clientId);
+                  onPick(item.id);
                 }}
               >
-                {c.clientId}
+                {item.name}
               </button>
             </li>
           ))}
@@ -62,10 +65,12 @@ function ClientMenu({
 export function BatchBar({
   count,
   clients,
+  groups,
   busy,
   onClear,
   onEnableTo,
   onDisableFrom,
+  onAddToGroup,
   onArchive,
   lockedClientId,
 }: BatchBarProps): React.JSX.Element {
@@ -73,6 +78,7 @@ export function BatchBar({
   const enable = getAction("enable");
   const disable = getAction("disable");
   const archive = getAction("archive");
+  const addToGroup = getAction("add-to-group");
   return (
     <div
       data-testid="batch-bar"
@@ -89,14 +95,12 @@ export function BatchBar({
           >
             {enable.verb}
           </button>
-          <button
-            type="button"
-            disabled
-            title="分组批量将在后续批次落地"
-            className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-faint"
-          >
-            挂到分组…
-          </button>
+          <PickMenu
+            label={addToGroup.verb + "…"}
+            items={groups}
+            disabled={busy || groups.length === 0}
+            onPick={onAddToGroup}
+          />
           <button
             type="button"
             disabled={busy}
@@ -108,16 +112,24 @@ export function BatchBar({
         </>
       ) : (
         <>
-          <ClientMenu label={enable.verb + "到…"} clients={clients} disabled={busy} onPick={onEnableTo} />
-          <button
-            type="button"
-            disabled
-            title="分组批量将在后续批次落地"
-            className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-faint"
-          >
-            挂到分组…
-          </button>
-          <ClientMenu label={disable.verb} clients={clients} disabled={busy} onPick={onDisableFrom} />
+          <PickMenu
+            label={enable.verb + "到…"}
+            items={clients.map((c) => ({ id: c.clientId, name: c.clientId }))}
+            disabled={busy}
+            onPick={onEnableTo}
+          />
+          <PickMenu
+            label={addToGroup.verb + "…"}
+            items={groups}
+            disabled={busy || groups.length === 0}
+            onPick={onAddToGroup}
+          />
+          <PickMenu
+            label={disable.verb}
+            items={clients.map((c) => ({ id: c.clientId, name: c.clientId }))}
+            disabled={busy}
+            onPick={onDisableFrom}
+          />
         </>
       )}
       <div className="relative">

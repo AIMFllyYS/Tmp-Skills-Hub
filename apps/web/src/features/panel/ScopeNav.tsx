@@ -1,9 +1,13 @@
+import { GroupSection } from "./GroupSection.js";
 import { sameScope, type ScopeCounts, type ScopeSelection } from "./scope.js";
 
 interface ScopeNavProps {
   counts: ScopeCounts;
   selected: ScopeSelection;
   onSelect: (scope: ScopeSelection) => void;
+  onCreateGroup: (id: string, name: string) => void;
+  onRenameGroup: (id: string, name: string) => void;
+  onDeleteGroup: (id: string) => void;
 }
 
 function Item({
@@ -37,7 +41,14 @@ function Heading({ text }: { text: string }): React.JSX.Element {
 }
 
 /** 作用域列:全部 / 分组 / 客户端 / 来源 / 归档 / 报告。点选改变集合列范围。 */
-export function ScopeNav({ counts, selected, onSelect }: ScopeNavProps): React.JSX.Element {
+export function ScopeNav({
+  counts,
+  selected,
+  onSelect,
+  onCreateGroup,
+  onRenameGroup,
+  onDeleteGroup,
+}: ScopeNavProps): React.JSX.Element {
   return (
     <nav className="py-2" aria-label="作用域">
       <Item
@@ -46,17 +57,14 @@ export function ScopeNav({ counts, selected, onSelect }: ScopeNavProps): React.J
         active={sameScope(selected, { kind: "all" })}
         onClick={() => onSelect({ kind: "all" })}
       />
-      <Heading text="分组" />
-      {counts.groups.length === 0 && <p className="px-4 py-1 text-xs text-ink-faint">暂无分组</p>}
-      {counts.groups.map((g) => (
-        <Item
-          key={g.id}
-          label={g.name}
-          count={g.count}
-          active={sameScope(selected, { kind: "group", id: g.id })}
-          onClick={() => onSelect({ kind: "group", id: g.id })}
-        />
-      ))}
+      <GroupSection
+        groups={counts.groups}
+        selected={selected}
+        onSelect={onSelect}
+        onCreate={onCreateGroup}
+        onRename={onRenameGroup}
+        onDelete={onDeleteGroup}
+      />
       <Heading text="客户端" />
       {counts.clients.length === 0 && <p className="px-4 py-1 text-xs text-ink-faint">未发现客户端</p>}
       {counts.clients.map((c) => (

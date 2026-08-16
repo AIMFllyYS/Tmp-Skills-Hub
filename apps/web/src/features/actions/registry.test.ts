@@ -25,5 +25,8 @@ describe("ACTION_REGISTRY", () => {
     expect(getAction("adopt").verb).toBe("收录");
     expect(getAction("restore").verb).toBe("恢复");
     expect(getAction("restore").destructive).toBe(false);
+    expect(getAction("create-group").verb).toBe("新建分组");
+    expect(getAction("delete-group").destructive).toBe(true);
+    expect(getAction("add-to-group").verb).toBe("挂到分组");
   });
 });

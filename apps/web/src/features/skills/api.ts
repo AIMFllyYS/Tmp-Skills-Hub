@@ -10,6 +10,42 @@ export async function fetchSkills(): Promise<SkillRecord[]> {
   return body.skills;
 }
 
+export async function createGroup(id: string, name: string, description = ""): Promise<void> {
+  const res = await fetch("/api/groups", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, name, description }),
+  });
+  const body = (await res.json().catch(() => null)) as { ok: boolean; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) throw new Error(body?.message ?? "HTTP " + res.status);
+}
+
+export async function renameGroup(id: string, name: string): Promise<void> {
+  const res = await fetch("/api/groups/" + encodeURIComponent(id), {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  const body = (await res.json().catch(() => null)) as { ok: boolean; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) throw new Error(body?.message ?? "HTTP " + res.status);
+}
+
+export async function deleteGroup(id: string): Promise<void> {
+  const res = await fetch("/api/groups/" + encodeURIComponent(id), { method: "DELETE" });
+  const body = (await res.json().catch(() => null)) as { ok: boolean; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) throw new Error(body?.message ?? "HTTP " + res.status);
+}
+
+export async function changeGroupMembers(id: string, hashes: string[], action: "add" | "remove"): Promise<void> {
+  const res = await fetch("/api/groups/" + encodeURIComponent(id) + "/members", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ hashes, action }),
+  });
+  const body = (await res.json().catch(() => null)) as { ok: boolean; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) throw new Error(body?.message ?? "HTTP " + res.status);
+}
+
 export async function fetchGroups(): Promise<GroupsResponse["groups"]> {
   const res = await fetch("/api/groups");
   if (!res.ok) throw new Error("GET /api/groups → " + res.status);

@@ -4,9 +4,12 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import {
+  addSkillToGroups,
   archiveSkill,
   restoreArchivedSkill,
   classifyClientLink,
+  createGroup,
+  deleteGroup,
   discoverClientRoots,
   discoverClientRootsAt,
   listArchivedSkills,
@@ -15,10 +18,12 @@ import {
   readLinksLedger,
   readSkillFile,
   readStoreIndex,
+  removeSkillFromGroups,
   saveSkillFile,
   readUsageStats,
   resolveStoreRoot,
   usageRanking,
+  writeGroups,
   type ClientLinkState,
   type LinkEntry,
   type SkillRecord,
@@ -45,7 +50,7 @@ export const TRANSLATE_SYSTEM_PROMPT =
 /**
  * HTTP 契约(v0,见 docs/specs/http-api-v0.md):面板数据源。
  * - 读端点:skills 列表 / 单个详情 / groups / stats / archive
- * - 写端点:enable / disable / archive(面板按钮即用户显式操作,无需 --yes)
+ * - 写端点:enable / disable / archive / group CRUD(面板按钮即用户显式操作,无需 --yes)
  * - 信封与错误 code 复用 json-contract-v0.md,字段定义不重复发明
  * - 服务只绑 127.0.0.1;storeRoot/home 可注入(沙箱测试)
  */
@@ -179,6 +184,91 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     withStore(c, "groups", async (root) => {
       const groups = await readGroups(root);
       return c.json({ ok: true, command: "groups", version: groups.version, groups: groups.groups });
+    }),
+  );
+
+  const GROUP_ID_RE = /^[a-z][a-z0-9-]*$/;
+
+  const resolveMemberHashes = (needles: string[], skills: SkillRecord[]): { hashes: string[] } | { message: string } => {
+    const hashes: string[] = [];
+    for (const n of needles) {
+      const needle = n.trim();
+      if (needle === "") return { message: "hashes 含空项" };
+      const hit =
+        skills.find((s) => s.hash === needle) ??
+        skills.find((s) => s.hash.startsWith(needle.toLowerCase())) ??
+        skills.find((s) => s.dirName === needle);
+      if (hit === undefined) return { message: "未找到: " + needle };
+      hashes.push(hit.hash);
+    }
+    return { hashes };
+  };
+
+  app.post("/api/groups", (c) =>
+    withStore(c, "group", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { id?: unknown; name?: unknown; description?: unknown } | null;
+      const id = typeof raw?.id === "string" ? raw.id.trim() : "";
+      if (id === "" || !GROUP_ID_RE.test(id)) {
+        return err(c, "group", "bad-usage", "id 须为小写字母开头、可含数字与连字符", 400);
+      }
+      const name = typeof raw?.name === "string" && raw.name.trim() !== "" ? raw.name.trim() : id;
+      const description = typeof raw?.description === "string" ? raw.description : "";
+      const current = await readGroups(root);
+      if (current.groups.some((g) => g.id === id)) return err(c, "group", "group-exists", "分组已存在: " + id, 409);
+      await createGroup(root, { id, name, description });
+      return c.json({ ok: true, command: "group", verb: "create", id, name, description });
+    }),
+  );
+
+  app.patch("/api/groups/:id", (c) =>
+    withStore(c, "group", async (root) => {
+      const id = c.req.param("id") ?? "";
+      const raw = (await c.req.json().catch(() => null)) as { name?: unknown; description?: unknown } | null;
+      const name = typeof raw?.name === "string" ? raw.name.trim() : undefined;
+      const description = typeof raw?.description === "string" ? raw.description : undefined;
+      if ((name === undefined || name === "") && description === undefined) {
+        return err(c, "group", "bad-usage", "body 需要 name 或 description", 400);
+      }
+      const current = await readGroups(root);
+      const g = current.groups.find((x) => x.id === id);
+      if (g === undefined) return err(c, "group", "group-not-found", "分组不存在: " + id, 404);
+      if (name !== undefined && name !== "") g.name = name;
+      if (description !== undefined) g.description = description;
+      await writeGroups(root, current);
+      return c.json({ ok: true, command: "group", verb: "rename", id, name: g.name, description: g.description });
+    }),
+  );
+
+  app.delete("/api/groups/:id", (c) =>
+    withStore(c, "group", async (root) => {
+      const id = c.req.param("id") ?? "";
+      try {
+        const memberCount = await deleteGroup(root, id);
+        return c.json({ ok: true, command: "group", verb: "delete", id, memberCount });
+      } catch {
+        return err(c, "group", "group-not-found", "分组不存在: " + id, 404);
+      }
+    }),
+  );
+
+  app.post("/api/groups/:id/members", (c) =>
+    withStore(c, "group", async (root) => {
+      const id = c.req.param("id") ?? "";
+      const raw = (await c.req.json().catch(() => null)) as { hashes?: unknown; action?: unknown } | null;
+      const action = raw?.action === "remove" ? "remove" : raw?.action === "add" ? "add" : "";
+      const hashesIn = Array.isArray(raw?.hashes) ? raw.hashes.filter((h): h is string => typeof h === "string") : [];
+      if (action === "" || hashesIn.length === 0) {
+        return err(c, "group", "bad-usage", "body 需要 { hashes: string[], action: add|remove }", 400);
+      }
+      const current = await readGroups(root);
+      if (!current.groups.some((g) => g.id === id)) return err(c, "group", "group-not-found", "分组不存在: " + id, 404);
+      const resolved = resolveMemberHashes(hashesIn, await readStoreIndex(root));
+      if ("message" in resolved) return err(c, "group", "not-found", resolved.message, 404);
+      const changed =
+        action === "add"
+          ? await addSkillToGroups(root, resolved.hashes, [id])
+          : await removeSkillFromGroups(root, resolved.hashes, [id]);
+      return c.json({ ok: true, command: "group", verb: action, id, hashes: resolved.hashes, changed });
     }),
   );
 
