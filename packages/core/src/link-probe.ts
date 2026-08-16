@@ -53,6 +53,26 @@ export async function probeLinkTypes(workDir: string): Promise<LinkTypeProbe> {
   return result;
 }
 
+/**
+ * 返回 p 的链接目标(绝对路径),p 是 symlink 或 Windows junction 时有效,否则 null。
+ * 只读;失败(普通目录/文件/不存在)一律 null。
+ */
+export async function readLinkTarget(p: string): Promise<string | null> {
+  try {
+    const st = await lstat(p);
+    if (st.isSymbolicLink()) {
+      return path.resolve(path.dirname(p), await readlink(p));
+    }
+    if (st.isDirectory()) {
+      // Windows junction:目录但 readlink 可解析
+      return path.resolve(path.dirname(p), await readlink(p));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface DanglingLink {
   /** 链接所在客户端 skills 目录 */
   root: string;
@@ -72,22 +92,11 @@ export async function findDanglingLinks(roots: string[]): Promise<DanglingLink[]
     const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
     for (const entry of entries) {
       const linkPath = path.join(root, entry.name);
-      let target: string | null = null;
-      try {
-        if (entry.isSymbolicLink()) {
-          target = await readlink(linkPath);
-        } else if (entry.isDirectory()) {
-          // Windows junction:目录但 readlink 可解析
-          target = await readlink(linkPath);
-        }
-      } catch {
-        /* 普通目录,不是链接 */
-      }
+      const target = await readLinkTarget(linkPath);
       if (target === null) continue;
-      const resolved = path.resolve(path.dirname(linkPath), target);
-      const targetOk = await statOk(resolved);
+      const targetOk = await statOk(target);
       if (!targetOk) {
-        dangling.push({ root, linkPath, target: resolved });
+        dangling.push({ root, linkPath, target });
       }
     }
   }
