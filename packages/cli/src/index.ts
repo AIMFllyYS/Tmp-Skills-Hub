@@ -1,16 +1,61 @@
 #!/usr/bin/env node
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { createInterface } from "node:readline/promises";
 import { defineCommand, runMain } from "citty";
+import {
+  discoverClientRoots,
+  findDanglingLinks,
+  initializeStoreLayout,
+  probeLinkTypes,
+  readStoreIndex,
+  resolveStoreRoot,
+  type StoreRootOptions,
+} from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
+
+/** 指针文件相对 home 的位置(spec §1)。 */
+const POINTER_REL = path.join(".skills-hub", "config.json");
+
+/** 写入指针文件(home 下),先建目录再原子写。 */
+async function writePointerFile(home: string, storeRoot: string): Promise<string> {
+  const pointerFile = path.join(home, POINTER_REL);
+  await mkdir(path.dirname(pointerFile), { recursive: true });
+  const tmp = pointerFile + ".tmp-" + process.pid + "-" + Date.now();
+  await writeFile(tmp, JSON.stringify({ storeRoot }, null, 2) + "\n", "utf8");
+  await rename(tmp, pointerFile);
+  return pointerFile;
+}
 
 const scan = defineCommand({
   meta: { name: "scan", description: "扫描各 Agent 全局目录,列出发现的 skill(只读,不入库)" },
   args: {
     home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口,默认真实 home)" },
+    json: { type: "boolean", description: "机器可读输出(稳定结构,供程序消费)" },
   },
   async run({ args }) {
-    const skills = await scanKnownClients(resolveHome(args.home));
+    const home = resolveHome(args.home);
+    const roots = await discoverClientRoots(home);
+    const skills = await scanKnownClients(home);
+    if (args.json) {
+      console.log(
+        JSON.stringify({
+          home,
+          roots: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })),
+          skills: skills.map((s) => ({
+            hash: s.hash,
+            clientId: s.clientId,
+            name: s.meta.name,
+            description: s.meta.description,
+          })),
+          total: skills.length,
+        }, null, 2),
+      );
+      return;
+    }
     if (skills.length === 0) {
       console.log("未发现任何 skill。");
       return;
@@ -18,7 +63,144 @@ const scan = defineCommand({
     for (const s of skills) {
       console.log(`${s.hash.slice(0, 12)}  [${s.clientId}] ${s.meta.name} — ${s.meta.description}`);
     }
-    console.log(`\n共 ${skills.length} 个(按内容哈希去重前)。`);
+    console.log(`\n共 ${skills.length} 个(按内容哈希去重前),${roots.length} 个客户端 root。`);
+  },
+});
+
+const init = defineCommand({
+  meta: { name: "init", description: "设置库存位置,写入指针文件,并建立目录布局" },
+  args: {
+    home: { type: "string", description: "库存根目录(绝对路径);同时作为沙箱 home 重定向" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  async run({ args }) {
+    // 写操作铁律(cli-commands-v0.md §2):非交互环境必须显式 --yes,否则拒绝执行
+    if (!args.dryRun && !process.stdin.isTTY && !args.yes) {
+      console.error("写操作需要显式授权:非交互环境请加 --yes。");
+      process.exitCode = 2;
+      return;
+    }
+    const storeRoot = await resolveStoreRootForInit(args);
+    if (storeRoot === null) return;
+    const home = resolveHome(args.home);
+    const pointerFile = path.join(home, POINTER_REL);
+    const plan = { storeRoot, pointerFile };
+    if (args.dryRun) {
+      if (args.json) {
+        console.log(JSON.stringify({ dryRun: true, ...plan }, null, 2));
+      } else {
+        console.log("将要写入:");
+        console.log("  指针文件: " + pointerFile);
+        console.log("  库存根目录: " + storeRoot + " (目录布局: skills/ archive/ tmp/ + 清单文件)");
+      }
+      return;
+    }
+    const layout = await initializeStoreLayout(storeRoot);
+    const pointerWritten = await writePointerFile(home, storeRoot);
+    if (args.json) {
+      console.log(
+        JSON.stringify({
+          storeRoot,
+          pointerFile: pointerWritten,
+          layoutCreated: layout.created,
+          message: "初始化完成",
+        }, null, 2),
+      );
+    } else {
+      console.log("初始化完成:");
+      console.log("  库存根目录: " + storeRoot);
+      console.log("  指针文件: " + pointerWritten);
+      if (layout.created) console.log("  目录布局: 新建");
+      else console.log("  目录布局: 已存在,未改动");
+    }
+  },
+});
+
+/** 解析 init 的库存位置:--home → SKILLS_HUB_HOME → 交互提示 → 报错。写操作需 --yes 或 TTY。 */
+async function resolveStoreRootForInit(args: { home: string | undefined; yes: boolean | undefined }): Promise<string | null> {
+  let storeRoot = args.home?.trim() ?? "";
+  if (storeRoot === "") storeRoot = process.env.SKILLS_HUB_HOME?.trim() ?? "";
+  if (storeRoot === "" && process.stdin.isTTY && !args.yes) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    storeRoot = (await rl.question("库存位置(绝对路径): ")).trim();
+    rl.close();
+  }
+  if (storeRoot === "") {
+    console.error("未指定库存位置。请用 --home <path> 或设置 SKILLS_HUB_HOME(写操作需 --yes 授权)。");
+    process.exitCode = 2;
+    return null;
+  }
+  if (!path.isAbsolute(storeRoot)) {
+    console.error("库存根目录必须是绝对路径,收到: " + storeRoot);
+    process.exitCode = 2;
+    return null;
+  }
+  return storeRoot;
+}
+
+const doctor = defineCommand({
+  meta: { name: "doctor", description: "环境自检:库存可达性、客户端 root、链接能力、悬空链接" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  async run({ args }) {
+    const home = resolveHome(args.home);
+    const storeOpts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
+    if (args.home !== undefined && args.home !== "") storeOpts.cliHome = args.home;
+    const envHome = process.env.SKILLS_HUB_HOME;
+    if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
+    const store = await resolveStoreRoot(storeOpts);
+    let reachable = false;
+    let storeError: string | null = null;
+    if (store.ok) {
+      try {
+        await readStoreIndex(store.storeRoot);
+        reachable = true;
+      } catch (e) {
+        storeError = e instanceof Error ? e.message : String(e);
+      }
+    }
+    const roots = await discoverClientRoots(home);
+    const probeDir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-linkprobe-"));
+    const linkTypes = await probeLinkTypes(probeDir);
+    await rm(probeDir, { recursive: true, force: true });
+    const dangling = await findDanglingLinks(roots.map((r) => r.skillsDir));
+
+    if (args.json) {
+      console.log(
+        JSON.stringify({
+          store: {
+            resolved: store.ok,
+            storeRoot: store.ok ? store.storeRoot : null,
+            reachable,
+            error: storeError,
+          },
+          roots: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })),
+          linkTypes,
+          danglingLinks: dangling,
+        }, null, 2),
+      );
+      return;
+    }
+
+    console.log("== 库存 ==");
+    if (store.ok) {
+      console.log("  位置: " + store.storeRoot + " (来源: " + store.source + ")");
+      console.log(reachable ? "  可达: 是" : "  可达: 否 (" + (storeError ?? "未知错误") + ")");
+    } else {
+      console.log("  位置: 未配置 — " + store.message);
+    }
+    console.log("== 客户端 root(" + roots.length + ") ==");
+    for (const r of roots) console.log("  " + r.clientId + " → " + r.skillsDir);
+    console.log("== 链接能力 ==");
+    console.log("  junction: " + (linkTypes.junction ? "可用" : "不可用"));
+    console.log("  symlink:  " + (linkTypes.symlink ? "可用" : "不可用"));
+    console.log("  hardlink: " + (linkTypes.hardlink ? "可用" : "不可用"));
+    console.log("== 悬空链接(" + dangling.length + ") ==");
+    for (const d of dangling) console.log("  " + d.linkPath + " → " + d.target + " (失效)");
   },
 });
 
@@ -37,7 +219,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, ui },
+  subCommands: { scan, init, doctor, ui },
 });
 
 runMain(main);
