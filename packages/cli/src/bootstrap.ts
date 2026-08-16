@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
 import path from "node:path";
-import { copyFile, mkdir, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import {
   discoverClientRoots,
@@ -61,73 +62,137 @@ async function writePointerFile(home: string, storeRoot: string): Promise<void> 
   await rename(tmp, pointerFile);
 }
 
-/**
- * 树复制:跟随符号链接复制内容,悬空链接跳过,返回计数。
- * 客户端 skills 目录天然含链接条目(本项目 enable 挂的 junction、用户/其他工具挂的链接):
- * - 链接指向存在 → 跟随复制内容(备份是"内容保险",不是"链接保险")
- * - 链接悬空(目标已删除,如 .continue/skills/agent-onboarding)→ 跳过不炸
- * 不用 fs.cp:它默认重建链接本身(Windows 创建 symlink 需管理员/开发者模式 → EPERM),
- * dereference:true 时又对悬空链接抛 ENOENT,两种都实测踩到。
- */
-export async function copyTree(src: string, dest: string): Promise<{ copied: number; skipped: number }> {
-  const st = await stat(src); // stat 跟随链接;悬空链接在此抛 ENOENT,由调用方跳过
-  if (st.isDirectory()) {
-    await mkdir(dest, { recursive: true });
-    const entries = await readdir(src, { withFileTypes: true });
-    let copied = 0;
-    let skipped = 0;
-    for (const e of entries) {
-      const s = path.join(src, e.name);
-      const d = path.join(dest, e.name);
-      try {
-        const r = await copyTree(s, d);
-        copied += r.copied;
-        skipped += r.skipped;
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-          skipped += 1; // 悬空链接:没有内容可复制
-          continue;
-        }
-        throw err;
-      }
-    }
-    return { copied, skipped };
-  }
-  if (st.isFile()) {
-    await copyFile(src, dest);
-    return { copied: 1, skipped: 0 };
-  }
-  return { copied: 0, skipped: 1 }; // 设备等特殊条目:跳过
+/** 快照里一条逻辑文件:哪个客户端的哪条相对路径对应哪份内容。 */
+export interface BackupFileEntry {
+  clientId: string;
+  rel: string;
+  hash: string;
+  size: number;
 }
 
-/** 备份:把全部客户端 skills 目录复制到 <库存根>/backups/<时间戳>/roots/<clientId>/<rel>/。 */
+export interface BackupManifest {
+  snapshotId: string;
+  createdAt: string;
+  clientRoots: number;
+  skillDirs: number;
+  logicalFiles: number;
+  writtenFiles: number;
+  bytesSaved: number;
+  entries: BackupFileEntry[];
+}
+
+function sha256(buf: Buffer): string {
+  return createHash("sha256").update(buf).digest("hex");
+}
+
+/**
+ * 把一棵 skills 树摄入 blob 池。跟随链接复制内容,悬空链接跳过。
+ * 同一内容哈希只写一份;结构只记进 entries,不在 roots/ 再铺一份树。
+ */
+async function ingestTree(
+  src: string,
+  relPrefix: string,
+  clientId: string,
+  blobsDir: string,
+  seen: Map<string, string>,
+  entries: BackupFileEntry[],
+  stats: { logical: number; written: number; saved: number },
+): Promise<void> {
+  let st;
+  try {
+    st = await stat(src);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+  if (st.isDirectory()) {
+    const children = await readdir(src, { withFileTypes: true });
+    for (const e of children) {
+      const childRel = relPrefix === "" ? e.name : relPrefix + "/" + e.name;
+      await ingestTree(path.join(src, e.name), childRel, clientId, blobsDir, seen, entries, stats);
+    }
+    return;
+  }
+  if (!st.isFile()) return;
+  const buf = await readFile(src);
+  const hash = sha256(buf);
+  stats.logical += 1;
+  if (!seen.has(hash)) {
+    const blobPath = path.join(blobsDir, hash);
+    const tmp = blobPath + ".tmp-" + process.pid + "-" + Date.now();
+    await writeFile(tmp, buf);
+    await rename(tmp, blobPath);
+    seen.set(hash, blobPath);
+    stats.written += 1;
+  } else {
+    stats.saved += buf.length;
+  }
+  entries.push({ clientId, rel: relPrefix, hash, size: buf.length });
+}
+
+/**
+ * 备份:内容进 blobs/<sha256>,结构进 manifest。
+ * 跟随链接取内容(备份是内容保险),按哈希去重,避免 N 个客户端各写一遍。
+ * 正式形态见 #83 / #116;本函数是止血,寻址思路与分析稿方案 A 对齐。
+ */
 export async function backupAllClientSkills(
   baseHome: string,
   backupRoot: string,
-): Promise<{ snapshotId: string; clientRoots: number; skillDirs: number; backupDir: string }> {
-  // 快照 ID:毫秒时间戳 + 随机后缀,避免同一毫秒多次调用碰撞(CI 上实测踩到)。
+): Promise<{
+  snapshotId: string;
+  clientRoots: number;
+  skillDirs: number;
+  backupDir: string;
+  logicalFiles: number;
+  writtenFiles: number;
+  bytesSaved: number;
+}> {
   const snapshotId = new Date().toISOString().replace(/[:]/g, "-") + "-" + Math.random().toString(36).slice(2, 6);
-  const destBase = path.join(backupRoot, snapshotId, "roots");
-  await mkdir(destBase, { recursive: true }); // 显式建目录:roots 为空或 cp 未建父目录时 manifest 也能写
-  // discoverClientRoots 内部对 skillsDir 做了 realpath(展开 8.3 短名/符号链接),
-  // 基准也必须 realpath,否则 relative 会以 ".." 开头误判越界(CI runner 上实测踩到)。
+  const snapDir = path.join(backupRoot, snapshotId);
+  const blobsDir = path.join(snapDir, "blobs");
+  await mkdir(blobsDir, { recursive: true });
   const realBase = await realpath(baseHome).catch(() => baseHome);
   const roots = await discoverClientRoots(baseHome);
+  const seen = new Map<string, string>();
+  const entries: BackupFileEntry[] = [];
+  const stats = { logical: 0, written: 0, saved: 0 };
   let skillDirs = 0;
   for (const root of roots) {
-    // 相对路径保留原始形态(如 .claude/skills),不做任何字符串裁剪——之前用
-    // /^\.\.?[/\\]?/ 替换会误删 .claude 开头的点,把备份结构搞错。
     const rel = path.relative(realBase, root.skillsDir).split(path.sep).join("/");
-    if (rel.startsWith("..") || path.isAbsolute(rel)) continue; // 防御:skillsDir 不在 baseHome 下则跳过
-    const dest = path.join(destBase, root.clientId, rel);
-    await copyTree(root.skillsDir, dest);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) continue;
+    await ingestTree(root.skillsDir, rel, root.clientId, blobsDir, seen, entries, stats);
     skillDirs += 1;
   }
-  await writeFile(
-    path.join(backupRoot, snapshotId, "manifest.json"),
-    JSON.stringify({ snapshotId, createdAt: new Date().toISOString(), clientRoots: roots.length, skillDirs }, null, 2) + "\n",
-  );
-  return { snapshotId, clientRoots: roots.length, skillDirs, backupDir: destBase };
+  const manifest: BackupManifest = {
+    snapshotId,
+    createdAt: new Date().toISOString(),
+    clientRoots: roots.length,
+    skillDirs,
+    logicalFiles: stats.logical,
+    writtenFiles: stats.written,
+    bytesSaved: stats.saved,
+    entries,
+  };
+  await writeFile(path.join(snapDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  return {
+    snapshotId,
+    clientRoots: roots.length,
+    skillDirs,
+    backupDir: snapDir,
+    logicalFiles: stats.logical,
+    writtenFiles: stats.written,
+    bytesSaved: stats.saved,
+  };
+}
+
+/** 按 manifest + blobs 还原目录树(测试与验收用;正式 restore 命令在 #83)。 */
+export async function restoreBackupSnapshot(snapshotDir: string, destRoot: string): Promise<void> {
+  const raw = JSON.parse(await readFile(path.join(snapshotDir, "manifest.json"), "utf8")) as BackupManifest;
+  for (const e of raw.entries) {
+    const dest = path.join(destRoot, e.clientId, ...e.rel.split("/"));
+    await mkdir(path.dirname(dest), { recursive: true });
+    await copyFile(path.join(snapshotDir, "blobs", e.hash), dest);
+  }
 }
 
 /** 发现并收录:扫描 base 下全部客户端 root,收集达标 skill 目录,一次批量 adopt。 */
