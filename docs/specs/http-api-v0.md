@@ -22,6 +22,8 @@
 | GET /api/stats | { ok, command: "stats", stats: StatsFile, ranking: UsageRankEntry[] } | 503 |
 | GET /api/archive | { ok, command: "archive", verb: "list", archiveDir, archived: ArchivedSkill[] } | 503 |
 | GET /api/clients | { ok, command: "clients", clients: { clientId, skillsDir }[] }(global 侧发现的客户端) | —(不依赖库存) |
+| GET /api/skills/:hash/links | { ok, command: "skill-links", hash, links: { clientId, state, detail }[] }(检查器客户端页,按需拉取) | 404 not-found;503 |
+| GET /api/clients/:clientId/skill-states | { ok, command: "client-skill-states", clientId, skillsDir, enabled, total, rows: { hash, state, detail }[] }(客户端视角全集行状态) | 404 not-found;503 |
 
 ### SkillRecord(与 json-contract §2 同定义)
 

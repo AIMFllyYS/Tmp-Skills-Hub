@@ -1,6 +1,13 @@
 import { memo } from "react";
 import { SKILL_ROW_HEIGHT_PX } from "../panel/virtual-window.js";
-import type { SkillRecord } from "./types.js";
+import type { ClientLinkState, SkillRecord } from "./types.js";
+
+export interface SkillRowClientView {
+  state: ClientLinkState;
+  detail: string;
+  pending: boolean;
+  onToggle: (enable: boolean) => void;
+}
 
 interface SkillRowProps {
   skill: SkillRecord;
@@ -9,6 +16,7 @@ interface SkillRowProps {
   focused: boolean;
   onToggleCheck: (hash: string, next: boolean) => void;
   onFocus: (hash: string) => void;
+  clientView?: SkillRowClientView | undefined;
 }
 
 /** 集合列的一行:复选 + 名称 + 启用聚合(12/23) + 状态点。开关不在行上。 */
@@ -19,8 +27,11 @@ export const SkillRow = memo(function SkillRow({
   focused,
   onToggleCheck,
   onFocus,
+  clientView,
 }: SkillRowProps): React.JSX.Element {
   const on = skill.visibleIn.length;
+  const blocked = clientView !== undefined && (clientView.state === "unregistered-conflict" || clientView.state === "dangling");
+  const enabled = clientView?.state === "managed";
   return (
     <li
       data-testid="skill-card"
@@ -48,14 +59,35 @@ export const SkillRow = memo(function SkillRow({
           className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
         >
           <span className="truncate text-sm font-medium text-ink-strong">{skill.dirName}</span>
-          <span className="flex shrink-0 items-center gap-2 font-mono text-xs text-ink-mid">
-            {on}/{clientTotal}
-            <span
-              className={"inline-block h-1.5 w-1.5 rounded-full " + (on > 0 ? "bg-ink-strong" : "bg-line")}
-              aria-hidden
-            />
-          </span>
+          {clientView === undefined ? (
+            <span className="flex shrink-0 items-center gap-2 font-mono text-xs text-ink-mid">
+              {on}/{clientTotal}
+              <span
+                className={"inline-block h-1.5 w-1.5 rounded-full " + (on > 0 ? "bg-ink-strong" : "bg-line")}
+                aria-hidden
+              />
+            </span>
+          ) : (
+            <span className="shrink-0 text-xs text-ink-faint">{clientView.detail}</span>
+          )}
         </button>
+        {clientView !== undefined && (
+          <button
+            type="button"
+            data-testid="client-row-switch"
+            aria-pressed={enabled}
+            disabled={clientView.pending || blocked}
+            title={blocked ? clientView.detail : undefined}
+            onClick={() => clientView.onToggle(!enabled)}
+            className={[
+              "shrink-0 rounded-full px-3 py-1 text-xs",
+              enabled ? "bg-ink-strong text-white" : "border border-line bg-white text-ink-mid",
+              clientView.pending || blocked ? "opacity-60" : "",
+            ].join(" ")}
+          >
+            {blocked ? (clientView.state === "dangling" ? "悬空" : "占用") : enabled ? "已启用" : "未启用"}
+          </button>
+        )}
       </div>
     </li>
   );

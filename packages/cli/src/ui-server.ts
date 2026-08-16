@@ -18,6 +18,7 @@ import {
   readUsageStats,
   resolveStoreRoot,
   usageRanking,
+  type ClientLinkState,
   type LinkEntry,
   type SkillRecord,
   type StoreRootOptions,
@@ -213,6 +214,33 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined).then((roots) =>
       c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),
     ),
+  );
+
+  app.get("/api/clients/:clientId/skill-states", (c) =>
+    withStore(c, "client-skill-states", async (root) => {
+      const clientId = c.req.param("clientId");
+      const roots = await discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined);
+      const found = roots.find((r) => r.clientId === clientId);
+      if (found === undefined) return err(c, "client-skill-states", "not-found", "未找到客户端: " + clientId, 404);
+      const skills = await readStoreIndex(root);
+      const ledger = await readLinksLedger(root);
+      const rows: { hash: string; state: ClientLinkState; detail: string }[] = [];
+      for (const s of skills) {
+        const inLedger = ledger.some((e) => e.clientId === clientId && e.entryName === s.dirName);
+        const status = await classifyClientLink(path.join(found.skillsDir, s.dirName), inLedger);
+        rows.push({ hash: s.hash, state: status.state, detail: status.detail });
+      }
+      const enabled = rows.filter((r) => r.state === "managed").length;
+      return c.json({
+        ok: true,
+        command: "client-skill-states",
+        clientId,
+        skillsDir: found.skillsDir,
+        enabled,
+        total: skills.length,
+        rows,
+      });
+    }),
   );
 
   // ---- 写端点 ----

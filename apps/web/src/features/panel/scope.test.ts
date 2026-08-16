@@ -36,8 +36,8 @@ describe("skillsForScope", () => {
     expect(skillsForScope(skills, groups, { kind: "group", id: "dev" }).map((s) => s.hash)).toEqual(["a", "b"]);
   });
 
-  it("客户端只含 visibleIn 命中的", () => {
-    expect(skillsForScope(skills, groups, { kind: "client", id: "cursor" }).map((s) => s.hash)).toEqual(["b"]);
+  it("客户端视角返回全集,由行级状态区分启停", () => {
+    expect(skillsForScope(skills, groups, { kind: "client", id: "cursor" }).map((s) => s.hash)).toEqual(["a", "b", "c"]);
   });
 
   it("来源按 origin.kind 切", () => {

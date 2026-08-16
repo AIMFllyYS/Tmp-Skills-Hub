@@ -169,6 +169,32 @@ describe("http-api 契约", () => {
     expect(missBody.code).toBe("not-found");
   });
 
+  it("client skill-states:全集 + 未启用为 off", async () => {
+    const res = await app.request("/api/clients/claude/skill-states");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      command: string;
+      clientId: string;
+      total: number;
+      enabled: number;
+      rows: { state: string }[];
+    };
+    expect(body.command).toBe("client-skill-states");
+    expect(body.clientId).toBe("claude");
+    expect(body.total).toBe(1);
+    expect(body.enabled).toBe(0);
+    expect(body.rows[0]?.state).toBe("off");
+  });
+
+  it("client skill-states:未知客户端 404", async () => {
+    const res = await app.request("/api/clients/no-such-client/skill-states");
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { ok: boolean; code: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("not-found");
+  });
+
   it("skill links:未启用客户端为 off", async () => {
     const list = await (await app.request("/api/skills")).json() as { skills: { hash: string }[] };
     const res = await app.request("/api/skills/" + list.skills[0]!.hash + "/links");

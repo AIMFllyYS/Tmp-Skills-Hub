@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { SkillRow } from "../skills/SkillRow.js";
+import { SkillRow, type SkillRowClientView } from "../skills/SkillRow.js";
 import type { SkillRecord } from "../skills/types.js";
 import { ensureRowVisible, stepIndex, virtualWindow } from "./virtual-window.js";
 
@@ -10,6 +10,7 @@ interface VirtualSkillListProps {
   focusedHash: string | null;
   onToggleCheck: (hash: string, next: boolean) => void;
   onFocus: (hash: string) => void;
+  clientViewOf?: ((skill: SkillRecord) => SkillRowClientView | undefined) | undefined;
 }
 
 /** 固定行高虚拟列表:只挂可见窗口 + overscan,选中态由数据驱动不随卸载丢失。 */
@@ -20,6 +21,7 @@ export function VirtualSkillList({
   focusedHash,
   onToggleCheck,
   onFocus,
+  clientViewOf,
 }: VirtualSkillListProps): React.JSX.Element {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -92,6 +94,7 @@ export function VirtualSkillList({
             focused={focusedHash === skill.hash}
             onToggleCheck={onToggleCheck}
             onFocus={onFocus}
+            clientView={clientViewOf?.(skill)}
           />
         ))}
         {win.bottomPad > 0 && <li aria-hidden style={{ height: win.bottomPad }} />}

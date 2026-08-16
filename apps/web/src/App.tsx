@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { BatchBar } from "./features/panel/BatchBar.js";
 import { CollectionPane, type SortMode } from "./features/panel/CollectionPane.js";
+import { fallbackClientState, filterByClientEnable, type ClientEnableFilter } from "./features/panel/client-view.js";
 import { InspectorPane } from "./features/panel/InspectorPane.js";
 import { emptySelection, selectionReducer } from "./features/panel/selection.js";
 import { ScopeNav, scopeOptions } from "./features/panel/ScopeNav.js";
 import { buildScopeCounts, isSkillScope, scopeKey, skillsForScope, type ScopeSelection } from "./features/panel/scope.js";
-import { archiveSkill, fetchArchive, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
+import { archiveSkill, fetchArchive, fetchClientSkillStates, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./features/skills/async-resource.js";
 import { applyFilters, ALL_GROUP, ALL_SOURCE } from "./features/skills/filters.js";
-import type { ArchivedSkill, ClientInfo, GroupDef, SkillRecord, UsageCounters } from "./features/skills/types.js";
+import type { ArchivedSkill, ClientInfo, ClientSkillStatesResponse, GroupDef, SkillRecord, UsageCounters } from "./features/skills/types.js";
 
 type LoadState = "loading" | "ready" | "offline";
 
@@ -22,6 +23,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("name");
   const [scope, setScope] = useState<ScopeSelection>({ kind: "all" });
+  const [enableFilter, setEnableFilter] = useState<ClientEnableFilter>("all");
+  const [clientStates, setClientStates] = useState<ClientSkillStatesResponse | null>(null);
   const [focusedHash, setFocusedHash] = useState<string | null>(null);
   const [selection, dispatchSelection] = useReducer(selectionReducer, emptySelection);
   const [pendingHash, setPendingHash] = useState<string | null>(null);
@@ -48,6 +51,19 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (scope.kind !== "client" || scope.id === undefined) return;
+    let cancelled = false;
+    void fetchClientSkillStates(scope.id).then((s) => {
+      if (!cancelled) setClientStates(s);
+    }).catch(() => {
+      if (!cancelled) setClientStates(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
+
   const handleToggle = useCallback(async (skill: SkillRecord, clientId: string, enable: boolean) => {
     setPendingHash(skill.hash);
     setErrors((prev) => {
@@ -66,6 +82,15 @@ export default function App() {
           return { ...s, visibleIn: visible };
         }),
       );
+      setClientStates((prev) => {
+        if (prev === null || prev.clientId !== clientId) return prev;
+        const rows = prev.rows.map((r) =>
+          r.hash === skill.hash
+            ? { ...r, state: enable ? "managed" as const : "off" as const, detail: enable ? "受管链接" : "未启用" }
+            : r,
+        );
+        return { ...prev, rows, enabled: rows.filter((r) => r.state === "managed").length };
+      });
       if (enable) {
         setUsageByHash((prev) => {
           const next = new Map(prev);
@@ -92,6 +117,7 @@ export default function App() {
 
   const handleScope = useCallback((next: ScopeSelection) => {
     setScope(next);
+    setEnableFilter("all");
     if (!isSkillScope(next)) setFocusedHash(null);
   }, []);
 
@@ -115,9 +141,24 @@ export default function App() {
     return [...filtered].sort((a, b) => a.dirName.localeCompare(b.dirName));
   }, [skills, groups, scope, query, sortMode, usageByHash]);
 
+  const activeClientStates =
+    scope.kind === "client" && clientStates !== null && clientStates.clientId === scope.id ? clientStates : null;
+
+  const listed = useMemo(() => {
+    if (scope.kind !== "client") return visible;
+    const clientId = scope.id ?? "";
+    const map = new Map((activeClientStates?.rows ?? []).map((r) => [r.hash, r.state]));
+    return filterByClientEnable(visible, enableFilter, (hash) => {
+      const hit = map.get(hash);
+      if (hit !== undefined) return hit;
+      const skill = visible.find((s) => s.hash === hash);
+      return fallbackClientState(skill?.visibleIn ?? [], clientId);
+    });
+  }, [visible, scope, enableFilter, activeClientStates]);
+
   const handleToggleAllVisible = useCallback((next: boolean) => {
-    dispatchSelection({ type: "toggle-visible", hashes: visible.map((s) => s.hash), next });
-  }, [visible]);
+    dispatchSelection({ type: "toggle-visible", hashes: listed.map((s) => s.hash), next });
+  }, [listed]);
 
   const handleSelectStore = useCallback(() => {
     dispatchSelection({ type: "select-store", hashes: skills.map((s) => s.hash) });
@@ -140,6 +181,15 @@ export default function App() {
           return { ...s, visibleIn: visible };
         }),
       );
+      setClientStates((prev) => {
+        if (prev === null || prev.clientId !== clientId) return prev;
+        const rows = prev.rows.map((r) =>
+          chosen.has(r.hash)
+            ? { ...r, state: enable ? "managed" as const : "off" as const, detail: enable ? "受管链接" : "未启用" }
+            : r,
+        );
+        return { ...prev, rows, enabled: rows.filter((r) => r.state === "managed").length };
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrors((prev) => {
@@ -232,7 +282,7 @@ export default function App() {
               onQuery={setQuery}
               sortMode={sortMode}
               onSortMode={setSortMode}
-              skills={visible}
+              skills={listed}
               archived={archived}
               clientTotal={clients.length}
               checked={selection.hashes}
@@ -242,6 +292,28 @@ export default function App() {
               onToggleAllVisible={handleToggleAllVisible}
               onSelectStore={handleSelectStore}
               onFocus={setFocusedHash}
+              clientView={
+                scope.kind === "client" && scope.id !== undefined
+                  ? {
+                      clientId: scope.id,
+                      skillsDir: activeClientStates?.skillsDir ?? clients.find((c) => c.clientId === scope.id)?.skillsDir ?? "",
+                      enabled: activeClientStates?.enabled ?? skills.filter((s) => s.visibleIn.includes(scope.id ?? "")).length,
+                      total: activeClientStates?.total ?? skills.length,
+                      enableFilter,
+                      onEnableFilter: setEnableFilter,
+                      clientViewOf: (skill) => {
+                        const row = activeClientStates?.rows.find((r) => r.hash === skill.hash);
+                        const clientId = scope.id ?? "";
+                        return {
+                          state: row?.state ?? (skill.visibleIn.includes(clientId) ? "managed" : "off"),
+                          detail: row?.detail ?? (skill.visibleIn.includes(clientId) ? "受管链接" : "未启用"),
+                          pending: pendingHash === skill.hash,
+                          onToggle: (en) => void handleToggle(skill, clientId, en),
+                        };
+                      },
+                    }
+                  : null
+              }
             />
           </section>
           <aside
@@ -290,6 +362,7 @@ export default function App() {
           onEnableTo={(id) => void handleBatchLink(id, true)}
           onDisableFrom={(id) => void handleBatchLink(id, false)}
           onArchive={() => void handleBatchArchive()}
+          lockedClientId={scope.kind === "client" ? scope.id : undefined}
         />
       )}
     </div>

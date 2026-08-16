@@ -1,11 +1,24 @@
 import { useEffect, useRef } from "react";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
+import type { SkillRowClientView } from "../skills/SkillRow.js";
 import type { ArchivedSkill, SkillRecord } from "../skills/types.js";
+import type { ClientEnableFilter } from "./client-view.js";
 import { isSkillScope, scopeKey, type ScopeSelection } from "./scope.js";
 import { masterCheckState, selectionSummary } from "./selection.js";
 import { VirtualSkillList } from "./VirtualSkillList.js";
 
 export type SortMode = "name" | "usage";
+export type { ClientEnableFilter };
+
+export interface ClientViewInfo {
+  clientId: string;
+  skillsDir: string;
+  enabled: number;
+  total: number;
+  enableFilter: ClientEnableFilter;
+  onEnableFilter: (f: ClientEnableFilter) => void;
+  clientViewOf: (skill: SkillRecord) => SkillRowClientView | undefined;
+}
 
 interface CollectionPaneProps {
   scope: ScopeSelection;
@@ -23,6 +36,7 @@ interface CollectionPaneProps {
   onToggleAllVisible: (next: boolean) => void;
   onSelectStore: () => void;
   onFocus: (hash: string) => void;
+  clientView: ClientViewInfo | null;
 }
 
 const inputClass =
@@ -96,6 +110,7 @@ export function CollectionPane({
   onToggleAllVisible,
   onSelectStore,
   onFocus,
+  clientView,
 }: CollectionPaneProps): React.JSX.Element {
   if (scope.kind === "archive") {
     return (
@@ -130,6 +145,28 @@ export function CollectionPane({
           <option value="usage">按调用次数</option>
         </select>
       </div>
+      {clientView !== null && (
+        <div data-testid="client-view-header" className="shrink-0 border-b border-line px-4 py-2">
+          <p className="text-sm font-medium text-ink-strong">{clientView.clientId}</p>
+          <p className="font-mono text-xs text-ink-faint break-all">{clientView.skillsDir}</p>
+          <p className="mt-1 text-xs text-ink-mid">已启用 {clientView.enabled} / {clientView.total}</p>
+          <div className="mt-2 flex gap-2">
+            {(["all", "on", "off"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => clientView.onEnableFilter(f)}
+                className={
+                  "rounded-full px-3 py-1 text-xs " +
+                  (clientView.enableFilter === f ? "bg-ink-strong text-white" : "border border-line text-ink-mid")
+                }
+              >
+                {f === "all" ? "全部" : f === "on" ? "只看已启用" : "只看未启用"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <SelectAllRow
         visibleHashes={skills.map((s) => s.hash)}
         checked={checked}
@@ -141,13 +178,14 @@ export function CollectionPane({
         <p className="px-4 py-6 text-sm text-ink-mid">没有匹配的 skill。</p>
       ) : (
         <VirtualSkillList
-          key={scopeKey(scope) + "\0" + query + "\0" + sortMode}
+          key={scopeKey(scope) + "\0" + query + "\0" + sortMode + "\0" + (clientView?.enableFilter ?? "all")}
           skills={skills}
           clientTotal={clientTotal}
           checked={checked}
           focusedHash={focusedHash}
           onToggleCheck={onToggleCheck}
           onFocus={onFocus}
+          clientViewOf={clientView?.clientViewOf}
         />
       )}
     </div>
