@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 import { defineCommand, runMain } from "citty";
+import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 
 const scan = defineCommand({
   meta: { name: "scan", description: "扫描各 Agent 全局目录,列出发现的 skill(只读,不入库)" },
-  async run() {
-    const skills = await scanKnownClients();
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口,默认真实 home)" },
+  },
+  async run({ args }) {
+    const skills = await scanKnownClients(resolveHome(args.home));
     if (skills.length === 0) {
       console.log("未发现任何 skill。");
       return;

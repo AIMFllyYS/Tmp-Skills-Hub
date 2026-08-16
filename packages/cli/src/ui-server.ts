@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
 
 export const DEFAULT_UI_PORT = 4321;
@@ -14,7 +15,7 @@ export function createUiApp(): Hono {
   app.get("/api/health", (c) => c.json({ ok: true }));
 
   app.get("/api/skills", async (c) => {
-    const skills = await scanKnownClients();
+    const skills = await scanKnownClients(resolveHome());
     return c.json({
       skills: skills.map((s) => ({
         hash: s.hash,
