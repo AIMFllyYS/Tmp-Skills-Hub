@@ -186,6 +186,24 @@ describe("http-api 契约", () => {
     expect(Array.isArray(body.ranking)).toBe(true);
   });
 
+  it("查看:文件树包含 SKILL.md,内容可读", async () => {
+    const tree = await (await app.request("/api/skills/demo/tree")).json() as { ok: boolean; entries: { path: string }[] };
+    expect(tree.ok).toBe(true);
+    expect(tree.entries.map((e) => e.path)).toContain("SKILL.md");
+    const file = await (await app.request("/api/skills/demo/file?path=SKILL.md")).json() as { ok: boolean; content: string };
+    expect(file.ok).toBe(true);
+    if (file.ok) expect(file.content).toContain("demo");
+  });
+
+  it("查看:路径穿越被拒绝(outside),未知文件 404", async () => {
+    const res = await app.request("/api/skills/demo/file?path=..%2F..%2Fsecret.txt");
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("outside");
+    const res2 = await app.request("/api/skills/demo/file?path=nope.md");
+    expect(res2.status).toBe(404);
+  });
+
   it("clients:发现 claude(沙箱 home)", async () => {
     const res = await app.request("/api/clients");
     expect(res.status).toBe(200);
