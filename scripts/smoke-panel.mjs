@@ -182,6 +182,12 @@ async function connectCdp(debugPort) {
   await send("Page.enable", {}, sessionId);
   await send("Runtime.enable", {}, sessionId);
   await send("Performance.enable", {}, sessionId);
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 1400,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  }, sessionId);
   return { ws, send, evalJs, sessionId };
 }
 
@@ -319,8 +325,6 @@ async function main() {
       await sleep(250);
     }
 
-    const switches = await evalJs("document.querySelectorAll('[data-testid=client-switch]').length");
-
     await evalJs("window.__smoke.longTasks = []; window.__smoke.fetches = 0; window.__smoke.fetchLog = []; true;");
     const tClick = Date.now();
     const clicked = await evalJs(`(() => {
@@ -352,6 +356,7 @@ async function main() {
       if (view.hasMd && view.mdText.includes(BODY_MARKER)) break;
       await sleep(100);
     }
+    const switches = await evalJs("document.querySelectorAll('[data-testid=client-switch]').length");
     const elapsed = Date.now() - tClick;
     if (elapsed < CLICK_WINDOW_MS) await sleep(CLICK_WINDOW_MS - elapsed);
 

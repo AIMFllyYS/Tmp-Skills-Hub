@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CollectionPane, type SortMode } from "./features/panel/CollectionPane.js";
+import { InspectorPane } from "./features/panel/InspectorPane.js";
+import { ScopeNav, scopeOptions } from "./features/panel/ScopeNav.js";
+import { buildScopeCounts, isSkillScope, scopeKey, skillsForScope, type ScopeSelection } from "./features/panel/scope.js";
 import { fetchArchive, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./features/skills/async-resource.js";
-import { ArchivePanel } from "./features/skills/ArchivePanel.js";
-import { applyFilters, ALL_GROUP, ALL_SOURCE, sourceKindsOf } from "./features/skills/filters.js";
-import { SkillList } from "./features/skills/SkillList.js";
+import { applyFilters, ALL_GROUP, ALL_SOURCE } from "./features/skills/filters.js";
 import type { ArchivedSkill, ClientInfo, GroupDef, SkillRecord, UsageCounters } from "./features/skills/types.js";
 
 type LoadState = "loading" | "ready" | "offline";
-type SortMode = "name" | "usage";
-type Tab = "skills" | "archive";
 
 export default function App() {
   const [skills, setSkills] = useState<SkillRecord[]>([]);
@@ -18,17 +18,18 @@ export default function App() {
   const [archived, setArchived] = useState<ArchivedSkill[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [query, setQuery] = useState("");
-  const [sourceKind, setSourceKind] = useState(ALL_SOURCE);
-  const [groupId, setGroupId] = useState(ALL_GROUP);
   const [sortMode, setSortMode] = useState<SortMode>("name");
-  const [tab, setTab] = useState<Tab>("skills");
-  /** 正在执行写操作的 skill 哈希 */
+  const [scope, setScope] = useState<ScopeSelection>({ kind: "all" });
+  const [focusedHash, setFocusedHash] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [pendingHash, setPendingHash] = useState<string | null>(null);
-  /** 失败原因,按 skill 哈希存(展示不静默) */
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
+
   useEffect(() => {
+    let cancelled = false;
     Promise.all([fetchSkills(), fetchGroups(), fetchClients(), fetchStats(), fetchArchive()])
       .then(([s, g, c, st, ar]) => {
+        if (cancelled) return;
         setSkills(s);
         setGroups(g);
         setClients(c);
@@ -36,10 +37,14 @@ export default function App() {
         setArchived(ar);
         setState("ready");
       })
-      .catch(() => setState("offline"));
+      .catch(() => {
+        if (!cancelled) setState("offline");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  /** 开关:成功后只改这一条的 visibleIn,不整表重拉 /api/skills。 */
   const handleToggle = useCallback(async (skill: SkillRecord, clientId: string, enable: boolean) => {
     setPendingHash(skill.hash);
     setErrors((prev) => {
@@ -78,12 +83,36 @@ export default function App() {
     invalidateResource(treeResourceKey(oldHash));
     invalidateResourcePrefix(fileResourceKey(oldHash, ""));
     setSkills((prev) => prev.map((s) => (s.hash === oldHash ? { ...s, hash: newHash } : s)));
+    setFocusedHash(newHash);
+    setChecked((prev) => {
+      if (!prev.has(oldHash)) return prev;
+      const next = new Set(prev);
+      next.delete(oldHash);
+      next.add(newHash);
+      return next;
+    });
   }, []);
 
-  const sources = useMemo(() => sourceKindsOf(skills), [skills]);
-  /** 过滤后按排序模式排列:name = dirName 升序;usage = 调用次数降序(零视为 0)。 */
+  const handleScope = useCallback((next: ScopeSelection) => {
+    setScope(next);
+    if (!isSkillScope(next)) setFocusedHash(null);
+  }, []);
+
+  const handleToggleCheck = useCallback((hash: string, next: boolean) => {
+    setChecked((prev) => {
+      const copy = new Set(prev);
+      if (next) copy.add(hash);
+      else copy.delete(hash);
+      return copy;
+    });
+  }, []);
+
+  const counts = useMemo(() => buildScopeCounts(skills, groups, clients, archived), [skills, groups, clients, archived]);
+  const options = useMemo(() => scopeOptions(counts), [counts]);
+
   const visible = useMemo(() => {
-    const filtered = applyFilters(skills, groups, { query, sourceKind, groupId });
+    const scoped = skillsForScope(skills, groups, scope);
+    const filtered = applyFilters(scoped, groups, { query, sourceKind: ALL_SOURCE, groupId: ALL_GROUP });
     if (sortMode === "usage") {
       const total = (s: SkillRecord) => {
         const u = usageByHash.get(s.hash);
@@ -92,79 +121,103 @@ export default function App() {
       return [...filtered].sort((a, b) => total(b) - total(a) || a.dirName.localeCompare(b.dirName));
     }
     return [...filtered].sort((a, b) => a.dirName.localeCompare(b.dirName));
-  }, [skills, groups, query, sourceKind, groupId, sortMode, usageByHash]);
-  const enabledCount = useMemo(() => skills.filter((s) => s.visibleIn.length > 0).length, [skills]);
+  }, [skills, groups, scope, query, sortMode, usageByHash]);
 
+  const handleToggleAllVisible = useCallback((next: boolean) => {
+    const hashes = visible.map((s) => s.hash);
+    setChecked((prev) => {
+      const copy = new Set(prev);
+      for (const h of hashes) {
+        if (next) copy.add(h);
+        else copy.delete(h);
+      }
+      return copy;
+    });
+  }, [visible]);
+
+  const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
   const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
-  const inputClass = "w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint";
-  const tabClass = (active: boolean) =>
-    "rounded-full px-3 py-1 text-sm transition-colors duration-150 " + (active ? "bg-ink-strong text-white" : "text-ink-mid hover:bg-surface");
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">skill-hub</h1>
-        <p className="mt-1 text-sm text-ink-mid">社团内部的 Agent Skill 共享与统一管理中心</p>
-        <p className="mt-1 text-xs text-ink-faint">
-          {state === "ready" ? "库存 " + skills.length + " 个 · 已启用 " + enabledCount + " 个" : " "}
-        </p>
+    <div className="flex h-dvh flex-col overflow-hidden bg-white">
+      <header className="shrink-0 border-b border-line px-4 py-3 lg:px-6">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">skill-hub</h1>
+            <p className="mt-1 text-sm text-ink-mid">社团内部的 Agent Skill 共享与统一管理中心</p>
+          </div>
+          <p className="shrink-0 text-xs text-ink-faint">
+            {state === "ready" ? "库存 " + skills.length + " 个" : " "}
+          </p>
+        </div>
+        <div className="mt-3 lg:hidden">
+          <select
+            className={selectClass + " w-full"}
+            value={scopeKey(scope)}
+            onChange={(e) => {
+              const opt = options.find((o) => o.key === e.target.value);
+              if (opt !== undefined) handleScope(opt.scope);
+            }}
+          >
+            {options.map((o) => (
+              <option key={o.key} value={o.key}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </header>
 
-      <div className="mb-6 flex items-center gap-3">
-        <nav className="flex gap-1">
-          <button type="button" className={tabClass(tab === "skills")} onClick={() => setTab("skills")}>技能</button>
-          <button type="button" className={tabClass(tab === "archive")} onClick={() => setTab("archive")}>归档区</button>
-        </nav>
-      </div>
-
-      {state === "loading" && <p className="text-sm text-ink-mid">加载中…</p>}
-
       {state === "offline" && (
-        <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="shrink-0 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           未连接到本地数据服务。先运行 <code className="font-mono">skills-hub ui</code>
           (开发时:<code className="font-mono">pnpm dev:cli ui</code>),再刷新本页。
         </p>
       )}
 
-      {state === "ready" && tab === "archive" && <ArchivePanel archived={archived} />}
+      {state === "loading" && <p className="px-4 py-6 text-sm text-ink-mid">加载中…</p>}
 
-      {state === "ready" && tab === "skills" && (
-        <>
-          <div className="mb-6 flex gap-3">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索名称 / 描述…"
-              className={inputClass}
+      {state === "ready" && (
+        <div className="flex min-h-0 flex-1">
+          <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-line lg:block">
+            <ScopeNav counts={counts} selected={scope} onSelect={handleScope} />
+          </aside>
+          <section className="min-w-0 flex-1 overflow-y-auto">
+            <CollectionPane
+              scope={scope}
+              query={query}
+              onQuery={setQuery}
+              sortMode={sortMode}
+              onSortMode={setSortMode}
+              skills={visible}
+              archived={archived}
+              clientTotal={clients.length}
+              checked={checked}
+              focusedHash={focusedHash}
+              onToggleCheck={handleToggleCheck}
+              onToggleAllVisible={handleToggleAllVisible}
+              onFocus={setFocusedHash}
             />
-            <select value={sourceKind} onChange={(e) => setSourceKind(e.target.value)} className={selectClass}>
-              <option value={ALL_SOURCE}>全部来源</option>
-              {sources.map((k) => (
-                <option key={k} value={k}>{k}</option>
-              ))}
-            </select>
-            <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className={selectClass}>
-              <option value={ALL_GROUP}>全部分组</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>{g.name}</option>
-              ))}
-            </select>
-            <select value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)} className={selectClass}>
-              <option value="name">按名称</option>
-              <option value="usage">按调用次数</option>
-            </select>
-          </div>
-          <SkillList
-            skills={visible}
-            clients={clients}
-            usageByHash={usageByHash}
-            pendingHash={pendingHash}
-            errors={errors}
-            onToggle={handleToggle}
-            onSaved={handleSaved}
-          />
-        </>
+          </section>
+          <aside
+            className={
+              "overflow-y-auto bg-white " +
+              (focused === null
+                ? "hidden w-[28rem] shrink-0 border-l border-line lg:block"
+                : "fixed inset-0 z-10 lg:static lg:z-auto lg:w-[28rem] lg:shrink-0 lg:border-l lg:border-line")
+            }
+          >
+            <InspectorPane
+              skill={focused}
+              clients={clients}
+              usage={focused === null ? undefined : usageByHash.get(focused.hash)}
+              pending={focused !== null && pendingHash === focused.hash}
+              error={focused === null ? null : (errors.get(focused.hash) ?? null)}
+              onClose={() => setFocusedHash(null)}
+              onToggle={handleToggle}
+              onSaved={handleSaved}
+            />
+          </aside>
+        </div>
       )}
-    </main>
+    </div>
   );
 }

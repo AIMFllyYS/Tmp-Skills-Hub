@@ -26,13 +26,12 @@ function Notice({ text, tone }: { text: string; tone: "warn" | "error" }): React
 
 interface SkillViewerProps {
   hash: string;
-  onClose: () => void;
   /** 保存成功回调(旧哈希,新哈希),上层按 key 替换,不整表重拉 */
   onSaved: (oldHash: string, newHash: string) => void;
 }
 
 /** skill 内容查看器:文件树 + 选中文件内容;Markdown 可读渲染,代码块高亮。 */
-export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React.JSX.Element {
+export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Element {
   const [entries, setEntries] = useState<SkillFileEntry[]>([]);
   const [selected, setSelected] = useState("SKILL.md");
   const [content, setContent] = useState("");
@@ -169,7 +168,6 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
     <div className="border-t border-line">
       <div className="flex items-center justify-between px-4 pt-3">
         <h3 className="text-xs font-medium text-ink-strong">内容</h3>
-        <button type="button" onClick={onClose} className="text-xs text-ink-mid hover:text-ink-strong">收起</button>
       </div>
       <div className="grid grid-cols-[10rem_1fr] gap-4 p-4">
         <nav className="max-h-72 overflow-y-auto">
@@ -195,7 +193,7 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
             ))}
           </ul>
         </nav>
-        <div className="min-h-24 max-h-96 overflow-y-auto">
+        <div className="min-h-24 overflow-y-auto">
           {savedHash !== null && <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">已保存,新哈希 {savedHash.slice(0, 12)}…</p>}
           {fileError !== null && <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />}
           {fileError === null && !editing && html !== "" && (
