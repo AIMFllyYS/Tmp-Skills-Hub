@@ -180,7 +180,7 @@ export default function App() {
           <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-line lg:block">
             <ScopeNav counts={counts} selected={scope} onSelect={handleScope} />
           </aside>
-          <section className="min-w-0 flex-1 overflow-y-auto">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <CollectionPane
               scope={scope}
               query={query}

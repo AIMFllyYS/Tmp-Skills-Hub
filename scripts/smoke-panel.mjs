@@ -10,13 +10,13 @@
  */
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const BODY_MARKER = "smoke-panel-body-marker";
 const EXPECTED_CARDS = 1;
@@ -25,6 +25,9 @@ const IDLE_CPU_MAX_S = 0.1;
 const LONG_TASK_MAX_MS = 200;
 const CLICK_WINDOW_MS = 4000;
 const IDLE_MS = 10_000;
+const SCALE_COUNT = 1000;
+const LIST_DOM_MAX = 3000;
+const RENDERED_CARD_MAX = 80;
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(repo, "packages", "cli", "dist", "index.js");
@@ -422,11 +425,70 @@ async function main() {
       "存在超过 200ms 的长任务",
     );
 
-    const passed = [r1, r2, r3, r4, r5, r6].filter(Boolean).length;
+    const pointerRaw = await readFile(path.join(home, ".skills-hub", "config.json"), "utf8");
+    const storeRoot = JSON.parse(pointerRaw).storeRoot;
+    if (typeof storeRoot !== "string" || storeRoot === "") {
+      console.error("沙箱指针没有 storeRoot,无法做 1000 条规模断言。");
+      return 1;
+    }
+    const coreHref = pathToFileURL(path.join(repo, "packages", "core", "dist", "index.js")).href;
+    const { writeStoreIndex } = await import(coreHref);
+    const scaleRecords = [];
+    for (let i = 0; i < SCALE_COUNT; i++) {
+      const name = "scale-" + String(i).padStart(4, "0");
+      scaleRecords.push({
+        hash: i.toString(16).padStart(64, "0"),
+        dirName: name,
+        meta: { name, description: "scale fixture " + i },
+        origins: [{ kind: "local", reference: name }],
+        visibleIn: [],
+        installedAt: "2026-01-01T00:00:00.000Z",
+      });
+    }
+    await writeStoreIndex(storeRoot, scaleRecords);
+    await send("Page.reload", { ignoreCache: true }, sessionId);
+    let scaleCards = 0;
+    for (let i = 0; i < 80; i++) {
+      scaleCards = await evalJs("document.querySelectorAll('[data-testid=skill-card]').length");
+      if (scaleCards > 0) break;
+      await sleep(250);
+    }
+    await sleep(400);
+    scaleCards = await evalJs("document.querySelectorAll('[data-testid=skill-card]').length");
+    const scaleApi = await (await fetch(panelUrl + "api/skills")).json();
+    const scaleApiCount = Array.isArray(scaleApi.skills) ? scaleApi.skills.length : 0;
+    const { metrics: scaleMetrics } = await send("Performance.getMetrics", {}, sessionId);
+    const scaleNodes = scaleMetrics.find((m) => m.name === "Nodes")?.value ?? 0;
+
+    console.log("--- 规模 ---");
+    const r7 = line(
+      "库存 1000 条",
+      String(scaleApiCount),
+      String(SCALE_COUNT),
+      scaleApiCount === SCALE_COUNT,
+      "规模库存未写入",
+    );
+    const r8 = line(
+      "可见行(虚拟化)",
+      String(scaleCards),
+      "≤ " + RENDERED_CARD_MAX + " 且 > 0",
+      scaleCards > 0 && scaleCards <= RENDERED_CARD_MAX,
+      "未虚拟化:可见行接近全量",
+    );
+    const r9 = line(
+      "文档 DOM 节点",
+      String(Math.round(scaleNodes)),
+      "≤ " + LIST_DOM_MAX,
+      scaleNodes <= LIST_DOM_MAX,
+      "1000 个 skill 时 DOM 超过 3000",
+    );
+
+    const checks = [r1, r2, r3, r4, r5, r6, r7, r8, r9];
+    const passed = checks.filter(Boolean).length;
     console.log("");
-    console.log("结果: " + passed + "/6 " + (passed === 6 ? "通过" : "未通过"));
+    console.log("结果: " + passed + "/" + checks.length + " " + (passed === checks.length ? "通过" : "未通过"));
     ws.close();
-    return passed === 6 ? 0 : 1;
+    return passed === checks.length ? 0 : 1;
   } finally {
     if (ws !== undefined) {
       try {

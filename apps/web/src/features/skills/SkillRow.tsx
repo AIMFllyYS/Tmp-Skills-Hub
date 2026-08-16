@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { SKILL_ROW_HEIGHT_PX } from "../panel/virtual-window.js";
 import type { SkillRecord } from "./types.js";
 
 interface SkillRowProps {
@@ -21,8 +22,14 @@ export const SkillRow = memo(function SkillRow({
 }: SkillRowProps): React.JSX.Element {
   const on = skill.visibleIn.length;
   return (
-    <li data-testid="skill-card" className={focused ? "bg-surface" : ""}>
-      <div className="flex items-center gap-2 px-4 py-2">
+    <li
+      data-testid="skill-card"
+      role="option"
+      aria-selected={focused}
+      className={"box-border overflow-hidden " + (focused ? "bg-surface" : "")}
+      style={{ height: SKILL_ROW_HEIGHT_PX }}
+    >
+      <div className="flex h-full items-center gap-2 px-4">
         <input
           type="checkbox"
           checked={checked}
