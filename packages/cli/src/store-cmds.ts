@@ -21,6 +21,7 @@ import {
 } from "@skills-hub/core";
 import { isGitHubUrl, STORE_TMP_DIR } from "@skills-hub/core";
 import { GitHubSourceProvider } from "./github-source.js";
+import { isSkillsShUrl, SkillsShSourceProvider } from "./skills-sh-source.js";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { performLinkChange } from "./link-actions.js";
@@ -74,23 +75,27 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
 
   // 本地路径:与批 1 完全一致,不拦截不接管
   for (const p of paths) {
-    if (isGitHubUrl(p)) continue;
+    if (isGitHubUrl(p) || isSkillsShUrl(p)) continue;
     inputs.push({
       folderPath: path.resolve(p),
       origin: { kind: "local-scan", reference: path.resolve(p) },
     });
   }
 
-  // GitHub 链接:拉取到库存临时区,验证通过后与本地路径同一套去重入库;
-  // 失败给出可读错误(含重试建议),不产生半个 skill,不留残留。
-  const urlPaths = paths.filter((p) => isGitHubUrl(p));
+  // URL 链接(GitHub / skills.sh):拉取到库存临时区,验证通过后与本地路径
+  // 同一套去重入库;失败给出可读错误(含重试建议),不产生半个 skill,不留残留。
+  const urlPaths = paths.filter((p) => isGitHubUrl(p) || isSkillsShUrl(p));
   if (urlPaths.length > 0) {
-    const provider = new GitHubSourceProvider(storeRoot);
+    const github = new GitHubSourceProvider(storeRoot);
+    const skillsSh = new SkillsShSourceProvider({ github });
     for (const u of urlPaths) {
       try {
+        const isSh = isSkillsShUrl(u);
+        const provider = isSh ? skillsSh : github;
         const dirs = await provider.fetch(u);
+        const kind = isSh ? ("skills-sh" as const) : ("github" as const);
         for (const d of dirs) {
-          inputs.push({ folderPath: d, origin: { kind: "github", reference: u } });
+          inputs.push({ folderPath: d, origin: { kind, reference: u } });
         }
       } catch (e) {
         adoptFailed = true;
