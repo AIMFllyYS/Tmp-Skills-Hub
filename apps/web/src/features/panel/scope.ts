@@ -50,7 +50,8 @@ export function skillsForScope(skills: SkillRecord[], groups: GroupDef[], scope:
       return skills.filter((s) => members.has(s.hash));
     }
     case "client":
-      return skills.filter((s) => s.visibleIn.includes(scope.id ?? ""));
+      // 客户端视角看全集,行上再标这一份客户端的状态(#106)
+      return skills;
     case "source":
       return skills.filter((s) => s.origins.some((o) => o.kind === scope.id));
     case "archive":

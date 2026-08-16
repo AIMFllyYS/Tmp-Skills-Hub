@@ -58,6 +58,22 @@ export interface SkillLinksResponse {
   links: ClientLinkRow[];
 }
 
+export interface ClientSkillStateRow {
+  hash: string;
+  state: ClientLinkState;
+  detail: string;
+}
+
+export interface ClientSkillStatesResponse {
+  ok: true;
+  command: "client-skill-states";
+  clientId: string;
+  skillsDir: string;
+  enabled: number;
+  total: number;
+  rows: ClientSkillStateRow[];
+}
+
 export interface ClientsResponse {
   ok: true;
   command: "clients";

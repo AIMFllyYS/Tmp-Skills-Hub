@@ -9,6 +9,8 @@ interface BatchBarProps {
   onEnableTo: (clientId: string) => void;
   onDisableFrom: (clientId: string) => void;
   onArchive: () => void;
+  /** 客户端视角:动作锁定到这一个 client,不再弹出菜单 */
+  lockedClientId?: string | undefined;
 }
 
 function ClientMenu({
@@ -64,6 +66,7 @@ export function BatchBar({
   onEnableTo,
   onDisableFrom,
   onArchive,
+  lockedClientId,
 }: BatchBarProps): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -72,16 +75,47 @@ export function BatchBar({
       className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line bg-white px-4 py-2"
     >
       <span className="text-xs text-ink-mid">已选 {count} 项</span>
-      <ClientMenu label="启用到…" clients={clients} disabled={busy} onPick={onEnableTo} />
-      <button
-        type="button"
-        disabled
-        title="分组批量将在后续批次落地"
-        className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-faint"
-      >
-        挂到分组…
-      </button>
-      <ClientMenu label="停用" clients={clients} disabled={busy} onPick={onDisableFrom} />
+      {lockedClientId !== undefined ? (
+        <>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onEnableTo(lockedClientId)}
+            className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
+          >
+            启用
+          </button>
+          <button
+            type="button"
+            disabled
+            title="分组批量将在后续批次落地"
+            className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-faint"
+          >
+            挂到分组…
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDisableFrom(lockedClientId)}
+            className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
+          >
+            停用
+          </button>
+        </>
+      ) : (
+        <>
+          <ClientMenu label="启用到…" clients={clients} disabled={busy} onPick={onEnableTo} />
+          <button
+            type="button"
+            disabled
+            title="分组批量将在后续批次落地"
+            className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-faint"
+          >
+            挂到分组…
+          </button>
+          <ClientMenu label="停用" clients={clients} disabled={busy} onPick={onDisableFrom} />
+        </>
+      )}
       <div className="relative">
         <button
           type="button"
