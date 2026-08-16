@@ -28,7 +28,16 @@ export interface SkillRecord {
   /** store 内的目录名(英文)。 */
   dirName: string;
   meta: SkillMeta;
-  source: SkillSource;
+  /**
+   * 收录来源(多值):同一份内容可能出现在 26 个客户端目录里,
+   * 按内容哈希去重后是一条记录、多个来源(store-and-paths-v0.md §2.3)。
+   */
+  origins: SkillSource[];
+  /**
+   * 在哪些客户端可见(由链接台账维护,与 origins 是两个独立概念:
+   * 来源 = 从哪收录来的,visibleIn = 链接挂在了哪些客户端目录)。
+   */
+  visibleIn: string[];
   installedAt: string;
 }
 

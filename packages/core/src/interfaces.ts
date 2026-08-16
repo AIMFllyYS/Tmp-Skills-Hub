@@ -16,8 +16,11 @@ export interface StorageProvider {
   get(hash: SkillHash): Promise<SkillRecord | null>;
   /** 将一个标准化的 skill 文件夹收进库存,返回记录(内容相同则幂等返回已有记录)。 */
   add(folderPath: string, record: Omit<SkillRecord, "hash">): Promise<SkillRecord>;
-  /** 从库存移除记录(不负责删除各 Agent 侧链接)。 */
-  remove(hash: SkillHash): Promise<void>;
+  /**
+   * 软删除:把记录移出活跃区并归档(zip),不销毁内容(cli-commands-v0.md §2)。
+   * 全项目不存在真删除路径——需要彻底删除时只向用户显示归档文件路径。
+   */
+  archive(hash: SkillHash): Promise<void>;
 }
 
 /**

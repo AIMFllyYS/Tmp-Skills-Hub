@@ -21,7 +21,7 @@ export function createUiApp(): Hono {
         hash: s.hash,
         name: s.meta.name,
         description: s.meta.description,
-        source: s.clientId,
+        clientId: s.clientId,
       })),
     });
   });
