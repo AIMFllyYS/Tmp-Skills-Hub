@@ -7,6 +7,7 @@ import {
   discoverClientRootsAt,
   hashSkillFolder,
   listArchivedSkills,
+  readGroups,
   readLinksLedger,
   readStoreIndex,
   resolveStoreRoot,
@@ -218,6 +219,8 @@ export interface LinkCmdArgs {
   client: string | undefined;
   /** global(默认,home 下)/ project(cwd 下) */
   scope: string | undefined;
+  /** 按分组批量操作(--group <id>,与按名互斥) */
+  group: string | undefined;
   _: (string | number)[];
 }
 
@@ -270,13 +273,51 @@ export async function syncVisibleIn(storeRoot: string, ledger: LinkEntry[]): Pro
   if (changed) await writeStoreIndex(storeRoot, skills);
 }
 
-export async function runEnable(args: LinkCmdArgs): Promise<void> {
+/** 解析操作目标:按名或按分组(二选一,互斥校验)。返回 dirName 列表。 */
+async function resolveLinkTargets(
+  args: LinkCmdArgs,
+  skills: Awaited<ReturnType<typeof readStoreIndex>>,
+  storeRoot: string,
+): Promise<string[] | null> {
   const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
-  if (names.length === 0) {
-    console.error("用法: skills-hub enable <skill名或哈希前缀...> --client <id> [--scope global|project] [--yes] [--dry-run]");
+  const groupId = args.group;
+  if (names.length > 0 && groupId !== undefined) {
+    console.error("enable/disable 不能同时按名与按分组(--group),请二选一。");
     process.exitCode = 2;
-    return;
+    return null;
   }
+  if (groupId !== undefined) {
+    const groups = await readGroups(storeRoot);
+    const g = groups.groups.find((x) => x.id === groupId);
+    if (g === undefined) {
+      console.error("分组不存在: " + groupId + "。skills-hub group list 查看。");
+      process.exitCode = 2;
+      return null;
+    }
+    const memberHashes = new Set(g.memberHashes);
+    const dirNames = skills.filter((s) => memberHashes.has(s.hash)).map((s) => s.dirName);
+    if (dirNames.length === 0) {
+      console.error("分组 " + groupId + " 里没有 skill。先 skills-hub group add <id> <skill名...> 加入。");
+      process.exitCode = 2;
+      return null;
+    }
+    return dirNames;
+  }
+  if (names.length === 0) {
+    console.error("用法: skills-hub enable <skill名或哈希前缀...> --client <id> [--group <id>] [--scope global|project] [--yes] [--dry-run]");
+    process.exitCode = 2;
+    return null;
+  }
+  try {
+    return names.flatMap((n) => resolveNames(n, skills));
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 2;
+    return null;
+  }
+}
+
+export async function runEnable(args: LinkCmdArgs): Promise<void> {
   const dryRun = args.dryRun === true;
   if (!dryRun && !requireWriteAuth(args)) return;
   const storeRoot = await resolveStoreRootOrFail(args);
@@ -286,14 +327,8 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
   const scope = args.scope === "project" ? "project" : "global";
 
   const skills = await readStoreIndex(storeRoot);
-  let dirNames: string[];
-  try {
-    dirNames = names.flatMap((n) => resolveNames(n, skills));
-  } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
-    process.exitCode = 2;
-    return;
-  }
+  const dirNames = await resolveLinkTargets(args, skills, storeRoot);
+  if (dirNames === null) return;
 
   const ledger = await readLinksLedger(storeRoot);
   const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
@@ -349,12 +384,6 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
 }
 
 export async function runDisable(args: LinkCmdArgs): Promise<void> {
-  const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
-  if (names.length === 0) {
-    console.error("用法: skills-hub disable <skill名或哈希前缀...> --client <id> [--scope global|project] [--yes] [--dry-run]");
-    process.exitCode = 2;
-    return;
-  }
   const dryRun = args.dryRun === true;
   if (!dryRun && !requireWriteAuth(args)) return;
   const storeRoot = await resolveStoreRootOrFail(args);
@@ -364,14 +393,8 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
   const scope = args.scope === "project" ? "project" : "global";
 
   const skills = await readStoreIndex(storeRoot);
-  let dirNames: string[];
-  try {
-    dirNames = names.flatMap((n) => resolveNames(n, skills));
-  } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
-    process.exitCode = 2;
-    return;
-  }
+  const dirNames = await resolveLinkTargets(args, skills, storeRoot);
+  if (dirNames === null) return;
 
   const ledger = await readLinksLedger(storeRoot);
   const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
