@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import {
@@ -35,6 +37,40 @@ export interface UiAppOptions {
   storeRoot?: string | null;
   /** home 解析基座(沙箱测试注入;缺省 resolveHome()) */
   home?: string;
+  /** web 静态产物根(缺省 apps/web/dist;测试注入临时目录) */
+  webRoot?: string;
+}
+
+/** 默认静态根:编译后位于 packages/cli/dist/,上三级到仓库根,再进 apps/web/dist。 */
+function defaultWebRoot(): string {
+  return fileURLToPath(new URL("../../../apps/web/dist", import.meta.url));
+}
+
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".ico": "image/x-icon",
+  ".webp": "image/webp",
+  ".woff2": "font/woff2",
+  ".json": "application/json",
+  ".map": "application/json",
+};
+
+/** 静态产物缺失时的可操作提示页(而不是裸 404)。 */
+function notFoundPage(): string {
+  return [
+    "<!doctype html><html lang='zh'><meta charset='utf-8'><title>skill-hub ui</title>",
+    "<body style='font-family:system-ui,sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem;color:#030712'>",
+    "<h1 style='font-size:1.25rem'>面板尚未构建</h1>",
+    "<p>本地数据服务已就绪,但静态面板产物不存在。先构建:</p>",
+    "<p style='font-family:ui-monospace,monospace;font-size:.875rem;background:#f9fafb;padding:.75rem;border-radius:.5rem'>pnpm --filter @skills-hub/web build</p>",
+    "<p>构建完成后刷新本页即可。API 端点不受影响:<a href='/api/health'>/api/health</a></p>",
+    "</body></html>",
+  ].join("");
 }
 
 /** 按台账重算 visibleIn(与 syncVisibleIn 同口径:某 dirName 在哪些客户端有链接)。 */
@@ -64,6 +100,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const app = new Hono();
   const storeRoot = opts.storeRoot === undefined ? null : opts.storeRoot;
   const home = opts.home ?? resolveHome();
+  const webRoot = opts.webRoot ?? defaultWebRoot();
 
   const err = (c: Context, command: string, code: string, message: string, status: 400 | 404 | 409 | 503) =>
     c.json({ ok: false, command, code, message }, status);
@@ -193,6 +230,27 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       return c.json({ ok: true, command: "archive", dirName, archiveFile: res.archiveFile, sizeBytes: res.sizeBytes, removedLinks: res.removedLinks });
     }),
   );
+
+  // ---- 静态面板(SPA):一条命令起完整体验 ----
+  // 路径按 webRoot 约束解析(防目录穿越);任何静态缺失都给构建指引页,不裸 404。
+
+  const serveFile = async (c: Context, rel: string): Promise<Response> => {
+    const relPath = rel === "/" ? "index.html" : rel;
+    const safe = path.resolve(webRoot, "./" + relPath);
+    if (safe !== webRoot && !safe.startsWith(webRoot + path.sep)) return c.text("Not found", 404);
+    const file = await readFile(safe).catch(() => null);
+    if (file === null) return c.html(notFoundPage(), 200);
+    const ext = path.extname(safe).toLowerCase();
+    return new Response(file, { headers: { "content-type": MIME[ext] ?? "application/octet-stream" } });
+  };
+
+  app.get("/", (c) => serveFile(c, "index.html"));
+  app.get("/assets/*", (c) => serveFile(c, c.req.path));
+  app.get("*", (c) => {
+    // API 未知路径仍返回 JSON 信封,不被 SPA fallback 吃掉
+    if (c.req.path.startsWith("/api/")) return err(c, "unknown", "not-found", "未知 API: " + c.req.path, 404);
+    return serveFile(c, "index.html"); // 前端路由刷新不 404
+  });
 
   return app;
 }

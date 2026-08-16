@@ -57,10 +57,61 @@ async function storeRootOf(): Promise<string> {
 let app: ReturnType<typeof createUiApp>;
 let storeRoot: string;
 
+/** 静态面板测试用的 webRoot:一个带 index.html 与 assets 的临时目录。 */
+async function makeWebRoot(): Promise<string> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-webroot-"));
+  tempRoots.push(dir);
+  await mkdir(path.join(dir, "assets"), { recursive: true });
+  await writeFile(path.join(dir, "index.html"), "<!doctype html><title>panel</title>", "utf8");
+  await writeFile(path.join(dir, "assets", "app.js"), "console.log(1)", "utf8");
+  return dir;
+}
+
+let webRoot = "";
+let emptyWebRoot = "";
+
 beforeAll(async () => {
   await setupStore();
   storeRoot = await storeRootOf();
+  webRoot = await makeWebRoot();
+  emptyWebRoot = await mkdtemp(path.join(os.tmpdir(), "skills-hub-webroot-empty-"));
+  tempRoots.push(emptyWebRoot);
   app = createUiApp({ storeRoot, home });
+});
+
+describe("静态面板托管", () => {
+  it("首页返回 index.html", async () => {
+    const res = await createUiApp({ storeRoot, home, webRoot }).request("/");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("panel");
+  });
+
+  it("assets 静态文件带正确 content-type", async () => {
+    const res = await createUiApp({ storeRoot, home, webRoot }).request("/assets/app.js");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("console.log(1)");
+    expect(res.headers.get("content-type")).toContain("text/javascript");
+  });
+
+  it("SPA fallback:前端路由刷新返回 index.html 而非 404", async () => {
+    const res = await createUiApp({ storeRoot, home, webRoot }).request("/panel/some/route");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("panel");
+  });
+
+  it("静态产物缺失:提示先构建,而不是裸 404", async () => {
+    const res = await createUiApp({ storeRoot, home, webRoot: emptyWebRoot }).request("/");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("尚未构建");
+  });
+
+  it("未知 API 路径返回 JSON 信封,不被 SPA fallback 吃掉", async () => {
+    const res = await app.request("/api/unknown-route");
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { ok: boolean; code: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("not-found");
+  });
 });
 
 afterAll(async () => {
