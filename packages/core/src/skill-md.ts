@@ -34,7 +34,8 @@ function extractFrontmatter(markdown: string): string | null {
 }
 
 function readScalar(frontmatter: string, key: string): string | null {
-  const pattern = new RegExp(`^${key}\\s*:\\s*(.+)$`, "m");
+  // 冒号两侧只允许空格/制表符:\s 含换行,会让空值吞掉下一行(如 `name: ` 后跟 description)
+  const pattern = new RegExp(`^${key}[ \\t]*:[ \\t]*(.+)$`, "m");
   const raw = pattern.exec(frontmatter)?.[1]?.trim();
   if (raw === undefined || raw === "") return null;
   return raw.replace(/^["']|["']$/g, "");
