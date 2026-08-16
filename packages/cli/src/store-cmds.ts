@@ -1,3 +1,4 @@
+import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   adoptMany,
@@ -18,6 +19,8 @@ import {
   type SkillRecord,
   type StoreRootOptions,
 } from "@skills-hub/core";
+import { isGitHubUrl, STORE_TMP_DIR } from "@skills-hub/core";
+import { GitHubSourceProvider } from "./github-source.js";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { performLinkChange } from "./link-actions.js";
@@ -57,7 +60,7 @@ export interface AdoptArgs {
 export async function runAdopt(args: AdoptArgs): Promise<void> {
   const paths = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
   if (paths.length === 0) {
-    console.error("用法: skills-hub adopt <本地skill目录路径> [--yes] [--dry-run]");
+    console.error("用法: skills-hub adopt <本地skill目录路径|GitHub链接> [--yes] [--dry-run]");
     process.exitCode = 2;
     return;
   }
@@ -66,11 +69,42 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
   const storeRoot = await resolveStoreRootOrFail(args, "adopt");
   if (storeRoot === null) return;
 
-  const inputs: AdoptInput[] = paths.map((p) => ({
-    folderPath: path.resolve(p),
-    origin: { kind: "local-scan", reference: path.resolve(p) },
-  }));
+  const inputs: AdoptInput[] = [];
+  let adoptFailed = false;
+
+  // 本地路径:与批 1 完全一致,不拦截不接管
+  for (const p of paths) {
+    if (isGitHubUrl(p)) continue;
+    inputs.push({
+      folderPath: path.resolve(p),
+      origin: { kind: "local-scan", reference: path.resolve(p) },
+    });
+  }
+
+  // GitHub 链接:拉取到库存临时区,验证通过后与本地路径同一套去重入库;
+  // 失败给出可读错误(含重试建议),不产生半个 skill,不留残留。
+  const urlPaths = paths.filter((p) => isGitHubUrl(p));
+  if (urlPaths.length > 0) {
+    const provider = new GitHubSourceProvider(storeRoot);
+    for (const u of urlPaths) {
+      try {
+        const dirs = await provider.fetch(u);
+        for (const d of dirs) {
+          inputs.push({ folderPath: d, origin: { kind: "github", reference: u } });
+        }
+      } catch (e) {
+        adoptFailed = true;
+        const message = e instanceof Error ? e.message : String(e);
+        if (args.json) emitError(true, "adopt", "github-fetch-failed", message);
+        else console.error("✗ 拉取失败: " + u + " — " + message);
+      }
+    }
+  }
+
   const report = await adoptMany(storeRoot, inputs, { dryRun });
+
+  // 清理本次 GitHub 拉取的临时目录(成功与失败都不留残留)
+  await cleanupGithubTmp(storeRoot);
 
   if (args.json) {
     emitOk("adopt", {
@@ -87,6 +121,7 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
       duplicates: report.duplicates,
       conflicts: report.conflicts,
       invalid: report.invalid,
+      fetchFailed: adoptFailed,
     });
     return;
   }
@@ -97,6 +132,7 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
     else console.log("✗ 未收录(缺 name/description): " + o.folderPath);
   }
   console.log((dryRun ? "预演结果" : "收录结果") + `: 新增 ${report.adopted} / 重复 ${report.duplicates} / 冲突 ${report.conflicts} / 未达标 ${report.invalid}`);
+  if (adoptFailed) process.exitCode = 3; // 至少一个链接拉取失败,仍继续处理其余输入
 }
 
 export interface ListArgs {
@@ -104,6 +140,22 @@ export interface ListArgs {
   json: boolean | undefined;
   source: string | undefined;
   enabled: boolean | undefined;
+}
+
+/** 清掉库存临时区里本次会话遗留的 github.* 目录(adopt 已入位的 adopt.* 已 rename,不受影响)。 */
+async function cleanupGithubTmp(storeRoot: string): Promise<void> {
+  const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
+  let names: string[];
+  try {
+    names = await readdir(tmpDir);
+  } catch {
+    return; // tmp 不存在则无事可做
+  }
+  for (const name of names) {
+    if (name.startsWith("github.")) {
+      await rm(path.join(tmpDir, name), { recursive: true, force: true });
+    }
+  }
 }
 
 export async function runList(args: ListArgs): Promise<void> {

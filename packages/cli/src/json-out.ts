@@ -15,6 +15,7 @@ export type JsonErrorCode =
   | "group-empty"
   | "invalid-skill"
   | "link-failed"
+  | "github-fetch-failed"
   | "io-error";
 
 /** 失败信封:--json 输出到 stdout,人类文本进 stderr,退出码 2。 */
