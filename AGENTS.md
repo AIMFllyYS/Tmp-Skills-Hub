@@ -136,6 +136,8 @@ scripts/        辅助脚本（setup/build/dev）
 
 - [architecture-initial-spec.md](docs/designs/architecture-initial-spec.md) — **架构初始规范（宏观最高约束）**：新模块/需求立项前必须按其第 1 章方法论走；issue 拆解须引用其 DAG 与 block 规则
 - [tech-stack-decision.md](docs/designs/tech-stack-decision.md) — 技术选型决策记录（为什么是 core+CLI 而不是 Next.js）
+- [panel-ia-v1.md](docs/designs/panel-ia-v1.md) — **面板信息架构**：三栏骨架、行级关系、批量一次原子提交、动作注册表
+- [backup-mechanism-analysis.md](docs/designs/backup-mechanism-analysis.md) — 备份机制分析稿（批 10 / #83 施工依据）
 
 ### docs/specs/ — 实现口径（分批施工前必读）
 
@@ -144,7 +146,7 @@ scripts/        辅助脚本（setup/build/dev）
 
 ### docs/plans/ — 计划
 
-- [plan-batches-v1.md](docs/plans/plan-batches-v1.md) — **分批执行计划（当前执行依据）**：7 个批次与录音稿 Step 的对应、各批验收
+- [plan-batches-v1.md](docs/plans/plan-batches-v1.md) — **分批执行计划（当前执行依据）**：批 0–6 已完成；当前从批 7（P0 修复）起
 - [plan-first-shippable.md](docs/plans/plan-first-shippable.md) — 第一版工程计划（决策甬道 1–6 落地，里程碑划分已被上文取代，保留作背景）
 
 ### docs/updates/ — 会议与变更

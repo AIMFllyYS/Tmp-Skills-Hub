@@ -1,7 +1,8 @@
 # 目标模式提示词（交给 harness 直接使用）
 
-> Created: 2026-08-16
+> Updated: 2026-08-17
 > 用法：把下面「提示词正文」整段复制进 harness 的目标模式。它自包含，不需要额外对话。
+> 上一轮（批 0–6，43 个 issue）已完成。本轮从批 7 起，把 Web 从「查看壳」做成主操作台。
 
 ---
 
@@ -11,17 +12,22 @@
 
 ### 你的目标
 
-按队列顺序清空 GitHub 上已经写好的 43 个 issue，把 skills-hub 从当前的骨架推进到一个能用的本地 Agent Skill 管理器。**卡功能，不卡时间**——不要为了赶时间牺牲质量，也不要在一个 issue 上无限打磨。
+按队列顺序清空 GitHub 上已经写好的 **25 个子 issue**（#95–#119），把面板做成正常人打开就能完成全部管理的主操作台，并顺手落地备份命令与分享闭环。**卡功能，不卡时间**——不要为了赶时间牺牲质量，也不要在一个 issue 上无限打磨。
+
+父 issue #90–#94 不单独开 PR，随子 issue 全部完成而关闭。#83 在批 10（#116+#117）完成后关闭。
 
 ### 开工前必读（按顺序，只读一次）
 
 1. `AGENTS.md` —— 操作索引与硬规则，特别是「目标模式」一节（你的权限与禁区）
-2. `docs/plans/plan-batches-v1.md` —— 执行依据：7 个批次、宗旨、各批验收
-3. `docs/specs/store-and-paths-v0.md` —— 库存位置、目录布局、客户端发现规则、**沙箱边界**
-4. `docs/specs/cli-commands-v0.md` —— CLI 命令面与渐进式披露机制
-5. `docs/conventions/core-patterns.md` —— 确定性内核铁律（第一、二节已于 2026-08-16 修订，注意修订理由）
+2. `docs/audits/panel-and-perf-audit-2026-08-17.md` —— **本轮事实依据**。卡顿不是点击造成的，四个 P0 都有实测数据。不要重新发明原因。
+3. `docs/designs/panel-ia-v1.md` —— 面板信息架构（三栏、行级关系、一次原子提交、动作注册表）
+4. `docs/plans/plan-batches-v1.md` —— 执行依据；当前从批 7 起
+5. `docs/specs/store-and-paths-v0.md` —— 库存位置、沙箱边界
+6. `docs/specs/cli-commands-v0.md` —— 命令名唯一口径，新命令先改本文
+7. `docs/conventions/ui-design-v0.md` —— 视觉铁律：无阴影、无毛玻璃、无渐变
+8. `docs/conventions/core-patterns.md` —— 确定性内核（注意 2026-08-16 修订）
 
-方向有疑问时，回去看 `docs/updates/meeting-2026-08-15-first-sync.md` 的录音稿原文，它是最高方向依据。
+方向有疑问时，回去看 `docs/updates/meeting-2026-08-15-first-sync.md` 的录音稿原文。
 
 ### 三条宗旨（优先于一切细节）
 
@@ -35,63 +41,67 @@
 
 1. 从**最新的 `dev`** 切分支，命名 `<type>/<issue编号>-<slug>`。禁止在上一个 issue 的分支上开新分支。
 2. 实现前先读当前代码确认实际行为——issue 里写的「当前行为」可能已被前面的 PR 改掉。
-3. 实现后必须跑：`pnpm lint`、`pnpm typecheck`、`pnpm build`、`pnpm test`（批 0 之后 test 才存在）。四条全绿才能提 PR。
+3. 实现后必须跑：`pnpm lint`、`pnpm typecheck`、`pnpm build`、`pnpm test`。四条全绿才能提 PR。`pnpm smoke` 在 #100 落地后也要跑（无 Chrome 可跳过）。
 4. PR 打向 `dev`，正文包含测试命令与结果摘要，末尾唯一一条 `Closes #<编号>`。
 5. **CI 绿后自行 squash merge 进 `dev`**，然后处理队列里的下一个。不要停下来等人审。
-6. 父 issue（#1–#7）不单独开 PR，它们随子 issue 全部完成而关闭。
+6. 父 issue（#90–#94）不单独开 PR。
 
 ### 执行队列（严格按此顺序）
 
 ```
-批 0 工程基座    #8  → #9  → #10 → #11
-批 1 存          #12 → #13 → #14 → #15 → #16 → #17 → #18
-批 2 链接层      #19 → #20 → #21 → #22 → #23 → #24
-批 3 渐进式披露  #25 → #26 → #27 → #28 → #29
-批 4 面板        #30 → #31 → #32 → #33 → #34 → #35
-（插队）         #42        ← 翻译按钮依赖它，必须先做
-批 5 查看与收录  #36 → #37 → #38 → #39 → #40 → #41
-批 6 AI 分析     #43
+批 7  P0 修复        #95 → #96 → #97 → #98 → #99 → #100
+批 8  三栏骨架        #101 → #102 → #103 → #104 → #105 → #106 → #107
+批 9  管理动作        #108 → #109 → #110 → #111 → #112 → #113 → #114 → #115
+批 10 备份施工        #116 → #117          ← 完成后关闭 #83
+批 11 分享闭环        #118 → #119          ← #118 无调研文档则 #119 不得开工
 ```
+
+批 7 必须先做完再动批 8：现在的面板是坏的（开关全空、内容永远「加载中…」），在坏面板上重构没有意义。
 
 ### 硬禁区（违反即为事故）
 
-- **不向真实客户端目录写入任何内容。** `~/.claude`、`~/.cursor`、`~/.codex` 等 26 个 skills 目录只读。所有写操作走沙箱假 home：`<repo>/.sandbox/home-<时间戳>/`，通过 `--home` / `SKILLS_HUB_HOME` 重定向。读取真实目录是允许的，可以只读复制真实 skill 当测试素材。
+- **不向真实客户端目录写入任何内容。** `~/.claude`、`~/.cursor`、`~/.codex` 等只读。所有写操作走沙箱假 home：`<repo>/.sandbox/home-<时间戳>/`，通过 `--home` / `SKILLS_HUB_HOME` 重定向。读取真实目录允许。
 - **不实现真删除。** 全项目没有 `delete`，所有删除都是软删除归档。需要彻底删除时只向用户显示归档路径。
 - **不动 `main`**，不 force push，不改 `pnpm-lock.yaml`（只通过 `pnpm install` 间接改）。
 - **不提交 `.env`** 或任何密钥。密钥只从环境变量读，不进源码、不进日志、不进发往前端的响应。
-- **core 不碰网络、不碰框架。** 外部 API 调用一律在 cli；web 不 import core 或 cli，只走 HTTP `/api`。
-- 不建 WSL 或 Docker。理由见 `docs/specs/store-and-paths-v0.md` §5——容器里没有 Windows junction，会把唯一值得验证的东西验证不了。
+- **core 不碰网络、不碰框架。** 外部 API 一律在 cli；web 不 import core 或 cli，只走 HTTP `/api`。
+- 不建 WSL 或 Docker。理由见 `docs/specs/store-and-paths-v0.md` §5。
+- **不向任何真实远程仓库推 skill。** 批 11 的推送测试只用 fetch 替身。不要写到 `KinomotoMio/skill-hub`，也不要写到用户的真实 GitHub。
+- **不引入 react-query / react-window / cmdk / kbar。** 虚拟滚动、请求缓存、命令面板自己写。必须引入时在 PR 里说明理由。
+- **批量挂链禁止循环打单条 enable 端点。** 走 `POST /api/links/apply`，一次 `applyLinkSet`。
+
+### 本轮已经核实的事实（可直接引用，不必重新验证）
+
+完整数据见 `docs/audits/panel-and-perf-audit-2026-08-17.md`。摘要：
+
+- 库存 `D:\projects\My-Skills\Hubs`：157 个 skill，2547 个文件
+- `/api/skills` 129 KB / 153 ms；`/tree` 与 `/file` 都在 45 ms 内
+- 点击 skill 后静置 10 s：CPU 增量 0.00 s，fetch 0，**没有死循环**
+- 内容区永远「加载中…」：`SkillViewer` 只拉树、不拉文件（#96）
+- `/api/clients` 返回空数组：`bootstrap.ts:226` 把 `storeRoot` 传给了 `startUiServer` 的 home（#95）
+- 正确 home 下 `discoverClientRoots` 返回 23 个 root
+- `bootstrap` 进程单次读 846 MB / 写 473 MB；快照从 5 MB 放大到 309 MB（#97）
+- `~/.skills-hub.pre-bootstrap-*` 被当成客户端 root（#98）
+- 4321 端口可能已被用户的 `bootstrap` 占用（PID 以当时为准）。不要杀用户进程；测试用沙箱 + 随机端口，或 `createUiApp` 的 `app.request()` 不占端口
 
 ### 遇到问题怎么办
 
 - **自己解决。** 查文档、联网搜索、换实现路径。只有真正的阻塞（鉴权失败、必需信息缺失且无法合理推断）才停下来报告。
-- **遇到架构矛盾先修文档。** 文档冲突通常意味着当初没规范清楚。先把规范改对并写明修订理由，再按新规范施工，不要绕过矛盾硬写代码。
-- **必须联网搜索的地方，不要凭猜测写代码。** 以下几处 issue 里已标明，每条结论要在 PR 或调研文档里附来源链接：
-  - macOS / Linux 上各客户端的 skills 目录约定（#12）
-  - symlink / junction / hardlink 在各系统的权限与非破坏性语义（#19）
-  - skills.sh 的链接结构与拉取方式（#39）
-  - DeepSeek API 的调用方式（#42）
-- 同一个 issue 连续失败 3 次仍无法通过验收 → 在该 issue 下留言说明卡点，跳到队列里下一个**不依赖它**的 issue，最后统一报告。不要卡死整条队列。
-- Windows + PowerShell 环境：不要用 `&&` 串联命令（用 `;` 或 `if ($?)`），不要用 bash heredoc 写 commit message（用 `git commit -F <file>`），含空格路径要加双引号。
-
-### 本机已实测的事实（可直接引用，不必重新验证）
-
-- 26 个客户端 skills root、579 份 skill 副本、190 个不同名字
-- `demo-init` 在全部 26 个 root 里各存一份；备份目录 `.demo-init.backup-20260814T203633` 也被复制了 26 份
-- 副本数最多的几个 root：`.trae-cn/skills`（61）、`.codex/skills`（53）、`.quickwork/skills`（48）
-- `.cursor` 下同时存在 `skills/`（25）与 `skills-cursor/`（23）两个目录
-- 至少有一个 skill 的 `description` 近乎为空（`pptx-manipulation`），是收录校验的真实边界案例
-- Claude Code 只有 `--add-dir` 指定的目录支持 skill 热加载，默认 `.claude/skills/` 只在启动时读取
+- **遇到架构矛盾先修文档。** 尤其是 #116：批 7-3「跟随链接复制内容」与备份分析稿「不跟随链接」冲突，必须先修订分析稿并写明理由，再写代码。
+- **必须联网搜索的地方，不要凭猜测写代码：**
+  - #118 授信仓库推送的 GitHub API、权限、配置落点（每条结论附来源链接）
+- 同一个 issue 连续失败 3 次仍无法通过验收 → 在该 issue 下留言说明卡点，跳到队列里下一个**不依赖它**的 issue，最后统一报告。
+- Windows + PowerShell：不要用 `&&` 串联命令（用 `;` 或 `if ($?)`），不要用 bash heredoc 写 commit message（用 `git commit -F <file>`），含空格路径要加双引号。
 
 ### 完成标准
 
-队列清空，`dev` 上四条校验全绿，`skills-hub ui` 一条命令能起完整体验。然后向用户汇报：完成了哪些 issue、跳过了哪些及原因、修订了哪些规范文档及理由、以及回来后需要人工做的第一件事。
+队列清空，`dev` 上四条校验全绿，`skills-hub ui` 一条命令起完整体验：点开 skill 能看到正文、能看到客户端开关、能从面板收录/归档/分组/分析/批量挂链。然后向用户汇报：完成了哪些 issue、跳过了哪些及原因、修订了哪些规范文档及理由、以及回来后需要人工做的第一件事。
 
 ---
 
 ## 附：给用户的说明（不要复制进 harness）
 
-- 43 个 issue 已建好并完成父子关联，父 issue 是 #1–#7，对应 7 个批次。
-- 远程默认分支已设为 `dev`，`main` 停在初始 commit，作为你回来审查的对照基线。
-- 你回来后看一个 `dev` → `main` 的总 PR，就是全部改动的一次性审查入口。
-- 真机首次收录（`adopt` 你自己的 skill）刻意留给你亲手执行——产品红线要求收录前获得授权，无人值守时没人能授权。
+- 30 个新 issue 已建好并完成父子关联：父 #90–#94，子 #95–#119。#83 仍 open，批 10 完成后关闭。
+- 远程默认分支仍是 `dev`。不要动 `main`。
+- 你回来后看 `dev` 相对出发时的 diff，就是本轮全部改动。
+- 真机客户端目录仍然只读。若要亲手体验，等队列跑完再自己点面板。
