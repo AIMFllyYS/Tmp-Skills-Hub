@@ -37,11 +37,15 @@
 
 忽略项(`.git`、`node_modules` 等)的清单变更等于**全库哈希迁移**,必须走 issue 评审。
 
-## 四、Windows 符号链接
+## 四、链接语义与权限(2026-08-16 修订)
 
-- 本地开发环境是 Windows:普通用户创建 symlink 需要开发者模式或管理员权限。
-- **目录链接优先用 junction**(`fs.symlink(target, path, "junction")`),不需要提权,各 Agent 读目录内容的行为一致。
-- 落地前有单独的 spike issue 验证各 Agent 对 junction 的兼容性(计划 M1 前置项)。
+> 本节依据 链接语义调研(docs/audits/link-semantics-research-2026-08-16.md)修订(联网查证,每条结论附来源)。原「各 Agent 读目录内容的行为一致」表述不准确,按查证结果细化。
+
+- 本地开发环境是 Windows:普通用户创建 symlink 需要开发者模式或管理员权限;junction 与 hardlink 无需提权(hardlink 仅文件,本项目不用作目录挂载)。
+- **目录链接优先用 junction**(fs.symlink(target, path, "junction")),目标必须是**绝对路径、同 NTFS 卷**;非 Windows 平台用目录 symlink(无特权,可用相对目标)。
+- **条目级链接(链接放在真实存在的客户端 skills 目录内)对 agent 加载器读取一致;但目录整体是链接、UI 菜单可见性、客户端自动更新三类场景不可靠**(Claude Code #38051/#68318/#50052),对应客户端需降级为复制——落地前 spike 需实测其余客户端的加载与 UI 显示。
+- **删除链接必须先 lstat 判型再 unlink,绝不用 Remove-Item -Recurse -Force / del /s /q 删除含链接的树**(会跟随 junction 删到链接目标,PowerShell #26913 灾难性数据丢失)。
+- **原子切换的 rename 顺序:先 unlink 旧链接(不跟随),再 rename 新链接**;rename 不允许目录覆盖非空目录,不能整目录覆盖。
 - store 内部不允许出现链接;扫描时遇到链接不展开,交给上层校验报错。
 
 ## 五、智能层写成 Skill,不写成代码
