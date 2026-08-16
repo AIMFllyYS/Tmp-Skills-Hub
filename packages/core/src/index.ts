@@ -4,3 +4,14 @@ export { hashSkillFolder } from "./hash.js";
 export { parseSkillMeta, readSkillMeta } from "./skill-md.js";
 export { discoverClientRoots, isExcludedRoot } from "./clients.js";
 export type { ClientRoot } from "./clients.js";
+export { resolveStoreRoot, readPointerStoreRoot } from "./store-location.js";
+export type { StoreRootOptions, StoreRootResolution, StoreRootSource } from "./store-location.js";
+export {
+  initializeStoreLayout,
+  STORE_ARCHIVE_DIR,
+  STORE_DATA_FILES,
+  STORE_LAYOUT_VERSION,
+  STORE_SKILLS_DIR,
+  STORE_TMP_DIR,
+} from "./store-layout.js";
+export type { InitLayoutResult, StoreManifest } from "./store-layout.js";
