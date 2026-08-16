@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
-import { SkillRow } from "../skills/SkillRow.js";
 import type { ArchivedSkill, SkillRecord } from "../skills/types.js";
-import { isSkillScope, type ScopeSelection } from "./scope.js";
+import { isSkillScope, scopeKey, type ScopeSelection } from "./scope.js";
+import { VirtualSkillList } from "./VirtualSkillList.js";
 
 export type SortMode = "name" | "usage";
 
@@ -115,19 +115,15 @@ export function CollectionPane({
       {skills.length === 0 ? (
         <p className="px-4 py-6 text-sm text-ink-mid">没有匹配的 skill。</p>
       ) : (
-        <ul>
-          {skills.map((skill) => (
-            <SkillRow
-              key={skill.hash}
-              skill={skill}
-              clientTotal={clientTotal}
-              checked={checked.has(skill.hash)}
-              focused={focusedHash === skill.hash}
-              onToggleCheck={onToggleCheck}
-              onFocus={onFocus}
-            />
-          ))}
-        </ul>
+        <VirtualSkillList
+          key={scopeKey(scope) + "\0" + query + "\0" + sortMode}
+          skills={skills}
+          clientTotal={clientTotal}
+          checked={checked}
+          focusedHash={focusedHash}
+          onToggleCheck={onToggleCheck}
+          onFocus={onFocus}
+        />
       )}
     </div>
   );
