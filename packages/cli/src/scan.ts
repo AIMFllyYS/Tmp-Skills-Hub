@@ -16,11 +16,14 @@ export interface DiscoveredSkill {
   meta: SkillMeta;
 }
 
-/** 扫描各已知客户端的全局 skills 目录,返回达到收录最低要求的 skill。 */
-export async function scanKnownClients(): Promise<DiscoveredSkill[]> {
+/**
+ * 扫描各已知客户端的全局 skills 目录,返回达到收录最低要求的 skill。
+ * home 由调用方显式传入(scan 是只读命令,默认真实 home)。
+ */
+export async function scanKnownClients(home: string): Promise<DiscoveredSkill[]> {
   const discovered: DiscoveredSkill[] = [];
   for (const client of KNOWN_CLIENTS) {
-    const dir = resolveSkillsDir(client, "global");
+    const dir = resolveSkillsDir(client, "global", home);
     if (!(await isDirectory(dir))) continue;
 
     for (const entry of await readdir(dir, { withFileTypes: true })) {

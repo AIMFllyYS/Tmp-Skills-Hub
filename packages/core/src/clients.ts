@@ -1,4 +1,3 @@
-import os from "node:os";
 import path from "node:path";
 import type { LinkScope } from "./types.js";
 
@@ -20,9 +19,15 @@ export const KNOWN_CLIENTS: readonly KnownClient[] = [
   { id: "agents", relativeSkillsDir: ".agents/skills" },
 ];
 
-/** 解析某客户端在指定范围下的 skills 目录绝对路径。 */
-export function resolveSkillsDir(client: KnownClient, scope: LinkScope, projectRoot?: string): string {
-  const base = scope === "global" ? os.homedir() : projectRoot;
+/**
+ * 解析某客户端在指定范围下的 skills 目录绝对路径。
+ *
+ * home 必须由调用方显式传入:core 内部不再自行决定写入位置,
+ * 沙箱重定向(--home / SKILLS_HUB_HOME)的唯一入口在 cli 层,
+ * 见 docs/specs/store-and-paths-v0.md §1、§5。
+ */
+export function resolveSkillsDir(client: KnownClient, scope: LinkScope, home: string, projectRoot?: string): string {
+  const base = scope === "global" ? home : projectRoot;
   if (base === undefined) {
     throw new Error(`project scope requires projectRoot (client: ${client.id})`);
   }
