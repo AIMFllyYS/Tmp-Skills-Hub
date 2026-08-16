@@ -35,3 +35,5 @@ export {
   writeLinksLedger,
 } from "./links.js";
 export type { LinkEntry, LinkEntryCheck, LinkEntryKind, LinkEntryState, LinksLedgerFile } from "./links.js";
+export { applyLinkSet } from "./link-switch.js";
+export type { ApplyOptions, LinkSetFailed, LinkSetOk, LinkSetPlan, LinkSetResult } from "./link-switch.js";
