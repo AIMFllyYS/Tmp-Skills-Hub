@@ -24,6 +24,8 @@
 | GET /api/clients | { ok, command: "clients", clients: { clientId, skillsDir }[] }(global 侧发现的客户端) | —(不依赖库存) |
 | GET /api/skills/:hash/links | { ok, command: "skill-links", hash, links: { clientId, state, detail }[] }(检查器客户端页,按需拉取) | 404 not-found;503 |
 | GET /api/clients/:clientId/skill-states | { ok, command: "client-skill-states", clientId, skillsDir, enabled, total, rows: { hash, state, detail }[] }(客户端视角全集行状态) | 404 not-found;503 |
+| GET /api/verify | { ok, command: "verify", storeRoot, checked, passed, drifted, missing }(只读;CLI --json 的 ok 数组在此改名为 passed,避开信封 ok) | 503 |
+| GET /api/doctor | { ok, command: "doctor", store, roots, linkTypes, danglingLinks }(与 CLI --json 同形) | 503 store-not-configured |
 
 ### SkillRecord(与 json-contract §2 同定义)
 
@@ -76,4 +78,4 @@
 
 ## 5. 测试
 
-packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、links preview/apply、分组 CRUD、analyze 只读建议、503 未配置。
+packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、links preview/apply、分组 CRUD、analyze 只读建议、verify/doctor 只读报告、503 未配置。
