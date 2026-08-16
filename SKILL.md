@@ -24,6 +24,15 @@ CLI 入口:仓库内 node packages/cli/dist/index.js <command>(需先 pnpm build
 
 ## 全流程(自包含)
 
+### 0. 一键初始化(真机体验;交互式,库存已就绪时直接启动面板)
+
+    skills-hub bootstrap [--home <库存根>] [--port 4321] [--yes]
+
+- 依次交互确认:库存位置(回车用默认 ~/.skills-hub)→ 备份(Y=复制全部客户端 skills 目录到 <库存根>/backups/<时间戳>/,N=跳过)→ 迁移(Y=收录全部本机 skills)
+- 红字警告 + 每一步 Y 即显式授权;完成后自动启动面板并尝试打开浏览器
+- 幂等:指针文件已配置 → 零交互直接启动面板
+- 非 TTY 环境需 --yes(全自动,默认路径,跳过全部确认)
+
 ### 1. 初始化库存(一次性)
 
     skills-hub init --home <SANDBOX_HOME> --yes
@@ -119,3 +128,4 @@ verify 重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改
 
 - 2026-08-16:沙箱全流程实测 init → adopt×2 → group list(5 内置)/create/add → enable(2 链接)→ disable(清空)→ rename/delete → archive,全部通过;show/enable 计数正确写入 stats.json;exit 2 路径(重复创建、名+组互斥、空组、缺 --yes)验证通过。
 - 2026-08-16:analyze 真实密钥 E2E(命中相近+冲突,理由具体,无写操作;无密钥降级、not-found 均验证);GitHub/skills.sh 收录 E2E(404/限流可读降级、tmp 零残留)。
+- 2026-08-16:bootstrap E2E(--yes 全自动:备份 manifest + 收录 + 自动起面板 /api/skills 200);单测 5 例(全流程/跳过备份/取消/幂等/非TTY拒绝);CI 双平台绿(core 116 / cli 69)。
