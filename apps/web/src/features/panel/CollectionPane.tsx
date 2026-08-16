@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getAction } from "../actions/registry.js";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
+import { ReportPanel } from "./ReportPanel.js";
 import type { SkillRowClientView } from "../skills/SkillRow.js";
 import type { ArchivedSkill, SkillRecord } from "../skills/types.js";
 import { AdoptForm } from "./AdoptForm.js";
@@ -130,9 +131,9 @@ export function CollectionPane({
   }
   if (scope.kind === "report") {
     return (
-      <div className="p-4">
-        <h2 className="mb-2 text-sm font-medium text-ink-strong">报告(四检)</h2>
-        <p className="text-sm text-ink-mid">四检报告入口将在后续批次落地。可先用终端 <code className="font-mono text-xs">skills-hub verify</code> / <code className="font-mono text-xs">skills-hub doctor</code>。</p>
+      <div className="h-full overflow-y-auto p-4">
+        <h2 className="mb-3 text-sm font-medium text-ink-strong">报告(四检)</h2>
+        <ReportPanel />
       </div>
     );
   }

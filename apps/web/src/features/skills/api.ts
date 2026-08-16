@@ -1,5 +1,5 @@
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
-import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
+import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse, VerifyResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchSkills(): Promise<SkillRecord[]> {
@@ -76,6 +76,24 @@ export async function fetchClients(): Promise<ClientsResponse["clients"]> {
   const body = (await res.json()) as ClientsResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
   return body.clients;
+}
+
+export async function fetchVerify(): Promise<VerifyResponse> {
+  const res = await fetch("/api/verify");
+  const body = (await res.json().catch(() => null)) as VerifyResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
+}
+
+export async function fetchDoctor(): Promise<DoctorResponse> {
+  const res = await fetch("/api/doctor");
+  const body = (await res.json().catch(() => null)) as DoctorResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
 }
 
 export async function fetchStats(): Promise<StatsResponse> {

@@ -190,6 +190,25 @@ export interface AnalyzeReportItem {
   reason: string;
 }
 
+export interface VerifyResponse {
+  ok: true;
+  command: "verify";
+  storeRoot: string;
+  checked: number;
+  passed: string[];
+  drifted: { name: string; recordedHash: string; actualHash: string }[];
+  missing: { name: string; recordedHash: string }[];
+}
+
+export interface DoctorResponse {
+  ok: true;
+  command: "doctor";
+  store: { resolved: boolean; storeRoot: string | null; reachable: boolean; error: string | null };
+  roots: { clientId: string; skillsDir: string }[];
+  linkTypes: { junction: boolean; symlink: boolean; hardlink: boolean };
+  danglingLinks: { linkPath: string; target: string }[];
+}
+
 export interface AnalyzeResponse {
   ok: true;
   command: "analyze";

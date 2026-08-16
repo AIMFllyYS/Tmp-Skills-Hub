@@ -438,6 +438,35 @@ describe("http-api 契约", () => {
     expect(fail.message).not.toMatch(/sk-|api[_-]?key\s*[:=]/i);
   });
 
+  it("verify:改文件后指出 dirName,写回后恢复;doctor 未配置 503", async () => {
+    const skillMd = path.join(storeRoot, "skills", "demo", "SKILL.md");
+    const orig = await readFile(skillMd, "utf8");
+    const clean = await app.request("/api/verify");
+    expect(clean.status).toBe(200);
+    const cleanBody = (await clean.json()) as { command: string; passed: string[]; drifted: { name: string }[] };
+    expect(cleanBody.command).toBe("verify");
+    expect(cleanBody.passed).toContain("demo");
+    expect(cleanBody.drifted.map((d) => d.name)).not.toContain("demo");
+
+    await writeFile(skillMd, orig + "\n# drifted-by-test\n", "utf8");
+    const dirty = await app.request("/api/verify");
+    const dirtyBody = (await dirty.json()) as { drifted: { name: string }[] };
+    expect(dirtyBody.drifted.map((d) => d.name)).toContain("demo");
+    await writeFile(skillMd, orig, "utf8");
+
+    const doc = await app.request("/api/doctor");
+    expect(doc.status).toBe(200);
+    const docBody = (await doc.json()) as { command: string; store: { resolved: boolean }; roots: unknown[]; linkTypes: unknown };
+    expect(docBody.command).toBe("doctor");
+    expect(docBody.store.resolved).toBe(true);
+    expect(Array.isArray(docBody.roots)).toBe(true);
+
+    const bare = createUiApp({ storeRoot: null, home });
+    const unconf = await bare.request("/api/doctor");
+    expect(unconf.status).toBe(503);
+    expect(((await unconf.json()) as { code: string }).code).toBe("store-not-configured");
+  });
+
   it("查看:路径穿越被拒绝(outside),未知文件 404", async () => {
     const res = await app.request("/api/skills/demo/file?path=..%2F..%2Fsecret.txt");
     expect(res.status).toBe(400);

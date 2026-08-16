@@ -284,13 +284,31 @@ export interface VerifyArgs {
   json: boolean | undefined;
 }
 
-export async function runVerify(args: VerifyArgs): Promise<void> {
-  const storeRoot = await resolveStoreRootOrFail(args, "verify");
-  if (storeRoot === null) return;
+export interface VerifyDrift {
+  name: string;
+  recordedHash: string;
+  actualHash: string;
+}
+
+export interface VerifyMissing {
+  name: string;
+  recordedHash: string;
+}
+
+export interface VerifyReport {
+  storeRoot: string;
+  checked: number;
+  passed: string[];
+  drifted: VerifyDrift[];
+  missing: VerifyMissing[];
+}
+
+/** 重算哈希对照清单。只读,不改写快照。 */
+export async function performVerify(storeRoot: string): Promise<VerifyReport> {
   const skills = await readStoreIndex(storeRoot);
-  const drifted: { name: string; recordedHash: string; actualHash: string }[] = [];
-  const missing: { name: string; recordedHash: string }[] = [];
-  const ok: string[] = [];
+  const drifted: VerifyDrift[] = [];
+  const missing: VerifyMissing[] = [];
+  const passed: string[] = [];
   for (const s of skills) {
     const dir = path.join(storeRoot, STORE_SKILLS_DIR, s.dirName);
     const actual = await hashSkillFolder(dir).catch(() => null);
@@ -298,19 +316,32 @@ export async function runVerify(args: VerifyArgs): Promise<void> {
       missing.push({ name: s.dirName, recordedHash: s.hash });
       continue;
     }
-    if (actual === s.hash) ok.push(s.dirName);
+    if (actual === s.hash) passed.push(s.dirName);
     else drifted.push({ name: s.dirName, recordedHash: s.hash, actualHash: actual });
   }
+  return { storeRoot, checked: skills.length, passed, drifted, missing };
+}
+
+export async function runVerify(args: VerifyArgs): Promise<void> {
+  const storeRoot = await resolveStoreRootOrFail(args, "verify");
+  if (storeRoot === null) return;
+  const report = await performVerify(storeRoot);
   if (args.json) {
-    console.log(JSON.stringify({ storeRoot, checked: skills.length, ok, drifted, missing }, null, 2));
+    console.log(JSON.stringify({
+      storeRoot: report.storeRoot,
+      checked: report.checked,
+      ok: report.passed,
+      drifted: report.drifted,
+      missing: report.missing,
+    }, null, 2));
     return;
   }
-  console.log("校验 " + skills.length + " 个:");
-  if (ok.length > 0) console.log("  ✓ " + ok.length + " 个与记录一致");
-  for (const d of drifted) console.log("  ! 漂移: " + d.name + " (记录 " + d.recordedHash.slice(0, 12) + " ≠ 实际 " + d.actualHash.slice(0, 12) + ")");
-  for (const m of missing) console.log("  ! 缺失: " + m.name + " (目录不存在)");
-  if (drifted.length === 0 && missing.length === 0) console.log("全部一致,无漂移。");
-  else console.log("发现 " + (drifted.length + missing.length) + " 处漂移/缺失 — verify 不自动改写,如需更新请重新 adopt 或人工处理。");
+  console.log("校验 " + report.checked + " 个:");
+  if (report.passed.length > 0) console.log("  ✓ " + report.passed.length + " 个与记录一致");
+  for (const d of report.drifted) console.log("  ! 漂移: " + d.name + " (记录 " + d.recordedHash.slice(0, 12) + " ≠ 实际 " + d.actualHash.slice(0, 12) + ")");
+  for (const m of report.missing) console.log("  ! 缺失: " + m.name + " (目录不存在)");
+  if (report.drifted.length === 0 && report.missing.length === 0) console.log("全部一致,无漂移。");
+  else console.log("发现 " + (report.drifted.length + report.missing.length) + " 处漂移/缺失 — verify 不自动改写,如需更新请重新 adopt 或人工处理。");
 }
 
 // ============ enable / disable(#22):受管链接集合的 CLI 入口 ============

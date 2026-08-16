@@ -30,7 +30,8 @@ import {
   type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
-import { performAdopt, POINTER_REL, resolveNames } from "./store-cmds.js";
+import { performAdopt, performVerify, POINTER_REL, resolveNames } from "./store-cmds.js";
+import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze } from "./analyze.js";
 import { applyLinkBatch, performLinkChange, previewLinkChange, type LinkChangeRequest, type LinkConflictItem, type LinkDiffItem } from "./link-actions.js";
 import { chatCompletion } from "./deepseek.js";
@@ -280,6 +281,20 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     withStore(c, "stats", async (root) => {
       const stats = await readUsageStats(root);
       return c.json({ ok: true, command: "stats", stats, ranking: usageRanking(stats) });
+    }),
+  );
+
+  app.get("/api/verify", (c) =>
+    withStore(c, "verify", async (root) => {
+      const report = await performVerify(root);
+      return c.json({ ok: true, command: "verify", ...report });
+    }),
+  );
+
+  app.get("/api/doctor", (c) =>
+    withStore(c, "doctor", async (root) => {
+      const report = await collectDoctorReport(home, root);
+      return c.json({ ok: true, command: "doctor", ...report });
     }),
   );
 

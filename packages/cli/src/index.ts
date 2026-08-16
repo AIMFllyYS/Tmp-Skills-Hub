@@ -1,21 +1,17 @@
 #!/usr/bin/env node
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { defineCommand, runMain } from "citty";
 import {
   discoverClientRoots,
   ensureBuiltinGroups,
-  findDanglingLinks,
   initializeStoreLayout,
-  probeLinkTypes,
-  readStoreIndex,
-  resolveStoreRoot,
   type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
+import { collectDoctorReport } from "./doctor.js";
 import { runGroup } from "./group-cmds.js";
 import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
@@ -156,57 +152,28 @@ const doctor = defineCommand({
     if (args.home !== undefined && args.home !== "") storeOpts.cliHome = args.home;
     const envHome = process.env.SKILLS_HUB_HOME;
     if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
-    const store = await resolveStoreRoot(storeOpts);
-    let reachable = false;
-    let storeError: string | null = null;
-    if (store.ok) {
-      try {
-        await readStoreIndex(store.storeRoot);
-        reachable = true;
-      } catch (e) {
-        storeError = e instanceof Error ? e.message : String(e);
-      }
-    }
-    const roots = await discoverClientRoots(home);
-    const probeDir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-linkprobe-"));
-    const linkTypes = await probeLinkTypes(probeDir);
-    await rm(probeDir, { recursive: true, force: true });
-    const dangling = await findDanglingLinks(roots.map((r) => r.skillsDir));
+    const report = await collectDoctorReport(home, undefined, storeOpts);
 
     if (args.json) {
-      console.log(
-        JSON.stringify({
-          ok: true,
-          command: "doctor",
-          store: {
-            resolved: store.ok,
-            storeRoot: store.ok ? store.storeRoot : null,
-            reachable,
-            error: storeError,
-          },
-          roots: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })),
-          linkTypes,
-          danglingLinks: dangling,
-        }, null, 2),
-      );
+      console.log(JSON.stringify({ ok: true, command: "doctor", ...report }, null, 2));
       return;
     }
 
     console.log("== 库存 ==");
-    if (store.ok) {
-      console.log("  位置: " + store.storeRoot + " (来源: " + store.source + ")");
-      console.log(reachable ? "  可达: 是" : "  可达: 否 (" + (storeError ?? "未知错误") + ")");
+    if (report.store.resolved && report.store.storeRoot !== null) {
+      console.log("  位置: " + report.store.storeRoot);
+      console.log(report.store.reachable ? "  可达: 是" : "  可达: 否 (" + (report.store.error ?? "未知错误") + ")");
     } else {
-      console.log("  位置: 未配置 — " + store.message);
+      console.log("  位置: 未配置 — " + (report.store.error ?? "未配置"));
     }
-    console.log("== 客户端 root(" + roots.length + ") ==");
-    for (const r of roots) console.log("  " + r.clientId + " → " + r.skillsDir);
+    console.log("== 客户端 root(" + report.roots.length + ") ==");
+    for (const r of report.roots) console.log("  " + r.clientId + " → " + r.skillsDir);
     console.log("== 链接能力 ==");
-    console.log("  junction: " + (linkTypes.junction ? "可用" : "不可用"));
-    console.log("  symlink:  " + (linkTypes.symlink ? "可用" : "不可用"));
-    console.log("  hardlink: " + (linkTypes.hardlink ? "可用" : "不可用"));
-    console.log("== 悬空链接(" + dangling.length + ") ==");
-    for (const d of dangling) console.log("  " + d.linkPath + " → " + d.target + " (失效)");
+    console.log("  junction: " + (report.linkTypes.junction ? "可用" : "不可用"));
+    console.log("  symlink:  " + (report.linkTypes.symlink ? "可用" : "不可用"));
+    console.log("  hardlink: " + (report.linkTypes.hardlink ? "可用" : "不可用"));
+    console.log("== 悬空链接(" + report.danglingLinks.length + ") ==");
+    for (const d of report.danglingLinks) console.log("  " + d.linkPath + " → " + d.target + " (失效)");
   },
 });
 
