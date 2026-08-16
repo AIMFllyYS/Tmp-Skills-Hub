@@ -23,6 +23,9 @@ pnpm-debug.log*
 # test coverage
 coverage/
 
+# 沙箱假 home:无人值守期间所有写操作的落点(store-and-paths-v0.md §5)
+.sandbox/
+
 # OS / editor
 .DS_Store
 Thumbs.db

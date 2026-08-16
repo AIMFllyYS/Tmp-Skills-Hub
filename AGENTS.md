@@ -43,6 +43,16 @@
 - Merge conflicts → stop and show conflicting files
 - **Never**: delete lock files, force push, skip tests, or bypass lint
 
+## 目标模式（无人值守执行）
+
+> 当前项目会以「目标模式」长时间无人值守推进。用户已明确授权，本节优先于 Boundaries 里的「⚠️ Ask first」。
+
+- **权限**：读取任意路径、装/删依赖、改根配置、建分支、推送、创建 issue 与 PR、CI 绿后自行 squash merge 进 `dev`，全部已授权，不必逐次询问。
+- **自主解决障碍**：遇到问题先自己想办法解决——查文档、联网搜索、换实现路径。只有真正的阻塞（鉴权失败、必需信息缺失且无法合理推断）才停下来报告。
+- **唯一禁区**：高破坏性操作。不动 `main`、不 force push、不真删用户的 skill、不向真实客户端目录（`~/.claude` 等）写入任何内容——所有写操作走沙箱，见 [store-and-paths-v0.md](docs/specs/store-and-paths-v0.md) §5。
+- **遇到架构矛盾先修文档**：文档冲突通常意味着当初没规范清楚。先把规范改对（写明修订理由），再按新规范施工，不要绕过矛盾硬写代码。
+- **规范是「大体硬、细节软」**：分层与依赖方向、产品红线、软删除铁律是硬的，违反即打回；文件怎么切、组件怎么组织是软的，按可读性判断。需要引入新依赖时——尽量不引入，必须引入则允许，在 PR 里说明理由。
+
 ## Project Structure
 
 ```
@@ -127,9 +137,15 @@ scripts/        辅助脚本（setup/build/dev）
 - [architecture-initial-spec.md](docs/designs/architecture-initial-spec.md) — **架构初始规范（宏观最高约束）**：新模块/需求立项前必须按其第 1 章方法论走；issue 拆解须引用其 DAG 与 block 规则
 - [tech-stack-decision.md](docs/designs/tech-stack-decision.md) — 技术选型决策记录（为什么是 core+CLI 而不是 Next.js）
 
+### docs/specs/ — 实现口径（分批施工前必读）
+
+- [store-and-paths-v0.md](docs/specs/store-and-paths-v0.md) — **库存位置、目录布局、客户端发现规则、沙箱边界**：所有涉及路径的代码必须按它解析
+- [cli-commands-v0.md](docs/specs/cli-commands-v0.md) — **CLI 命令面与渐进式披露机制**：命令名的唯一口径，不得自行发明
+
 ### docs/plans/ — 计划
 
-- [plan-first-shippable.md](docs/plans/plan-first-shippable.md) — 第一版工程计划（决策甬道 1–6 落地）
+- [plan-batches-v1.md](docs/plans/plan-batches-v1.md) — **分批执行计划（当前执行依据）**：7 个批次与录音稿 Step 的对应、各批验收
+- [plan-first-shippable.md](docs/plans/plan-first-shippable.md) — 第一版工程计划（决策甬道 1–6 落地，里程碑划分已被上文取代，保留作背景）
 
 ### docs/updates/ — 会议与变更
 
