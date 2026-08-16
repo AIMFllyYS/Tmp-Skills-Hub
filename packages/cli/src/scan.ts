@@ -1,10 +1,9 @@
-import { readdir, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import {
-  KNOWN_CLIENTS,
+  discoverClientRoots,
   hashSkillFolder,
   readSkillMeta,
-  resolveSkillsDir,
   type SkillMeta,
 } from "@skills-hub/core";
 
@@ -17,23 +16,23 @@ export interface DiscoveredSkill {
 }
 
 /**
- * 扫描各已知客户端的全局 skills 目录,返回达到收录最低要求的 skill。
- * home 由调用方显式传入(scan 是只读命令,默认真实 home)。
+ * 扫描 home 下全部客户端 skills 根目录(按目录形状发现,不维护品牌名单),
+ * 返回达到收录最低要求的 skill。home 由调用方显式传入(scan 是只读命令,默认真实 home)。
  */
 export async function scanKnownClients(home: string): Promise<DiscoveredSkill[]> {
+  const roots = await discoverClientRoots(home);
   const discovered: DiscoveredSkill[] = [];
-  for (const client of KNOWN_CLIENTS) {
-    const dir = resolveSkillsDir(client, "global", home);
-    if (!(await isDirectory(dir))) continue;
 
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
+  for (const root of roots) {
+    const entries = await readdir(root.skillsDir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
       if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-      const folderPath = path.join(dir, entry.name);
+      const folderPath = path.join(root.skillsDir, entry.name);
       const meta = await readSkillMeta(folderPath);
       if (meta === null) continue; // 缺 name/description,未达收录最低要求
 
       discovered.push({
-        clientId: client.id,
+        clientId: root.clientId,
         folderPath,
         hash: await hashSkillFolder(folderPath),
         meta,
@@ -41,12 +40,4 @@ export async function scanKnownClients(home: string): Promise<DiscoveredSkill[]>
     }
   }
   return discovered;
-}
-
-async function isDirectory(p: string): Promise<boolean> {
-  try {
-    return (await stat(p)).isDirectory();
-  } catch {
-    return false;
-  }
 }
