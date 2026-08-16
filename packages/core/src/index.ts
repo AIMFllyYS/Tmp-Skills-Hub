@@ -23,5 +23,15 @@ export {
   STORE_INDEX_VERSION,
 } from "./store.js";
 export type { AdoptionOutcome, AdoptionReport, AdoptInput, AdoptOptions, StoreIndexFile } from "./store.js";
-export { findDanglingLinks, probeLinkTypes } from "./link-probe.js";
+export { findDanglingLinks, probeLinkTypes, readLinkTarget } from "./link-probe.js";
 export type { DanglingLink, LinkTypeProbe } from "./link-probe.js";
+export {
+  checkLinksLedger,
+  LINKS_LEDGER_VERSION,
+  queryLinksByClient,
+  readLinksLedger,
+  removeLinkEntries,
+  upsertLinkEntries,
+  writeLinksLedger,
+} from "./links.js";
+export type { LinkEntry, LinkEntryCheck, LinkEntryKind, LinkEntryState, LinksLedgerFile } from "./links.js";
