@@ -212,6 +212,80 @@ describe("http-api 契约", () => {
     expect(body.groups.map((g) => g.id).sort()).toEqual(["design", "development", "research", "tooling", "writing"]);
   });
 
+  it("groups 写:创建/重名冲突/改名/加减成员/删除后 skill 仍在", async () => {
+    const skills = (await (await app.request("/api/skills")).json()) as { skills: { hash: string; dirName: string }[] };
+    const demo = skills.skills.find((s) => s.dirName === "demo") ?? skills.skills[0]!;
+    const created = await app.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "http-tmp", name: "临时组" }),
+    });
+    expect(created.status).toBe(200);
+    const createdBody = (await created.json()) as { verb: string; id: string; name: string };
+    expect(createdBody.verb).toBe("create");
+    expect(createdBody.id).toBe("http-tmp");
+
+    const dup = await app.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "http-tmp" }),
+    });
+    expect(dup.status).toBe(409);
+    expect(((await dup.json()) as { code: string }).code).toBe("group-exists");
+
+    const renamed = await app.request("/api/groups/http-tmp", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "改过的临时组" }),
+    });
+    expect(renamed.status).toBe(200);
+    expect(((await renamed.json()) as { name: string }).name).toBe("改过的临时组");
+
+    const missingPatch = await app.request("/api/groups/no-such-group", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "x" }),
+    });
+    expect(missingPatch.status).toBe(404);
+    expect(((await missingPatch.json()) as { code: string }).code).toBe("group-not-found");
+
+    const added = await app.request("/api/groups/http-tmp/members", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [demo.hash], action: "add" }),
+    });
+    expect(added.status).toBe(200);
+    expect(((await added.json()) as { changed: number; verb: string }).changed).toBe(1);
+
+    const missingMembers = await app.request("/api/groups/no-such-group/members", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [demo.hash], action: "add" }),
+    });
+    expect(missingMembers.status).toBe(404);
+    expect(((await missingMembers.json()) as { code: string }).code).toBe("group-not-found");
+
+    const removed = await app.request("/api/groups/http-tmp/members", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [demo.hash], action: "remove" }),
+    });
+    expect(removed.status).toBe(200);
+
+    const del = await app.request("/api/groups/http-tmp", { method: "DELETE" });
+    expect(del.status).toBe(200);
+    expect(((await del.json()) as { verb: string }).verb).toBe("delete");
+
+    const delMissing = await app.request("/api/groups/http-tmp", { method: "DELETE" });
+    expect(delMissing.status).toBe(404);
+    expect(((await delMissing.json()) as { code: string }).code).toBe("group-not-found");
+
+    const after = (await (await app.request("/api/skills")).json()) as { skills: { dirName: string }[] };
+    expect(after.skills.some((s) => s.dirName === demo.dirName)).toBe(true);
+    const groups = (await (await app.request("/api/groups")).json()) as { groups: { id: string }[] };
+    expect(groups.groups.map((g) => g.id)).not.toContain("http-tmp");
+  });
+
   it("stats:形状与 ranking", async () => {
     const res = await app.request("/api/stats");
     expect(res.status).toBe(200);

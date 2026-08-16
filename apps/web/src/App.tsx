@@ -245,6 +245,83 @@ export default function App() {
     }
   }, [selection.hashes, focusedHash]);
 
+  const refreshGroups = useCallback(async () => {
+    setGroups(await fetchGroups());
+  }, []);
+
+  const handleCreateGroup = useCallback((id: string, name: string) => {
+    void (async () => {
+      try {
+        await getAction("create-group").execute({ id, name });
+        await refreshGroups();
+        setScope({ kind: "group", id });
+        setToast({ message: "已新建分组 " + name });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setToast({ message: "新建分组失败: " + msg });
+      }
+    })();
+  }, [refreshGroups]);
+
+  const handleRenameGroup = useCallback((id: string, name: string) => {
+    void (async () => {
+      try {
+        await getAction("rename-group").execute({ id, name });
+        await refreshGroups();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setToast({ message: "重命名失败: " + msg });
+      }
+    })();
+  }, [refreshGroups]);
+
+  const handleDeleteGroup = useCallback((id: string) => {
+    void (async () => {
+      try {
+        await getAction("delete-group").execute({ id });
+        await refreshGroups();
+        if (scope.kind === "group" && scope.id === id) setScope({ kind: "all" });
+        setToast({ message: "已删除分组（skill 仍在库存）" });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setToast({ message: "删除分组失败: " + msg });
+      }
+    })();
+  }, [refreshGroups, scope]);
+
+  const handleAddToGroup = useCallback((groupId: string) => {
+    const hashes = [...selection.hashes];
+    if (hashes.length === 0) return;
+    void (async () => {
+      setBatchBusy(true);
+      try {
+        await getAction("add-to-group").execute({ id: groupId, hashes });
+        await refreshGroups();
+        setToast({ message: "已加入分组" });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setToast({ message: "加入分组失败: " + msg });
+      } finally {
+        setBatchBusy(false);
+      }
+    })();
+  }, [selection.hashes, refreshGroups]);
+
+  const handleRemoveFromGroup = useCallback((groupId: string) => {
+    const hashes = [...selection.hashes];
+    if (hashes.length === 0) return;
+    void (async () => {
+      try {
+        await getAction("remove-from-group").execute({ id: groupId, hashes });
+        await refreshGroups();
+        dispatchSelection({ type: "clear" });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setToast({ message: "移出分组失败: " + msg });
+      }
+    })();
+  }, [selection.hashes, refreshGroups]);
+
   const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
   const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
 
@@ -288,7 +365,14 @@ export default function App() {
       {state === "ready" && (
         <div className="flex min-h-0 flex-1">
           <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-line lg:block">
-            <ScopeNav counts={counts} selected={scope} onSelect={handleScope} />
+            <ScopeNav
+              counts={counts}
+              selected={scope}
+              onSelect={handleScope}
+              onCreateGroup={handleCreateGroup}
+              onRenameGroup={handleRenameGroup}
+              onDeleteGroup={handleDeleteGroup}
+            />
           </aside>
           <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <CollectionPane
@@ -309,6 +393,7 @@ export default function App() {
               onAdopted={() => {
                 void fetchSkills().then(setSkills);
               }}
+              onRemoveFromGroup={handleRemoveFromGroup}
               onRestore={(name) => {
                 void (async () => {
                   try {
@@ -388,10 +473,12 @@ export default function App() {
         <BatchBar
           count={selection.hashes.size}
           clients={clients}
+          groups={groups.map((g) => ({ id: g.id, name: g.name }))}
           busy={batchBusy}
           onClear={() => dispatchSelection({ type: "clear" })}
           onEnableTo={(id) => void handleBatchLink(id, true)}
           onDisableFrom={(id) => void handleBatchLink(id, false)}
+          onAddToGroup={handleAddToGroup}
           onArchive={() => void handleBatchArchive()}
           lockedClientId={scope.kind === "client" ? scope.id : undefined}
         />

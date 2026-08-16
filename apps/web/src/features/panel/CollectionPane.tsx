@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { getAction } from "../actions/registry.js";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
 import type { SkillRowClientView } from "../skills/SkillRow.js";
 import type { ArchivedSkill, SkillRecord } from "../skills/types.js";
@@ -40,6 +41,7 @@ interface CollectionPaneProps {
   clientView: ClientViewInfo | null;
   onAdopted: () => void;
   onRestore: (name: string) => void;
+  onRemoveFromGroup?: ((groupId: string) => void) | undefined;
 }
 
 const inputClass =
@@ -116,6 +118,7 @@ export function CollectionPane({
   clientView,
   onAdopted,
   onRestore,
+  onRemoveFromGroup,
 }: CollectionPaneProps): React.JSX.Element {
   if (scope.kind === "archive") {
     return (
@@ -151,6 +154,20 @@ export function CollectionPane({
         </select>
       </div>
       <AdoptForm onDone={onAdopted} />
+      {scope.kind === "group" && scope.id !== undefined && onRemoveFromGroup !== undefined && checked.size > 0 && (
+        <div className="shrink-0 border-b border-line px-4 py-2">
+          <button
+            type="button"
+            onClick={() => {
+              const id = scope.id;
+              if (id !== undefined) onRemoveFromGroup(id);
+            }}
+            className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
+          >
+            {getAction("remove-from-group").verb}
+          </button>
+        </div>
+      )}
       {clientView !== null && (
         <div data-testid="client-view-header" className="shrink-0 border-b border-line px-4 py-2">
           <p className="text-sm font-medium text-ink-strong">{clientView.clientId}</p>

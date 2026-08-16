@@ -1,7 +1,21 @@
-import { adoptSource, applyLinks, archiveSkill, previewLinks, restoreSkill, saveSkillFile, setSkillEnabled, translateText } from "../skills/api.js";
+import { adoptSource, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, translateText } from "../skills/api.js";
 import type { LinksBatchParams } from "../skills/types.js";
 
-export type ActionId = "enable" | "disable" | "archive" | "save" | "translate" | "preview-links" | "apply-links" | "adopt" | "restore";
+export type ActionId =
+  | "enable"
+  | "disable"
+  | "archive"
+  | "save"
+  | "translate"
+  | "preview-links"
+  | "apply-links"
+  | "adopt"
+  | "restore"
+  | "create-group"
+  | "rename-group"
+  | "delete-group"
+  | "add-to-group"
+  | "remove-from-group";
 
 export interface ActionMeta {
   id: ActionId;
@@ -100,6 +114,41 @@ export const ACTION_REGISTRY = {
     destructive: false,
     supportsPreview: false,
     execute: (p: { source: string }) => adoptSource(p.source),
+  },
+  "create-group": {
+    id: "create-group",
+    verb: "新建分组",
+    destructive: false,
+    supportsPreview: false,
+    execute: (p: { id: string; name: string }) => createGroup(p.id, p.name),
+  },
+  "rename-group": {
+    id: "rename-group",
+    verb: "重命名",
+    destructive: false,
+    supportsPreview: false,
+    execute: (p: { id: string; name: string }) => renameGroup(p.id, p.name),
+  },
+  "delete-group": {
+    id: "delete-group",
+    verb: "删除分组",
+    destructive: true,
+    supportsPreview: false,
+    execute: (p: { id: string }) => deleteGroup(p.id),
+  },
+  "add-to-group": {
+    id: "add-to-group",
+    verb: "挂到分组",
+    destructive: false,
+    supportsPreview: false,
+    execute: (p: { id: string; hashes: string[] }) => changeGroupMembers(p.id, p.hashes, "add"),
+  },
+  "remove-from-group": {
+    id: "remove-from-group",
+    verb: "移出分组",
+    destructive: false,
+    supportsPreview: false,
+    execute: (p: { id: string; hashes: string[] }) => changeGroupMembers(p.id, p.hashes, "remove"),
   },
 } as const;
 
