@@ -15,7 +15,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
-import { POINTER_REL, requireWriteAuth, runAdopt, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
+import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
@@ -276,6 +276,19 @@ const disable = defineCommand({
   },
 });
 
+const archive = defineCommand({
+  meta: { name: "archive", description: "软删除:移出活跃区归档为 zip(无真删除;无参数时列出归档区;写操作,非交互需 --yes)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "预演:只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  run({ args }) {
+    return runArchive(args);
+  },
+});
+
 const ui = defineCommand({
   meta: { name: "ui", description: "启动本地查看服务(App 壳的数据源)" },
   args: {
@@ -291,7 +304,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, verify, ui },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, archive, verify, ui },
 });
 
 runMain(main);

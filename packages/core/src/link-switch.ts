@@ -155,7 +155,8 @@ export async function applyLinkSet(
   }
 
   // 8. 成功:更新台账,清 journal 与 tmp 残留
-  const kept = oldLedger.filter((e) => !sameDir(e) || newIds.has(e.id));
+  // 本落点条目的最终形态 = 计划集合(摘除/替换的旧条目已在磁盘摘除);其余落点保留
+  const kept = oldLedger.filter((e) => !sameDir(e));
   const next = [...kept, ...plan.entries];
   await writeLinksLedger(storeRoot, next);
   await rm(journalFile, { force: true });

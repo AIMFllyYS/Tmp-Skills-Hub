@@ -2,12 +2,15 @@ import path from "node:path";
 import {
   adoptMany,
   applyLinkSet,
+  archiveSkill,
   discoverClientRoots,
   discoverClientRootsAt,
   hashSkillFolder,
+  listArchivedSkills,
   readLinksLedger,
   readStoreIndex,
   resolveStoreRoot,
+  STORE_ARCHIVE_DIR,
   STORE_SKILLS_DIR,
   writeStoreIndex,
   type AdoptInput,
@@ -407,4 +410,83 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
   for (const p of result.removed) console.log("✓ 已禁用(摘除链接): " + path.basename(p));
   console.log("disable 完成,摘除 " + result.removed.length + " 个链接。库存原件一个字节未动。" + (result.created.length > 0 ? "(顺带建立 " + result.created.length + " 个新链接)" : ""));
 }
+
+// ============ archive(#23):软删除与归档 ============
+
+export interface ArchiveArgs {
+  home: string | undefined;
+  yes: boolean | undefined;
+  dryRun: boolean | undefined;
+  json: boolean | undefined;
+  _: (string | number)[];
+}
+
+export async function runArchive(args: ArchiveArgs): Promise<void> {
+  const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
+  const storeRoot = await resolveStoreRootOrFail(args);
+  if (storeRoot === null) return;
+
+  // 无参数:列出归档区(可被列出与定位)
+  if (names.length === 0) {
+    const archived = await listArchivedSkills(storeRoot);
+    if (args.json) {
+      console.log(JSON.stringify({ archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), archived }, null, 2));
+      return;
+    }
+    if (archived.length === 0) {
+      console.log("归档区为空: " + path.join(storeRoot, STORE_ARCHIVE_DIR));
+      return;
+    }
+    console.log("归档区(" + archived.length + "): " + path.join(storeRoot, STORE_ARCHIVE_DIR));
+    for (const a of archived) console.log("  " + a.name + "  " + a.sizeBytes + " B  " + a.file);
+    return;
+  }
+
+  const dryRun = args.dryRun === true;
+  if (!dryRun && !requireWriteAuth(args)) return;
+  const skills = await readStoreIndex(storeRoot);
+  let dirNames: string[];
+  try {
+    dirNames = names.flatMap((n) => resolveNames(n, skills));
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 2;
+    return;
+  }
+
+  if (dryRun) {
+    const plan = dirNames.map((n) => ({
+      dirName: n,
+      action: "归档:打包成 zip 移入归档区,先摘全部受管链接,原件不删除",
+    }));
+    if (args.json) console.log(JSON.stringify({ dryRun: true, plan }, null, 2));
+    else {
+      console.log("预演(不写盘):");
+      for (const p of plan) console.log("  " + p.dirName + " — " + p.action);
+    }
+    return;
+  }
+
+  const results: unknown[] = [];
+  let failed = 0;
+  for (const dirName of dirNames) {
+    const res = await archiveSkill(storeRoot, dirName);
+    if (res.ok) {
+      results.push({ dirName, ok: true, archiveFile: res.archiveFile, sizeBytes: res.sizeBytes, removedLinks: res.removedLinks });
+      console.log("✓ 已归档: " + dirName + " → " + res.archiveFile + " (" + res.removedLinks + " 个链接已摘)");
+    } else {
+      failed++;
+      results.push({ dirName, ok: false, code: res.code, message: res.message });
+      console.error("✗ 归档失败: " + dirName + " — " + res.message);
+    }
+  }
+  if (args.json) {
+    console.log(JSON.stringify({ archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), results, failed }, null, 2));
+  } else {
+    console.log("归档完成:" + (dirNames.length - failed) + " 成功 / " + failed + " 失败。");
+    console.log("本工具没有真删除。如需彻底删除,请自行处理归档区文件:" + path.join(storeRoot, STORE_ARCHIVE_DIR));
+  }
+  if (failed > 0) process.exitCode = 2;
+}
+
 
