@@ -52,3 +52,5 @@ export {
   GROUPS_FILE_VERSION,
 } from "./groups.js";
 export type { GroupDef, GroupsFile } from "./groups.js";
+export { readUsageStats, recordUsage, usageRanking, STATS_FILE_VERSION } from "./stats.js";
+export type { StatsFile, UsageCounters, UsageKind, UsageRankEntry } from "./stats.js";
