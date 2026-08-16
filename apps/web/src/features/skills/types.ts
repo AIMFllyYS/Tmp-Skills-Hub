@@ -185,6 +185,19 @@ export interface AdoptOutcome {
   reason?: string | undefined;
 }
 
+export interface AnalyzeReportItem {
+  name: string;
+  reason: string;
+}
+
+export interface AnalyzeResponse {
+  ok: true;
+  command: "analyze";
+  target: string;
+  similar: AnalyzeReportItem[];
+  conflict: AnalyzeReportItem[];
+}
+
 export interface AdoptResponse {
   ok: true;
   command: "adopt";

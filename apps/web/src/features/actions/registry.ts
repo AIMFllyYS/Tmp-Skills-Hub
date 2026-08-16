@@ -1,4 +1,4 @@
-import { adoptSource, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, translateText } from "../skills/api.js";
+import { adoptSource, analyzeSkill, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, translateText } from "../skills/api.js";
 import type { LinksBatchParams } from "../skills/types.js";
 
 export type ActionId =
@@ -15,7 +15,8 @@ export type ActionId =
   | "rename-group"
   | "delete-group"
   | "add-to-group"
-  | "remove-from-group";
+  | "remove-from-group"
+  | "analyze";
 
 export interface ActionMeta {
   id: ActionId;
@@ -149,6 +150,13 @@ export const ACTION_REGISTRY = {
     destructive: false,
     supportsPreview: false,
     execute: (p: { id: string; hashes: string[] }) => changeGroupMembers(p.id, p.hashes, "remove"),
+  },
+  analyze: {
+    id: "analyze",
+    verb: "分析",
+    destructive: false,
+    supportsPreview: false,
+    execute: (p: { target: string }) => analyzeSkill(p.target),
   },
 } as const;
 

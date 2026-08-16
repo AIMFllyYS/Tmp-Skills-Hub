@@ -4,6 +4,7 @@ import { fetchSkillLinks } from "../skills/api.js";
 import { ClientSwitches } from "../skills/ClientSwitches.js";
 import { SkillViewer } from "../skills/SkillViewer.js";
 import type { ClientInfo, ClientLinkRow, SkillRecord, UsageCounters } from "../skills/types.js";
+import { AnalyzePanel } from "./AnalyzePanel.js";
 
 type InspectorTab = "content" | "clients" | "analyze";
 
@@ -108,7 +109,9 @@ function InspectorBody({
           </div>
         )}
         {tab === "analyze" && (
-          <p className="p-4 text-sm text-ink-mid">相近/冲突分析将在后续批次接入。可先用终端 <code className="font-mono text-xs">skills-hub analyze</code>。</p>
+          <div className="h-full overflow-y-auto">
+            <AnalyzePanel target={skill.dirName} />
+          </div>
         )}
       </div>
       <footer className="shrink-0 border-t border-line px-4 py-2">

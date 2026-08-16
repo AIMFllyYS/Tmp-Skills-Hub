@@ -31,6 +31,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { performAdopt, POINTER_REL, resolveNames } from "./store-cmds.js";
+import { performAnalyze } from "./analyze.js";
 import { applyLinkBatch, performLinkChange, previewLinkChange, type LinkChangeRequest, type LinkConflictItem, type LinkDiffItem } from "./link-actions.js";
 import { chatCompletion } from "./deepseek.js";
 
@@ -64,6 +65,8 @@ export interface UiAppOptions {
   webRoot?: string;
   /** 翻译实现注入(测试替身隔离网络;缺省 chatCompletion) */
   translateImpl?: typeof chatCompletion;
+  /** 分析用的 chat 替身(测试隔离真实网络;缺省 chatCompletion) */
+  analyzeChat?: typeof chatCompletion;
   /** GitHub/skills.sh 拉取用的 fetch 替身(测试隔离真实网络) */
   fetchImpl?: typeof fetch;
 }
@@ -130,6 +133,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const storeRoot = opts.storeRoot === undefined ? null : opts.storeRoot;
   const home = opts.home ?? resolveHome();
   const translate = opts.translateImpl ?? chatCompletion;
+  const analyzeChat = opts.analyzeChat ?? chatCompletion;
   const fetchImpl = opts.fetchImpl;
   const webRoot = opts.webRoot ?? defaultWebRoot();
 
@@ -304,6 +308,20 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }
     return c.json({ ok: true, command: "translate", text: res.content });
   });
+
+  app.post("/api/analyze", (c) =>
+    withStore(c, "analyze", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { target?: unknown } | null;
+      const target = typeof raw?.target === "string" ? raw.target.trim() : "";
+      if (target === "") return err(c, "analyze", "bad-usage", "body 需要 { target: string }", 400);
+      const res = await performAnalyze(root, target, { chat: analyzeChat, allowLocalPath: false });
+      if (!res.ok) {
+        const status = res.code === "bad-usage" ? 400 : res.code === "not-found" ? 404 : res.code === "not-configured" ? 503 : 502;
+        return err(c, "analyze", res.code, res.message, status);
+      }
+      return c.json({ ok: true, command: "analyze", target: res.target, similar: res.similar, conflict: res.conflict });
+    }),
+  );
   app.get("/api/clients", (c) =>
     discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined).then((roots) =>
       c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),

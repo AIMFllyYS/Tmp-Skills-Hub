@@ -389,6 +389,55 @@ describe("http-api 契约", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("analyze:成功报告形状 + 不写库存/台账;缺 target 400;无密钥 503", async () => {
+    const indexPath = path.join(storeRoot, "index.json");
+    const linksPath = path.join(storeRoot, "links.json");
+    const beforeIndex = await readFile(indexPath, "utf8");
+    const beforeLinks = await readFile(linksPath, "utf8");
+    const analyzeChat = (async () => ({
+      ok: true as const,
+      content: JSON.stringify({ similar: [{ name: "other", reason: "职责接近" }], conflict: [] }),
+    })) as never;
+    const aapp = createUiApp({ storeRoot, home, analyzeChat });
+    const ok = await aapp.request("/api/analyze", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ target: "demo" }),
+    });
+    expect(ok.status).toBe(200);
+    const body = (await ok.json()) as { command: string; target: string; similar: { name: string; reason: string }[]; conflict: unknown[] };
+    expect(body.command).toBe("analyze");
+    expect(body.target).toBe("demo");
+    expect(body.similar).toEqual([{ name: "other", reason: "职责接近" }]);
+    expect(body.conflict).toEqual([]);
+    expect(await readFile(indexPath, "utf8")).toBe(beforeIndex);
+    expect(await readFile(linksPath, "utf8")).toBe(beforeLinks);
+
+    const missing = await aapp.request("/api/analyze", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(missing.status).toBe(400);
+    expect(((await missing.json()) as { code: string }).code).toBe("bad-usage");
+
+    const noKey = createUiApp({
+      storeRoot,
+      home,
+      analyzeChat: (async () => ({ ok: false as const, code: "not-configured" as const, message: "未配置" })) as never,
+    });
+    const degraded = await noKey.request("/api/analyze", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ target: "demo" }),
+    });
+    expect(degraded.status).toBe(503);
+    const fail = (await degraded.json()) as { code: string; message: string };
+    expect(fail.code).toBe("not-configured");
+    expect(fail.message).toContain("DEEPSEEK_API_KEY");
+    expect(fail.message).not.toMatch(/sk-|api[_-]?key\s*[:=]/i);
+  });
+
   it("查看:路径穿越被拒绝(outside),未知文件 404", async () => {
     const res = await app.request("/api/skills/demo/file?path=..%2F..%2Fsecret.txt");
     expect(res.status).toBe(400);

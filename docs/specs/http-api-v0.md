@@ -50,6 +50,7 @@
 | PATCH /api/groups/:id | { name?, description? }(至少一项) | { ok, command: "group", verb: "rename", id, name, description } | 400;404 group-not-found;503 |
 | DELETE /api/groups/:id | — | { ok, command: "group", verb: "delete", id, memberCount }(只删分组定义,不删 skill) | 404 group-not-found;503 |
 | POST /api/groups/:id/members | { hashes, action: add\|remove } | { ok, command: "group", verb: "add"\|"remove", id, hashes, changed } | 400;404 group-not-found\|not-found;503 |
+| POST /api/analyze | { target }(hash 前缀或 dirName) | { ok, command: "analyze", target, similar, conflict }(只建议,不写盘) | 400 bad-usage;404 not-found;503 not-configured;502 analyze-failed |
 
 - `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
@@ -66,11 +67,13 @@
 | link-failed | 409 |
 | group-exists | 409 |
 | store-not-configured | 503 |
+| not-configured | 503 |
 | io-error(预留) | 500 |
 | github-fetch-failed | 502 |
+| analyze-failed | 502 |
 
 > 注:auth-required / group-empty / invalid-skill 是 CLI 专属 code(交互授权、按空组 enable)。分组写操作走 HTTP,code 与 CLI 同口径。
 
 ## 5. 测试
 
-packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、links preview/apply、分组 CRUD、503 未配置。
+packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、links preview/apply、分组 CRUD、analyze 只读建议、503 未配置。

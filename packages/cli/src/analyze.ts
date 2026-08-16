@@ -11,7 +11,7 @@
 
 import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/core";
 import path from "node:path";
-import { chatCompletion, type ChatOptions } from "./deepseek.js";
+import { chatCompletion, type ChatOptions, type DeepSeekMessage, type DeepSeekResult } from "./deepseek.js";
 import { emitError, emitOk } from "./json-out.js";
 
 /** 单个目标最多喂给模型的 description 字符数(防超大 skill 撑爆上下文)。 */
@@ -90,33 +90,44 @@ export function extractReportJson(text: string): { similar: AnalyzeReportItem[];
 
 export interface RunAnalyzeOptions {
   /** 测试注入;缺省走 #42 chatCompletion(读 DEEPSEEK_API_KEY) */
-  chat?: (messages: Parameters<typeof chatCompletion>[0], opts?: ChatOptions) => Promise<ReturnType<typeof chatCompletion>>;
+  chat?: (messages: DeepSeekMessage[], opts?: ChatOptions) => Promise<DeepSeekResult>;
+  /** HTTP 只认库存 hash/dirName;CLI 默认可再回退本地目录 */
+  allowLocalPath?: boolean | undefined;
 }
 
-export async function runAnalyze(args: AnalyzeArgs, opts: RunAnalyzeOptions = {}): Promise<void> {
-  const input = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(" ").trim();
-  if (input === "") {
-    console.error("用法: skills-hub analyze <本地skill目录路径|库存skill名>");
-    process.exitCode = 2;
-    return;
-  }
-  const { resolveStoreRootOrFail } = await import("./store-cmds.js");
-  const storeRoot = await resolveStoreRootOrFail(args, "analyze");
-  if (storeRoot === null) return;
+export type AnalyzeFailureCode = "bad-usage" | "not-found" | "not-configured" | "analyze-failed";
 
-  // 目标:先当库存名,再当本地目录
-  const records = await readStoreIndex(storeRoot);
-  let target: { dirName: string; description: string } | null = null;
+export type AnalyzeOutcome =
+  | { ok: true; target: string; similar: AnalyzeReportItem[]; conflict: AnalyzeReportItem[] }
+  | { ok: false; code: AnalyzeFailureCode; message: string };
+
+function resolveInventoryTarget(records: SkillRecord[], input: string): { dirName: string; description: string } | null {
   const byName = records.find((s) => s.dirName === input);
-  if (byName !== undefined) {
-    target = { dirName: byName.dirName, description: byName.meta.description };
-  } else {
-    const meta = await readSkillMeta(path.resolve(input)).catch(() => null);
+  if (byName !== undefined) return { dirName: byName.dirName, description: byName.meta.description };
+  const lower = input.toLowerCase();
+  const byHash = records.find((s) => s.hash === input || s.hash.startsWith(lower));
+  if (byHash !== undefined) return { dirName: byHash.dirName, description: byHash.meta.description };
+  return null;
+}
+
+/** CLI 与 POST /api/analyze 共用:只读建议,不写库存或链接。 */
+export async function performAnalyze(storeRoot: string, input: string, opts: RunAnalyzeOptions = {}): Promise<AnalyzeOutcome> {
+  const needle = input.trim();
+  if (needle === "") return { ok: false, code: "bad-usage", message: "需要 target(hash 前缀或 dirName)" };
+  const records = await readStoreIndex(storeRoot);
+  let target = resolveInventoryTarget(records, needle);
+  if (target === null && opts.allowLocalPath === true) {
+    const meta = await readSkillMeta(path.resolve(needle)).catch(() => null);
     if (meta !== null) target = { dirName: meta.name, description: meta.description };
   }
   if (target === null) {
-    emitError(args.json === true, "analyze", "not-found", "找不到该 skill:既不是库存中的名字,也不是含 SKILL.md 的本地目录 — " + input);
-    return;
+    return {
+      ok: false,
+      code: "not-found",
+      message: opts.allowLocalPath === true
+        ? "找不到该 skill:既不是库存中的名字,也不是含 SKILL.md 的本地目录 — " + needle
+        : "库存中没有: " + needle,
+    };
   }
 
   const ctx = buildAnalyzeContext(records, target);
@@ -132,27 +143,44 @@ export async function runAnalyze(args: AnalyzeArgs, opts: RunAnalyzeOptions = {}
     { timeoutMs: ANALYZE_TIMEOUT_MS },
   );
   if (!result.ok) {
-    const hint = result.code === "not-configured" ? "未配置 DEEPSEEK_API_KEY,无法分析 — 请配置密钥后重试(不会编造结论)" : "分析调用失败(" + result.code + "): " + result.message;
-    emitError(args.json === true, "analyze", "analyze-failed", hint);
-    return;
+    if (result.code === "not-configured") {
+      return { ok: false, code: "not-configured", message: "未配置 DEEPSEEK_API_KEY,无法分析 — 请配置密钥后重试(不会编造结论)" };
+    }
+    return { ok: false, code: "analyze-failed", message: "分析调用失败(" + result.code + "): " + result.message };
   }
-
-  let report: ReturnType<typeof extractReportJson>;
   try {
-    report = extractReportJson(result.content);
+    const report = extractReportJson(result.content);
+    return { ok: true, target: ctx.targetName, similar: report.similar, conflict: report.conflict };
   } catch (e) {
-    emitError(args.json === true, "analyze", "analyze-failed", "模型回复无法解析: " + (e instanceof Error ? e.message : String(e)) + " (请重试)");
-    return;
+    return { ok: false, code: "analyze-failed", message: "模型回复无法解析: " + (e instanceof Error ? e.message : String(e)) + " (请重试)" };
   }
+}
 
-  if (args.json) {
-    emitOk("analyze", { target: ctx.targetName, similar: report.similar, conflict: report.conflict });
+export async function runAnalyze(args: AnalyzeArgs, opts: RunAnalyzeOptions = {}): Promise<void> {
+  const input = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(" ").trim();
+  if (input === "") {
+    console.error("用法: skills-hub analyze <本地skill目录路径|库存skill名>");
+    process.exitCode = 2;
     return;
   }
-  console.log("目标: " + ctx.targetName);
-  console.log(report.similar.length === 0 ? "(未发现相近 skill)" : "相近:");
-  for (const s of report.similar) console.log("  ~ " + s.name + " — " + s.reason);
-  console.log(report.conflict.length === 0 ? "(未发现冲突)" : "可能冲突:");
-  for (const c of report.conflict) console.log("  ! " + c.name + " — " + c.reason);
+  const { resolveStoreRootOrFail } = await import("./store-cmds.js");
+  const storeRoot = await resolveStoreRootOrFail(args, "analyze");
+  if (storeRoot === null) return;
+
+  const res = await performAnalyze(storeRoot, input, { ...opts, allowLocalPath: true });
+  if (!res.ok) {
+    const code = res.code === "not-found" ? "not-found" : res.code === "bad-usage" ? "bad-usage" : "analyze-failed";
+    emitError(args.json === true, "analyze", code, res.message);
+    return;
+  }
+  if (args.json) {
+    emitOk("analyze", { target: res.target, similar: res.similar, conflict: res.conflict });
+    return;
+  }
+  console.log("目标: " + res.target);
+  console.log(res.similar.length === 0 ? "(未发现相近 skill)" : "相近:");
+  for (const s of res.similar) console.log("  ~ " + s.name + " — " + s.reason);
+  console.log(res.conflict.length === 0 ? "(未发现冲突)" : "可能冲突:");
+  for (const c of res.conflict) console.log("  ! " + c.name + " — " + c.reason);
   console.log("(报告仅为建议,未做任何写操作)");
 }
