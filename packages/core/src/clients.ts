@@ -75,25 +75,33 @@ export function isExcludedRoot(skillsDir: string, home: string): boolean {
  * - home 不存在/不可读时返回空数组,绝不创建任何目录
  */
 export async function discoverClientRoots(home: string): Promise<ClientRoot[]> {
+  return discoverClientRootsAt(home);
+}
+
+/**
+ * 在任意基准目录下发现客户端 skills 根(全局用 home,项目侧用 cwd;#22)。
+ * 规则与 discoverClientRoots 相同,只读,绝不创建目录。
+ */
+export async function discoverClientRootsAt(base: string): Promise<ClientRoot[]> {
   const found = new Map<string, ClientRoot>();
 
   // 同名真实路径只保留第一个(确定性顺序下先到者胜,clientId 取先到者)
   const addRoot = async (clientId: string, skillsDir: string): Promise<void> => {
-    if (isExcludedRoot(skillsDir, home)) return;
+    if (isExcludedRoot(skillsDir, base)) return;
     const real = await realpath(skillsDir).catch(() => skillsDir);
     if (!found.has(real)) {
       found.set(real, { clientId, skillsDir: real });
     }
   };
 
-  // 1. 直接子目录形状:<home>/<client>/skills
-  const entries = await readdir(home, { withFileTypes: true }).catch(() => []);
+  // 1. 直接子目录形状:<base>/<client>/skills
+  const entries = await readdir(base, { withFileTypes: true }).catch(() => []);
   const dirNames = entries
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort(); // 确定性
   for (const name of dirNames) {
-    const skillsDir = path.join(home, name, "skills");
+    const skillsDir = path.join(base, name, "skills");
     if (await isDirectory(skillsDir)) {
       await addRoot(name.replace(/^\.+/, ""), skillsDir); // 去前导点:.claude → claude
     }
@@ -101,14 +109,14 @@ export async function discoverClientRoots(home: string): Promise<ClientRoot[]> {
 
   // 2. 已知嵌套惯例(存在才算)
   for (const c of NESTED_CONVENTIONS) {
-    const skillsDir = path.join(home, c.relDir);
+    const skillsDir = path.join(base, c.relDir);
     if (await isDirectory(skillsDir)) {
       await addRoot(c.clientId, skillsDir);
     }
   }
 
-  // 3. XDG 风格:<home>/.config/<client>/skills(Devin CLI / OpenCode 官方全局目录)
-  const configDir = path.join(home, ".config");
+  // 3. XDG 风格:<base>/.config/<client>/skills(Devin CLI / OpenCode 官方全局目录)
+  const configDir = path.join(base, ".config");
   if (await isDirectory(configDir)) {
     const configEntries = await readdir(configDir, { withFileTypes: true }).catch(() => []);
     const configNames = configEntries

@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readLinkTarget } from "./link-probe.js";
 import { readLinksLedger, writeLinksLedger, type LinkEntry } from "./links.js";
@@ -159,10 +159,6 @@ export async function applyLinkSet(
   const next = [...kept, ...plan.entries];
   await writeLinksLedger(storeRoot, next);
   await rm(journalFile, { force: true });
-  const residue = await readdir(tmpDir);
-  if (residue.length === 0) {
-    await rm(tmpDir, { recursive: true, force: true });
-  }
   return { ok: true, created: createdPaths, removed: removedPaths, ledger: next };
 }
 
