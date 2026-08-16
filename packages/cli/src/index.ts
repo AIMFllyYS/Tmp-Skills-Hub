@@ -336,7 +336,9 @@ const ui = defineCommand({
     home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
   },
   run({ args }) {
-    void startUiServer(Number(args.port), args.home);
+    const uiOpts: { port: number; home?: string } = { port: Number(args.port) };
+    if (args.home !== undefined && args.home !== "") uiOpts.home = args.home;
+    void startUiServer(uiOpts);
   },
 });
 

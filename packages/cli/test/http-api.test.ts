@@ -297,6 +297,19 @@ describe("http-api 契约", () => {
     expect(body.clients.some((c) => c.clientId === "claude")).toBe(true);
   });
 
+  it("clients:沙箱 home 下两个假客户端都返回", async () => {
+    const h = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-clients-"));
+    tempRoots.push(h);
+    await mkdir(path.join(h, ".claude", "skills"), { recursive: true });
+    await mkdir(path.join(h, ".cursor", "skills"), { recursive: true });
+    const tapp = createUiApp({ storeRoot, home: h });
+    const res = await tapp.request("/api/clients");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; clients: { clientId: string }[] };
+    expect(body.ok).toBe(true);
+    expect(body.clients.map((c) => c.clientId).sort()).toEqual(["claude", "cursor"]);
+  });
+
   it("archive 列表:初始为空", async () => {
     const res = await app.request("/api/archive");
     expect(res.status).toBe(200);
