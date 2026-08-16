@@ -6,6 +6,7 @@ import { createInterface } from "node:readline/promises";
 import { defineCommand, runMain } from "citty";
 import {
   discoverClientRoots,
+  ensureBuiltinGroups,
   findDanglingLinks,
   initializeStoreLayout,
   probeLinkTypes,
@@ -92,6 +93,7 @@ const init = defineCommand({
       return;
     }
     const layout = await initializeStoreLayout(storeRoot);
+    const groups = await ensureBuiltinGroups(storeRoot); // #25:内置分组,仅占位/缺失时写入
     const pointerWritten = await writePointerFile(home, storeRoot);
     if (args.json) {
       console.log(
@@ -99,6 +101,7 @@ const init = defineCommand({
           storeRoot,
           pointerFile: pointerWritten,
           layoutCreated: layout.created,
+          builtinGroupsWrote: groups.wrote,
           message: "初始化完成",
         }, null, 2),
       );
@@ -108,6 +111,7 @@ const init = defineCommand({
       console.log("  指针文件: " + pointerWritten);
       if (layout.created) console.log("  目录布局: 新建");
       else console.log("  目录布局: 已存在,未改动");
+      console.log("  内置分组: " + (groups.wrote ? "已写入" : "已存在,未覆盖用户修改"));
     }
   },
 });

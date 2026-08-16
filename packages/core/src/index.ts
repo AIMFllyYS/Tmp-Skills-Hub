@@ -40,3 +40,15 @@ export type { ApplyOptions, LinkSetFailed, LinkSetOk, LinkSetPlan, LinkSetResult
 export { archiveSkill, listArchivedSkills } from "./archive.js";
 export type { ArchivedSkill, ArchiveFailed, ArchiveOk, ArchiveResult } from "./archive.js";
 export { crc32, zipDirectory, zipEntries } from "./zip.js";
+export {
+  addSkillToGroups,
+  BUILTIN_GROUPS,
+  ensureBuiltinGroups,
+  groupsOfSkill,
+  readGroups,
+  removeSkillFromGroups,
+  skillsOfGroup,
+  writeGroups,
+  GROUPS_FILE_VERSION,
+} from "./groups.js";
+export type { GroupDef, GroupsFile } from "./groups.js";
