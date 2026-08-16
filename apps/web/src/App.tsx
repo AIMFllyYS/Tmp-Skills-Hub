@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import type { ActionId } from "./features/actions/registry.js";
 import { BatchBar } from "./features/panel/BatchBar.js";
+import { CommandPalette } from "./features/panel/CommandPalette.js";
 import { CollectionPane, type SortMode } from "./features/panel/CollectionPane.js";
 import { fallbackClientState, filterByClientEnable, type ClientEnableFilter } from "./features/panel/client-view.js";
 import { InspectorPane } from "./features/panel/InspectorPane.js";
@@ -32,6 +34,7 @@ export default function App() {
   const [batchBusy, setBatchBusy] = useState(false);
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
   const [toast, setToast] = useState<{ message: string; undoName?: string } | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +118,17 @@ export default function App() {
     setSkills((prev) => prev.map((s) => (s.hash === oldHash ? { ...s, hash: newHash } : s)));
     setFocusedHash(newHash);
     dispatchSelection({ type: "replace-hash", from: oldHash, to: newHash });
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const handleScope = useCallback((next: ScopeSelection) => {
@@ -322,6 +336,88 @@ export default function App() {
     })();
   }, [selection.hashes, refreshGroups]);
 
+  const handleArchiveSkill = useCallback((s: SkillRecord) => {
+    void (async () => {
+      try {
+        await getAction("archive").execute({ hash: s.hash });
+        setSkills((prev) => prev.filter((x) => x.hash !== s.hash));
+        if (focusedHash === s.hash) setFocusedHash(null);
+        dispatchSelection({ type: "toggle", hash: s.hash, next: false });
+        setArchived(await fetchArchive());
+        setToast({ message: "已归档 " + s.dirName, undoName: s.dirName });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setErrors((prev) => new Map(prev).set(s.hash, "归档失败: " + msg));
+      }
+    })();
+  }, [focusedHash]);
+
+  const handlePaletteRun = useCallback((id: ActionId, arg?: string) => {
+    const skill = focusedHash === null ? undefined : skills.find((s) => s.hash === focusedHash);
+    if (id === "archive" && skill !== undefined) {
+      handleArchiveSkill(skill);
+      return;
+    }
+    if (id === "analyze" && skill !== undefined) {
+      void getAction("analyze").execute({ target: skill.dirName }).then((r) => {
+        setToast({ message: "相近 " + String(r.similar.length) + " / 冲突 " + String(r.conflict.length) });
+      }).catch((e: unknown) => {
+        setToast({ message: e instanceof Error ? e.message : String(e) });
+      });
+      return;
+    }
+    if ((id === "enable" || id === "disable") && skill !== undefined && arg !== undefined) {
+      void handleToggle(skill, arg, id === "enable");
+      return;
+    }
+    if ((id === "preview-links" || id === "apply-links") && arg !== undefined) {
+      void handleBatchLink(arg, true);
+      return;
+    }
+    if (id === "add-to-group" && arg !== undefined) {
+      handleAddToGroup(arg);
+      return;
+    }
+    if (id === "remove-from-group" && arg !== undefined) {
+      handleRemoveFromGroup(arg);
+      return;
+    }
+    if (id === "adopt" && arg !== undefined) {
+      void getAction("adopt").execute({ source: arg }).then(() => {
+        void fetchSkills().then(setSkills);
+        setToast({ message: "收录完成" });
+      }).catch((e: unknown) => {
+        setToast({ message: e instanceof Error ? e.message : String(e) });
+      });
+      return;
+    }
+    if (id === "restore" && arg !== undefined) {
+      void getAction("restore").execute({ name: arg }).then(async () => {
+        setSkills(await fetchSkills());
+        setArchived(await fetchArchive());
+        setToast({ message: "已恢复 " + arg });
+      }).catch((e: unknown) => {
+        setToast({ message: e instanceof Error ? e.message : String(e) });
+      });
+      return;
+    }
+    if (id === "create-group" && arg !== undefined) {
+      handleCreateGroup(arg, arg);
+      return;
+    }
+    if (id === "delete-group" && arg !== undefined) {
+      handleDeleteGroup(arg);
+      return;
+    }
+    if (id === "rename-group" && arg !== undefined) {
+      const sp = arg.split(/\s+/);
+      const gid = sp[0] ?? "";
+      const name = sp.slice(1).join(" ");
+      if (gid !== "" && name !== "") handleRenameGroup(gid, name);
+      else setToast({ message: "用法: <id> <新名称>" });
+    }
+  }, [focusedHash, skills, handleArchiveSkill, handleToggle, handleBatchLink, handleAddToGroup, handleRemoveFromGroup, handleCreateGroup, handleDeleteGroup, handleRenameGroup]);
+
   const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
   const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
 
@@ -333,9 +429,18 @@ export default function App() {
             <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">skill-hub</h1>
             <p className="mt-1 text-sm text-ink-mid">社团内部的 Agent Skill 共享与统一管理中心</p>
           </div>
-          <p className="shrink-0 text-xs text-ink-faint">
-            {state === "ready" ? "库存 " + skills.length + " 个" : " "}
-          </p>
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="text-xs text-ink-faint hover:text-ink-mid"
+            >
+              Ctrl+K 命令
+            </button>
+            <p className="text-xs text-ink-faint">
+              {state === "ready" ? "库存 " + skills.length + " 个" : " "}
+            </p>
+          </div>
         </div>
         <div className="mt-3 lg:hidden">
           <select
@@ -449,21 +554,7 @@ export default function App() {
               onClose={() => setFocusedHash(null)}
               onToggle={handleToggle}
               onSaved={handleSaved}
-              onArchive={(s) => {
-                void (async () => {
-                  try {
-                    await getAction("archive").execute({ hash: s.hash });
-                    setSkills((prev) => prev.filter((x) => x.hash !== s.hash));
-                    if (focusedHash === s.hash) setFocusedHash(null);
-                    dispatchSelection({ type: "toggle", hash: s.hash, next: false });
-                    setArchived(await fetchArchive());
-                    setToast({ message: "已归档 " + s.dirName, undoName: s.dirName });
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setErrors((prev) => new Map(prev).set(s.hash, "归档失败: " + msg));
-                  }
-                })();
-              }}
+              onArchive={handleArchiveSkill}
             />
           </aside>
         </div>
@@ -517,6 +608,21 @@ export default function App() {
             关闭
           </button>
         </div>
+      )}
+      {paletteOpen && (
+      <CommandPalette
+        open
+        onClose={() => setPaletteOpen(false)}
+        ctx={{
+          hasFocused: focused !== null,
+          selectedCount: selection.hashes.size,
+          clientCount: clients.length,
+          groupCount: groups.length,
+        }}
+        clients={clients.map((c) => ({ id: c.clientId, name: c.clientId }))}
+        groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+        onRun={handlePaletteRun}
+      />
       )}
     </div>
   );
