@@ -1,6 +1,10 @@
+import { useEffect, useState } from "react";
+import { fetchSkillLinks } from "../skills/api.js";
 import { ClientSwitches } from "../skills/ClientSwitches.js";
 import { SkillViewer } from "../skills/SkillViewer.js";
-import type { ClientInfo, SkillRecord, UsageCounters } from "../skills/types.js";
+import type { ClientInfo, ClientLinkRow, SkillRecord, UsageCounters } from "../skills/types.js";
+
+type InspectorTab = "content" | "clients" | "analyze";
 
 interface InspectorPaneProps {
   skill: SkillRecord | null;
@@ -11,10 +15,29 @@ interface InspectorPaneProps {
   onClose: () => void;
   onToggle: (skill: SkillRecord, clientId: string, enable: boolean) => void;
   onSaved: (oldHash: string, newHash: string) => void;
+  onArchive: (skill: SkillRecord) => void;
 }
 
-/** 检查器:当前选中 skill 的元信息、正文、客户端开关;未选中为空状态。 */
-export function InspectorPane({
+function tabClass(active: boolean): string {
+  return (
+    "px-3 py-2 text-xs transition-colors duration-150 " +
+    (active ? "border-b border-ink-strong text-ink-strong" : "text-ink-mid hover:text-ink-strong")
+  );
+}
+
+/** 检查器:头部 + 内容/客户端/分析页签 + 归档。未选中为空状态。 */
+export function InspectorPane(props: InspectorPaneProps): React.JSX.Element {
+  if (props.skill === null) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <p className="text-sm text-ink-mid">选择一个 skill 查看详情</p>
+      </div>
+    );
+  }
+  return <InspectorBody key={props.skill.hash} {...props} skill={props.skill} />;
+}
+
+function InspectorBody({
   skill,
   clients,
   usage,
@@ -23,18 +46,28 @@ export function InspectorPane({
   onClose,
   onToggle,
   onSaved,
-}: InspectorPaneProps): React.JSX.Element {
-  if (skill === null) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <p className="text-sm text-ink-mid">选择一个 skill 查看详情</p>
-      </div>
-    );
-  }
+  onArchive,
+}: InspectorPaneProps & { skill: SkillRecord }): React.JSX.Element {
+  const [tab, setTab] = useState<InspectorTab>("content");
+  const [links, setLinks] = useState<ClientLinkRow[] | null>(null);
+
+  useEffect(() => {
+    if (tab !== "clients") return;
+    let cancelled = false;
+    void fetchSkillLinks(skill.hash).then((rows) => {
+      if (!cancelled) setLinks(rows);
+    }).catch(() => {
+      if (!cancelled) setLinks([]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [skill.hash, tab]);
+
   const origins = skill.origins.map((o) => o.kind).join(" / ");
   const total = (usage?.show ?? 0) + (usage?.enable ?? 0);
   return (
-    <div className="flex min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-line px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -50,12 +83,43 @@ export function InspectorPane({
           </button>
         </div>
       </header>
-      {error !== null && <p className="px-4 pt-3 text-xs text-red-700">{error}</p>}
-      <SkillViewer key={skill.hash} hash={skill.hash} onSaved={onSaved} />
-      <div className="border-t border-line pt-3">
-        <h3 className="px-4 pb-2 text-xs font-medium text-ink-strong">客户端</h3>
-        <ClientSwitches skill={skill} clients={clients} pending={pending} onToggle={onToggle} />
+      <nav className="flex shrink-0 border-b border-line px-2" aria-label="检查器页签">
+        <button type="button" data-testid="inspector-tab-content" className={tabClass(tab === "content")} onClick={() => setTab("content")}>
+          内容
+        </button>
+        <button type="button" data-testid="inspector-tab-clients" className={tabClass(tab === "clients")} onClick={() => setTab("clients")}>
+          客户端
+        </button>
+        <button type="button" data-testid="inspector-tab-analyze" className={tabClass(tab === "analyze")} onClick={() => setTab("analyze")}>
+          分析
+        </button>
+      </nav>
+      {error !== null && <p className="shrink-0 px-4 pt-3 text-xs text-red-700">{error}</p>}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {tab === "content" && (
+          <div className="h-full min-h-0 overflow-y-auto">
+            <SkillViewer key={skill.hash} hash={skill.hash} onSaved={onSaved} />
+          </div>
+        )}
+        {tab === "clients" && (
+          <div className="h-full overflow-y-auto pt-3">
+            <ClientSwitches skill={skill} clients={clients} links={links} pending={pending} onToggle={onToggle} />
+          </div>
+        )}
+        {tab === "analyze" && (
+          <p className="p-4 text-sm text-ink-mid">相近/冲突分析将在后续批次接入。可先用终端 <code className="font-mono text-xs">skills-hub analyze</code>。</p>
+        )}
       </div>
+      <footer className="shrink-0 border-t border-line px-4 py-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onArchive(skill)}
+          className="text-xs text-red-700 hover:underline disabled:opacity-50"
+        >
+          归档此技能
+        </button>
+      </footer>
     </div>
   );
 }

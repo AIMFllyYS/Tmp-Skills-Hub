@@ -359,12 +359,18 @@ async function main() {
       if (view.hasMd && view.mdText.includes(BODY_MARKER)) break;
       await sleep(100);
     }
-    const switches = await evalJs("document.querySelectorAll('[data-testid=client-switch]').length");
     const elapsed = Date.now() - tClick;
     if (elapsed < CLICK_WINDOW_MS) await sleep(CLICK_WINDOW_MS - elapsed);
 
     const probe = JSON.parse(await evalJs("JSON.stringify(window.__smoke)"));
     const clickLongMax = probe.longTasks.length > 0 ? Math.max(...probe.longTasks) : 0;
+    await evalJs(`(() => { const t = document.querySelector('[data-testid=inspector-tab-clients]'); if (t) t.click(); return true; })()`);
+    let switches = 0;
+    for (let i = 0; i < 20; i++) {
+      switches = await evalJs("document.querySelectorAll('[data-testid=client-switch]').length");
+      if (switches > 0) break;
+      await sleep(100);
+    }
 
     await evalJs("window.__smoke.longTasks = []; window.__smoke.fetches = 0; true;");
     const idleStart = await metricsOf(send, sessionId);

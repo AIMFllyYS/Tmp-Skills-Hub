@@ -43,6 +43,21 @@ export interface ClientInfo {
   skillsDir: string;
 }
 
+export type ClientLinkState = "managed" | "off" | "unregistered-conflict" | "dangling";
+
+export interface ClientLinkRow {
+  clientId: string;
+  state: ClientLinkState;
+  detail: string;
+}
+
+export interface SkillLinksResponse {
+  ok: true;
+  command: "skill-links";
+  hash: string;
+  links: ClientLinkRow[];
+}
+
 export interface ClientsResponse {
   ok: true;
   command: "clients";

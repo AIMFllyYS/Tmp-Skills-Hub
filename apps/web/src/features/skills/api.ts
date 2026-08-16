@@ -1,5 +1,5 @@
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
-import type { ArchiveResponse, ClientsResponse, GroupsResponse, SkillFileEntry, SkillFileResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
+import type { ArchiveResponse, ClientLinkRow, ClientsResponse, GroupsResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchSkills(): Promise<SkillRecord[]> {
@@ -16,6 +16,14 @@ export async function fetchGroups(): Promise<GroupsResponse["groups"]> {
   const body = (await res.json()) as GroupsResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
   return body.groups;
+}
+
+export async function fetchSkillLinks(hash: string): Promise<ClientLinkRow[]> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/links");
+  if (!res.ok) throw new Error("GET skill-links → " + res.status);
+  const body = (await res.json()) as SkillLinksResponse | { ok: false; message: string };
+  if (!body.ok) throw new Error(body.message);
+  return body.links;
 }
 
 export async function fetchClients(): Promise<ClientsResponse["clients"]> {
