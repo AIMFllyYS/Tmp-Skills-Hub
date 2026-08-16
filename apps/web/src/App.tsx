@@ -4,7 +4,7 @@ interface SkillItem {
   hash: string;
   name: string;
   description: string;
-  source: string;
+  clientId: string;
 }
 
 type LoadState = "loading" | "ready" | "offline";
@@ -13,7 +13,7 @@ export default function App() {
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [query, setQuery] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [clientFilter, setClientFilter] = useState<string>("all");
 
   useEffect(() => {
     fetch("/api/skills")
@@ -25,16 +25,16 @@ export default function App() {
       .catch(() => setState("offline"));
   }, []);
 
-  const sources = useMemo(() => [...new Set(skills.map((s) => s.source))].sort(), [skills]);
+  const clients = useMemo(() => [...new Set(skills.map((s) => s.clientId))].sort(), [skills]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return skills.filter(
       (s) =>
-        (sourceFilter === "all" || s.source === sourceFilter) &&
+        (clientFilter === "all" || s.clientId === clientFilter) &&
         (q === "" || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)),
     );
-  }, [skills, query, sourceFilter]);
+  }, [skills, query, clientFilter]);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -51,12 +51,12 @@ export default function App() {
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
         />
         <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
         >
-          <option value="all">全部来源</option>
-          {sources.map((s) => (
+          <option value="all">全部客户端</option>
+          {clients.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -80,7 +80,7 @@ export default function App() {
               <div className="flex items-baseline justify-between gap-4">
                 <h2 className="font-medium">{skill.name}</h2>
                 <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                  {skill.source}
+                  {skill.clientId}
                 </span>
               </div>
               <p className="mt-1 text-sm text-gray-600">{skill.description}</p>
