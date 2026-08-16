@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { CollectionPane, type SortMode } from "./features/panel/CollectionPane.js";
 import { InspectorPane } from "./features/panel/InspectorPane.js";
+import { emptySelection, selectionReducer } from "./features/panel/selection.js";
 import { ScopeNav, scopeOptions } from "./features/panel/ScopeNav.js";
 import { buildScopeCounts, isSkillScope, scopeKey, skillsForScope, type ScopeSelection } from "./features/panel/scope.js";
 import { fetchArchive, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
@@ -21,7 +22,7 @@ export default function App() {
   const [sortMode, setSortMode] = useState<SortMode>("name");
   const [scope, setScope] = useState<ScopeSelection>({ kind: "all" });
   const [focusedHash, setFocusedHash] = useState<string | null>(null);
-  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [selection, dispatchSelection] = useReducer(selectionReducer, emptySelection);
   const [pendingHash, setPendingHash] = useState<string | null>(null);
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
 
@@ -84,13 +85,7 @@ export default function App() {
     invalidateResourcePrefix(fileResourceKey(oldHash, ""));
     setSkills((prev) => prev.map((s) => (s.hash === oldHash ? { ...s, hash: newHash } : s)));
     setFocusedHash(newHash);
-    setChecked((prev) => {
-      if (!prev.has(oldHash)) return prev;
-      const next = new Set(prev);
-      next.delete(oldHash);
-      next.add(newHash);
-      return next;
-    });
+    dispatchSelection({ type: "replace-hash", from: oldHash, to: newHash });
   }, []);
 
   const handleScope = useCallback((next: ScopeSelection) => {
@@ -99,12 +94,7 @@ export default function App() {
   }, []);
 
   const handleToggleCheck = useCallback((hash: string, next: boolean) => {
-    setChecked((prev) => {
-      const copy = new Set(prev);
-      if (next) copy.add(hash);
-      else copy.delete(hash);
-      return copy;
-    });
+    dispatchSelection({ type: "toggle", hash, next });
   }, []);
 
   const counts = useMemo(() => buildScopeCounts(skills, groups, clients, archived), [skills, groups, clients, archived]);
@@ -124,16 +114,12 @@ export default function App() {
   }, [skills, groups, scope, query, sortMode, usageByHash]);
 
   const handleToggleAllVisible = useCallback((next: boolean) => {
-    const hashes = visible.map((s) => s.hash);
-    setChecked((prev) => {
-      const copy = new Set(prev);
-      for (const h of hashes) {
-        if (next) copy.add(h);
-        else copy.delete(h);
-      }
-      return copy;
-    });
+    dispatchSelection({ type: "toggle-visible", hashes: visible.map((s) => s.hash), next });
   }, [visible]);
+
+  const handleSelectStore = useCallback(() => {
+    dispatchSelection({ type: "select-store", hashes: skills.map((s) => s.hash) });
+  }, [skills]);
 
   const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
   const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
@@ -190,10 +176,12 @@ export default function App() {
               skills={visible}
               archived={archived}
               clientTotal={clients.length}
-              checked={checked}
+              checked={selection.hashes}
+              storeTotal={skills.length}
               focusedHash={focusedHash}
               onToggleCheck={handleToggleCheck}
               onToggleAllVisible={handleToggleAllVisible}
+              onSelectStore={handleSelectStore}
               onFocus={setFocusedHash}
             />
           </section>

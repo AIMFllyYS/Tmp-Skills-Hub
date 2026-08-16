@@ -26,7 +26,11 @@ export const SkillRow = memo(function SkillRow({
       data-testid="skill-card"
       role="option"
       aria-selected={focused}
-      className={"box-border overflow-hidden " + (focused ? "bg-surface" : "")}
+      className={
+        "box-border overflow-hidden " +
+        (checked ? "bg-surface " : "") +
+        (focused ? "outline outline-1 outline-line-strong outline-offset-[-1px]" : "")
+      }
       style={{ height: SKILL_ROW_HEIGHT_PX }}
     >
       <div className="flex h-full items-center gap-2 px-4">

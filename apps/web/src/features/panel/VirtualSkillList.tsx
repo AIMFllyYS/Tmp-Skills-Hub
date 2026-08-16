@@ -51,6 +51,13 @@ export function VirtualSkillList({
     const current = focusedHash === null ? null : skills.findIndex((s) => s.hash === focusedHash);
     const idx = current === -1 ? null : current;
     let next: number | null = null;
+    if (e.key === " " || e.key === "Spacebar") {
+      if (focusedHash !== null) {
+        e.preventDefault();
+        onToggleCheck(focusedHash, !checked.has(focusedHash));
+      }
+      return;
+    }
     if (e.key === "ArrowDown") next = stepIndex(idx, 1, skills.length);
     else if (e.key === "ArrowUp") next = stepIndex(idx, -1, skills.length);
     else if (e.key === "Home") next = 0;

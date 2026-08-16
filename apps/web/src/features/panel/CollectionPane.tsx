@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
 import type { ArchivedSkill, SkillRecord } from "../skills/types.js";
 import { isSkillScope, scopeKey, type ScopeSelection } from "./scope.js";
+import { masterCheckState, selectionSummary } from "./selection.js";
 import { VirtualSkillList } from "./VirtualSkillList.js";
 
 export type SortMode = "name" | "usage";
@@ -16,9 +17,11 @@ interface CollectionPaneProps {
   archived: ArchivedSkill[];
   clientTotal: number;
   checked: ReadonlySet<string>;
+  storeTotal: number;
   focusedHash: string | null;
   onToggleCheck: (hash: string, next: boolean) => void;
   onToggleAllVisible: (next: boolean) => void;
+  onSelectStore: () => void;
   onFocus: (hash: string) => void;
 }
 
@@ -30,30 +33,48 @@ const selectClass =
 function SelectAllRow({
   visibleHashes,
   checked,
+  storeTotal,
   onToggleAll,
+  onSelectStore,
 }: {
   visibleHashes: string[];
   checked: ReadonlySet<string>;
+  storeTotal: number;
   onToggleAll: (next: boolean) => void;
+  onSelectStore: () => void;
 }): React.JSX.Element {
   const ref = useRef<HTMLInputElement>(null);
-  const selectedVisible = visibleHashes.filter((h) => checked.has(h)).length;
-  const all = visibleHashes.length > 0 && selectedVisible === visibleHashes.length;
-  const some = selectedVisible > 0 && !all;
+  const master = masterCheckState(visibleHashes, checked);
+  const summary = selectionSummary(visibleHashes, checked);
   useEffect(() => {
-    if (ref.current !== null) ref.current.indeterminate = some;
-  }, [some]);
+    if (ref.current !== null) ref.current.indeterminate = master === "some";
+  }, [master]);
+  const live =
+    summary.hidden > 0
+      ? "已选 " + summary.selected + " 项，其中 " + summary.hidden + " 项当前不可见"
+      : "已选 " + summary.selected + " 项";
+  const offerStore = master === "all" && storeTotal > visibleHashes.length;
   return (
-    <div className="flex items-center gap-2 border-b border-line px-4 py-2 text-xs text-ink-mid">
+    <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2 text-xs text-ink-mid">
       <input
         ref={ref}
         type="checkbox"
-        checked={all}
+        checked={master === "all"}
         disabled={visibleHashes.length === 0}
-        aria-label="全选当前列表"
+        aria-label="全选当前可见列表"
         onChange={(e) => onToggleAll(e.target.checked)}
       />
-      <span>全选 · 已选 {checked.size}</span>
+      <span>全选当前列表</span>
+      <span aria-live="polite">{live}</span>
+      {offerStore && (
+        <button
+          type="button"
+          onClick={onSelectStore}
+          className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong hover:text-ink-strong"
+        >
+          选中全部库存 {storeTotal} 项
+        </button>
+      )}
     </div>
   );
 }
@@ -69,9 +90,11 @@ export function CollectionPane({
   archived,
   clientTotal,
   checked,
+  storeTotal,
   focusedHash,
   onToggleCheck,
   onToggleAllVisible,
+  onSelectStore,
   onFocus,
 }: CollectionPaneProps): React.JSX.Element {
   if (scope.kind === "archive") {
@@ -110,7 +133,9 @@ export function CollectionPane({
       <SelectAllRow
         visibleHashes={skills.map((s) => s.hash)}
         checked={checked}
+        storeTotal={storeTotal}
         onToggleAll={onToggleAllVisible}
+        onSelectStore={onSelectStore}
       />
       {skills.length === 0 ? (
         <p className="px-4 py-6 text-sm text-ink-mid">没有匹配的 skill。</p>
