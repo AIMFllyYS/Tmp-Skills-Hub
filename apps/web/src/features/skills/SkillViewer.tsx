@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked, type Tokens } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
 import { fetchSkillFile, fetchSkillTree, saveSkillFile, translateText } from "./api.js";
+import { loadSkillView } from "./skill-view-load.js";
 import type { SkillFileEntry } from "./types.js";
 
 /** 代码块高亮:marked 新版已移除内置 highlight 选项,用自定义 renderer 挂 hljs。 */
@@ -37,6 +38,8 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
   const [treeError, setTreeError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fileLoading, setFileLoading] = useState(false);
+  const loadGen = useRef(0);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,32 +51,45 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
   const [translateError, setTranslateError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 组件每次展开全新挂载,初始 state 即 loading/null,无需同步重置
     let cancelled = false;
-    fetchSkillTree(hash)
-      .then((e) => {
-        if (cancelled) return;
-        setEntries(e);
-        const md = e.find((x) => x.path === "SKILL.md");
-        setSelected(md !== undefined ? "SKILL.md" : (e.find((x) => x.kind === "file")?.path ?? ""));
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setTreeError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const gen = loadGen.current;
+    void loadSkillView(hash, {
+      fetchTree: fetchSkillTree,
+      fetchFile: fetchSkillFile,
+      isCancelled: () => cancelled || gen !== loadGen.current,
+    }).then((result) => {
+      if (result.status === "cancelled") return;
+      if (result.status === "tree-error") {
+        setTreeError(result.message);
+        return;
+      }
+      setEntries(result.entries);
+      if (result.status === "empty") {
+        setSelected("");
+        return;
+      }
+      setSelected(result.selected);
+      if (result.status === "file-error") {
+        setFileError(result.message);
+        return;
+      }
+      setContent(result.content);
+    }).finally(() => {
+      if (!cancelled && gen === loadGen.current) setLoading(false);
+    });
     return () => {
       cancelled = true;
+      loadGen.current += 1;
     };
   }, [hash]);
 
   const load = useCallback(
     async (rel: string) => {
+      const gen = ++loadGen.current;
       setFileError(null);
       setContent("");
       setSelected(rel);
+      setFileLoading(true);
       setEditing(false);
       setSaveError(null);
       setSavedHash(null);
@@ -82,9 +98,13 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
       setTranslated(null);
       try {
         const res = await fetchSkillFile(hash, rel);
+        if (gen !== loadGen.current) return;
         setContent(res.content);
       } catch (e) {
+        if (gen !== loadGen.current) return;
         setFileError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (gen === loadGen.current) setFileLoading(false);
       }
     },
     [hash],
@@ -225,7 +245,10 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
             </div>
           )}
           {saveError !== null && <Notice text={saveError} tone="error" />}
-          {selected !== "" && fileError === null && content === "" && <p className="text-xs text-ink-mid">加载中…</p>}
+          {fileLoading && <p className="text-xs text-ink-mid">加载中…</p>}
+          {!fileLoading && selected === "" && fileError === null && treeError === null && (
+            <p className="text-xs text-ink-mid">此 skill 没有可显示的文件</p>
+          )}
           {fileError === null && !editing && html !== "" && (
             <div className="skill-md text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: showTranslated && translated !== null ? (marked.parse(translated) as string) : html }} />
           )}
