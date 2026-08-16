@@ -18,6 +18,23 @@ export {
   STORE_SKILLS_DIR,
   STORE_TMP_DIR,
 } from "./store-layout.js";
+export {
+  createBackupSnapshot,
+  materializeBackupSnapshot,
+  readBackupManifest,
+  readLatestSnapshotId,
+  verifyBackupSnapshot,
+  BACKUP_MANIFEST_VERSION,
+  STORE_BACKUPS_DIR,
+} from "./backup.js";
+export type {
+  BackupFileEntry,
+  BackupLinkEntry,
+  BackupManifest,
+  BackupSnapshotResult,
+  BackupVerifyIssue,
+  BackupVerifyReport,
+} from "./backup.js";
 export type { InitLayoutResult, StoreManifest } from "./store-layout.js";
 export {
   adoptMany,
