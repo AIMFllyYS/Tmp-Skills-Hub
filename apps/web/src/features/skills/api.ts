@@ -1,4 +1,4 @@
-import type { ClientsResponse, GroupsResponse, SkillRecord, SkillsResponse } from "./types.js";
+import type { ArchiveResponse, ClientsResponse, GroupsResponse, SkillRecord, SkillsResponse, StatsResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchSkills(): Promise<SkillRecord[]> {
@@ -23,6 +23,22 @@ export async function fetchClients(): Promise<ClientsResponse["clients"]> {
   const body = (await res.json()) as ClientsResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
   return body.clients;
+}
+
+export async function fetchStats(): Promise<StatsResponse> {
+  const res = await fetch("/api/stats");
+  if (!res.ok) throw new Error("GET /api/stats → " + res.status);
+  const body = (await res.json()) as StatsResponse | { ok: false; message: string };
+  if (!body.ok) throw new Error(body.message);
+  return body;
+}
+
+export async function fetchArchive(): Promise<ArchiveResponse["archived"]> {
+  const res = await fetch("/api/archive");
+  if (!res.ok) throw new Error("GET /api/archive → " + res.status);
+  const body = (await res.json()) as ArchiveResponse | { ok: false; message: string };
+  if (!body.ok) throw new Error(body.message);
+  return body.archived;
 }
 
 /** 开关背后就是 enable/disable(语义与 CLI 完全一致:只挂/摘链接,库存原件不动)。 */

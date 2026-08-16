@@ -1,8 +1,10 @@
-import type { ClientInfo, SkillRecord } from "./types.js";
+import type { ClientInfo, SkillRecord, UsageCounters } from "./types.js";
 
 interface SkillCardProps {
   skill: SkillRecord;
   clients: ClientInfo[];
+  /** 调用次数(无记录时为零,不空白不报错) */
+  usage: UsageCounters | undefined;
   /** 本卡片正在执行写操作(禁止重复提交) */
   pending: boolean;
   /** 最近一次操作失败的可读原因(展示在卡片内,不静默) */
@@ -10,9 +12,10 @@ interface SkillCardProps {
   onToggle: (clientId: string, enable: boolean) => void;
 }
 
-/** 单个 skill 卡片:名称、描述、来源徽标、每个客户端的启用开关(状态 = 磁盘链接状态)。 */
-export function SkillCard({ skill, clients, pending, error, onToggle }: SkillCardProps): React.JSX.Element {
+/** 单个 skill 卡片:名称、描述、来源徽标、调用次数、每个客户端的启用开关。 */
+export function SkillCard({ skill, clients, usage, pending, error, onToggle }: SkillCardProps): React.JSX.Element {
   const origins = skill.origins.map((o) => o.kind).join(" / ");
+  const total = (usage?.show ?? 0) + (usage?.enable ?? 0);
   return (
     <li className="rounded-xl border border-line bg-white p-4">
       <div className="flex items-baseline justify-between gap-4">
@@ -23,7 +26,7 @@ export function SkillCard({ skill, clients, pending, error, onToggle }: SkillCar
       <div className="mt-2 flex items-center justify-between gap-4">
         <p className="font-mono text-xs text-ink-faint">{skill.hash.slice(0, 12)}</p>
         <p className="text-xs text-ink-mid">
-          {skill.visibleIn.length > 0 ? "可见于: " + skill.visibleIn.join(", ") : "未在客户端启用"}
+          {total} 次调用 · {skill.visibleIn.length > 0 ? "可见于: " + skill.visibleIn.join(", ") : "未在客户端启用"}
         </p>
       </div>
       <ul className="mt-3 space-y-1.5">
