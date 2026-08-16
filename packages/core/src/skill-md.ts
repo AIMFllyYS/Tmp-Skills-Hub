@@ -8,7 +8,9 @@ import type { SkillMeta } from "./types.js";
  * 各家扩展字段(display name 等)属于适配层,后续由 ClientAdapter 各自处理。
  */
 export function parseSkillMeta(markdown: string): SkillMeta | null {
-  const frontmatter = extractFrontmatter(markdown);
+  // Windows 记事本/PowerShell 写的文件常带 UTF-8 BOM,剥掉再解析
+  const text = markdown.charCodeAt(0) === 0xfeff ? markdown.slice(1) : markdown;
+  const frontmatter = extractFrontmatter(text);
   if (frontmatter === null) return null;
 
   const name = readScalar(frontmatter, "name");

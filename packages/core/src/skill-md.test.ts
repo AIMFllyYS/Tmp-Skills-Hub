@@ -45,6 +45,11 @@ describe("parseSkillMeta", () => {
     expect(parseSkillMeta(markdown)).toEqual({ name: "crlf-skill", description: "crlf desc" });
   });
 
+  it("UTF-8 BOM 开头的文件(Windows 记事本)同样可解析", () => {
+    const markdown = "\uFEFF---\nname: bom-skill\ndescription: bom desc\n---\nbody";
+    expect(parseSkillMeta(markdown)).toEqual({ name: "bom-skill", description: "bom desc" });
+  });
+
   it("值为空视为缺失,返回 null", () => {
     const markdown = ["---", "name: ", "description: has desc", "---"].join("\n");
     expect(parseSkillMeta(markdown)).toBeNull();

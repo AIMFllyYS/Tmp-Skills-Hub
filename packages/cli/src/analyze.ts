@@ -1,0 +1,158 @@
+/**
+ * 相近/冲突分析(#43)。文本判断类任务:按 core-patterns.md §5 交给模型,
+ * core 不实现任何相似度算法——分析完全基于 CLI 已有输出(list --json 的
+ * description),模型只产出「建议」,本命令不触发任何写操作。
+ *
+ * 输入:本地 skill 目录路径,或库存中的 skill 名(目录名)。
+ * 输出:相近(similar)与可能冲突(conflict)清单,各带理由。
+ * 降级:无密钥 → not-configured 可读提示;调用失败/超时 → 可读错误,
+ * 绝不编造结论。密钥只从环境变量读取,不进报告与日志(#42 封装保证)。
+ */
+
+import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/core";
+import path from "node:path";
+import { chatCompletion, type ChatOptions } from "./deepseek.js";
+import { emitError, emitOk } from "./json-out.js";
+
+/** 单个目标最多喂给模型的 description 字符数(防超大 skill 撑爆上下文)。 */
+export const MAX_TARGET_DESC_CHARS = 4_000;
+/** 库存单条 description 截断,避免大库存超上下文。 */
+export const MAX_STOCK_DESC_CHARS = 200;
+/** 库存最多纳入多少条对照。 */
+export const MAX_STOCK_RECORDS = 400;
+/** 分析超时:库存大、推理耗时,比默认 30s 放宽。 */
+export const ANALYZE_TIMEOUT_MS = 90_000;
+
+export interface AnalyzeReportItem {
+  name: string;
+  reason: string;
+}
+
+export interface AnalyzeReport {
+  target: string;
+  similar: AnalyzeReportItem[];
+  conflict: AnalyzeReportItem[];
+}
+
+export interface AnalyzeArgs {
+  home: string | undefined;
+  json: boolean | undefined;
+  _: (string | number)[];
+}
+
+interface AnalyzeContext {
+  targetName: string;
+  targetDescription: string;
+  stock: Array<{ name: string; description: string }>;
+}
+
+/** 组装给模型的分析上下文(纯函数,可测)。 */
+export function buildAnalyzeContext(records: SkillRecord[], target: { dirName: string; description: string }): AnalyzeContext {
+  const stock = records
+    .filter((s) => s.dirName !== target.dirName)
+    .slice(0, MAX_STOCK_RECORDS)
+    .map((s) => ({
+      name: s.dirName,
+      description: s.meta.description.slice(0, MAX_STOCK_DESC_CHARS),
+    }));
+  return {
+    targetName: target.dirName,
+    targetDescription: target.description.slice(0, MAX_TARGET_DESC_CHARS),
+    stock,
+  };
+}
+
+/** 系统提示:角色与输出契约(纯函数,可测)。 */
+export function analyzeSystemPrompt(): string {
+  return [
+    "你是一个 Agent Skill 库存的分析助手。用户给出一个待评估的 skill 的 name 与 description,以及库存中其他 skill 的 name 与 description 列表。",
+    "你的任务:判断库存里哪些 skill 与它功能相近(similar),哪些可能冲突(conflict,如职责重叠、命名易混、互相干扰)。",
+    "只输出一个 JSON 对象,不要任何额外文字,格式:",
+    '{"similar":[{"name":"...","reason":"..."}],"conflict":[{"name":"...","reason":"..."}]}',
+    "要求:1) 只引用库存列表中真实存在的 name;2) 每条给一句具体理由(基于 description 的相似点或冲突点);3) 没有相近或冲突就输出空数组;4) 这是建议,绝不执行任何写操作;5) 不要在理由中编造库存列表之外的信息。",
+  ].join("\n");
+}
+
+/** 从模型回复中提取 JSON(容忍 ```json 围栏与前后缀文字)。 */
+export function extractReportJson(text: string): { similar: AnalyzeReportItem[]; conflict: AnalyzeReportItem[] } {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
+  const candidate = fenced?.[1] ?? text;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("模型回复中没有可解析的 JSON 对象");
+  const parsed = JSON.parse(candidate.slice(start, end + 1)) as { similar?: unknown; conflict?: unknown };
+  const clean = (v: unknown): AnalyzeReportItem[] =>
+    Array.isArray(v)
+      ? v.filter((x): x is AnalyzeReportItem => typeof x === "object" && x !== null && typeof (x as { name?: unknown }).name === "string" && typeof (x as { reason?: unknown }).reason === "string").map((x) => ({ name: (x as { name: string }).name, reason: (x as { reason: string }).reason }))
+      : [];
+  return { similar: clean(parsed.similar), conflict: clean(parsed.conflict) };
+}
+
+export interface RunAnalyzeOptions {
+  /** 测试注入;缺省走 #42 chatCompletion(读 DEEPSEEK_API_KEY) */
+  chat?: (messages: Parameters<typeof chatCompletion>[0], opts?: ChatOptions) => Promise<ReturnType<typeof chatCompletion>>;
+}
+
+export async function runAnalyze(args: AnalyzeArgs, opts: RunAnalyzeOptions = {}): Promise<void> {
+  const input = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(" ").trim();
+  if (input === "") {
+    console.error("用法: skills-hub analyze <本地skill目录路径|库存skill名>");
+    process.exitCode = 2;
+    return;
+  }
+  const { resolveStoreRootOrFail } = await import("./store-cmds.js");
+  const storeRoot = await resolveStoreRootOrFail(args, "analyze");
+  if (storeRoot === null) return;
+
+  // 目标:先当库存名,再当本地目录
+  const records = await readStoreIndex(storeRoot);
+  let target: { dirName: string; description: string } | null = null;
+  const byName = records.find((s) => s.dirName === input);
+  if (byName !== undefined) {
+    target = { dirName: byName.dirName, description: byName.meta.description };
+  } else {
+    const meta = await readSkillMeta(path.resolve(input)).catch(() => null);
+    if (meta !== null) target = { dirName: meta.name, description: meta.description };
+  }
+  if (target === null) {
+    emitError(args.json === true, "analyze", "not-found", "找不到该 skill:既不是库存中的名字,也不是含 SKILL.md 的本地目录 — " + input);
+    return;
+  }
+
+  const ctx = buildAnalyzeContext(records, target);
+  const chat = opts.chat ?? chatCompletion;
+  const result = await chat(
+    [
+      { role: "system", content: analyzeSystemPrompt() },
+      {
+        role: "user",
+        content: "待评估 skill:\nname: " + ctx.targetName + "\ndescription: " + ctx.targetDescription + "\n\n库存对照:\n" + ctx.stock.map((s) => "- " + s.name + ": " + s.description).join("\n") + "\n\n请输出 JSON。",
+      },
+    ],
+    { timeoutMs: ANALYZE_TIMEOUT_MS },
+  );
+  if (!result.ok) {
+    const hint = result.code === "not-configured" ? "未配置 DEEPSEEK_API_KEY,无法分析 — 请配置密钥后重试(不会编造结论)" : "分析调用失败(" + result.code + "): " + result.message;
+    emitError(args.json === true, "analyze", "analyze-failed", hint);
+    return;
+  }
+
+  let report: ReturnType<typeof extractReportJson>;
+  try {
+    report = extractReportJson(result.content);
+  } catch (e) {
+    emitError(args.json === true, "analyze", "analyze-failed", "模型回复无法解析: " + (e instanceof Error ? e.message : String(e)) + " (请重试)");
+    return;
+  }
+
+  if (args.json) {
+    emitOk("analyze", { target: ctx.targetName, similar: report.similar, conflict: report.conflict });
+    return;
+  }
+  console.log("目标: " + ctx.targetName);
+  console.log(report.similar.length === 0 ? "(未发现相近 skill)" : "相近:");
+  for (const s of report.similar) console.log("  ~ " + s.name + " — " + s.reason);
+  console.log(report.conflict.length === 0 ? "(未发现冲突)" : "可能冲突:");
+  for (const c of report.conflict) console.log("  ! " + c.name + " — " + c.reason);
+  console.log("(报告仅为建议,未做任何写操作)");
+}

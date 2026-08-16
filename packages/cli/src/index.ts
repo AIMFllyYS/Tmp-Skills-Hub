@@ -19,6 +19,7 @@ import { scanKnownClients } from "./scan.js";
 import { runGroup } from "./group-cmds.js";
 import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
+import { runAnalyze } from "./analyze.js";
 import { loadEnvFile } from "./env.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
@@ -316,6 +317,17 @@ const archive = defineCommand({
   },
 });
 
+const analyze = defineCommand({
+  meta: { name: "analyze", description: "相近/冲突分析:对照库存 description,给出相近与可能冲突的清单与理由(只读建议,不写盘;需 DEEPSEEK_API_KEY)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  run({ args }) {
+    return runAnalyze(args);
+  },
+});
+
 const ui = defineCommand({
   meta: { name: "ui", description: "启动本地查看服务(App 壳的数据源;仅绑 127.0.0.1)" },
   args: {
@@ -332,7 +344,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, verify, ui },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, ui },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。
