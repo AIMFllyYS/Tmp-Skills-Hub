@@ -57,9 +57,10 @@ describe("discoverClientRoots: 目录形状扫描", () => {
     const roots = await discoverClientRoots(home);
     expect(roots.map((r) => r.clientId).sort()).toEqual(["cursor", "gemini", "windsurf"]);
     const byId = new Map(roots.map((r) => [r.clientId, r.skillsDir]));
-    expect(byId.get("cursor")).toBe(path.join(home, ".cursor", "skills-cursor"));
-    expect(byId.get("gemini")).toBe(path.join(home, ".gemini", "antigravity", "skills"));
-    expect(byId.get("windsurf")).toBe(path.join(home, ".codeium", "windsurf", "skills"));
+    // 返回值为 realpath 归一化结果(CI 上 tmpdir 可能是 8.3 短名,须按归一化后比较)
+    expect(byId.get("cursor")).toBe(await realpath(path.join(home, ".cursor", "skills-cursor")));
+    expect(byId.get("gemini")).toBe(await realpath(path.join(home, ".gemini", "antigravity", "skills")));
+    expect(byId.get("windsurf")).toBe(await realpath(path.join(home, ".codeium", "windsurf", "skills")));
   });
 
   it("嵌套惯例不存在时不报错、不产生 root", async () => {
@@ -202,7 +203,8 @@ describe("discoverClientRoots: 沙箱隔离与确定性", () => {
     const roots = await discoverClientRoots(home);
     expect(roots.map((r) => r.clientId)).toEqual(["claude"]);
     for (const root of roots) {
-      expect(root.skillsDir.startsWith(home)).toBe(true);
+      // skillsDir 是 realpath 归一化结果;home 可能是 8.3 短名,先归一化再判前缀
+      expect(root.skillsDir.startsWith(await realpath(home))).toBe(true);
     }
   });
 
