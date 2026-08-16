@@ -95,7 +95,9 @@ export async function migrateAllSkills(
 ): Promise<{ discovered: number; adopted: number; dryRun: boolean }> {
   await initializeStoreLayout(storeRoot);
   await ensureBuiltinGroups(storeRoot);
-  await writePointerFile(storeRoot, storeRoot);
+  // 指针写 home 基座(baseHome)下,与幂等检查(读 baseHome/.skills-hub/config.json)一致;
+  // 若写 storeRoot 内部(无 --home 时 storeRoot=~/.skills-hub),下次 bootstrap 会永远判为未配置。
+  await writePointerFile(baseHome, storeRoot);
   const roots = await discoverClientRoots(baseHome);
   const dirs: string[] = [];
   for (const root of roots) {
