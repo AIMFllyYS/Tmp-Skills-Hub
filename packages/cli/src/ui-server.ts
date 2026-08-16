@@ -24,8 +24,20 @@ import {
 import { resolveHome } from "./home.js";
 import { POINTER_REL, resolveNames } from "./store-cmds.js";
 import { performLinkChange } from "./link-actions.js";
+import { chatCompletion } from "./deepseek.js";
 
 export const DEFAULT_UI_PORT = 4321;
+
+/** 翻译代理(#38)常量:超时 60s(长文本),单次截断上限防滥用。 */
+export const MAX_TRANSLATE_CHARS = 200_000;
+
+/** 翻译系统提示:保留代码块与 frontmatter 原文,只译说明性文字。 */
+export const TRANSLATE_SYSTEM_PROMPT =
+  "你是 skill 文档翻译器。把用户给的 Markdown 翻译成简体中文,规则:\n" +
+  "- 代码块与行内代码、frontmatter(--- 之间的 YAML)、URL 一律保留原文,绝不翻译\n" +
+  "- 只译说明性文字;术语首次出现可附英文原名\n" +
+  "- 保持 Markdown 结构与标题层级不变\n" +
+  "- 只输出译文,不要解释";
 
 /**
  * HTTP 契约(v0,见 docs/specs/http-api-v0.md):面板数据源。
@@ -42,6 +54,8 @@ export interface UiAppOptions {
   home?: string;
   /** web 静态产物根(缺省 apps/web/dist;测试注入临时目录) */
   webRoot?: string;
+  /** 翻译实现注入(测试替身隔离网络;缺省 chatCompletion) */
+  translateImpl?: typeof chatCompletion;
 }
 
 /** 默认静态根:编译后位于 packages/cli/dist/,上三级到仓库根,再进 apps/web/dist。 */
@@ -103,9 +117,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const app = new Hono();
   const storeRoot = opts.storeRoot === undefined ? null : opts.storeRoot;
   const home = opts.home ?? resolveHome();
+  const translate = opts.translateImpl ?? chatCompletion;
   const webRoot = opts.webRoot ?? defaultWebRoot();
 
-  const err = (c: Context, command: string, code: string, message: string, status: 400 | 404 | 409 | 422 | 500 | 503) =>
+  const err = (c: Context, command: string, code: string, message: string, status: 400 | 404 | 409 | 422 | 500 | 502 | 503) =>
     c.json({ ok: false, command, code, message }, status);
 
   const withStore = (c: Context, command: string, fn: (root: string) => Promise<Response>): Promise<Response> =>
@@ -155,6 +170,24 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }),
   );
 
+  // ---- 翻译代理(#38):本地服务代发,密钥绝不出现在前端/网络响应/日志 ----
+  app.post("/api/translate", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { text?: unknown } | null;
+    if (body === null || typeof body?.text !== "string" || body.text === "") {
+      return err(c, "translate", "bad-usage", "body 需要 { text: string }", 400);
+    }
+    const res = await translate(
+      [
+        { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
+        { role: "user", content: body.text.slice(0, MAX_TRANSLATE_CHARS) },
+      ],
+      { timeoutMs: 60_000 },
+    );
+    if (!res.ok) {
+      return err(c, "translate", res.code, res.message, res.code === "not-configured" ? 503 : 502);
+    }
+    return c.json({ ok: true, command: "translate", text: res.content });
+  });
   app.get("/api/clients", (c) =>
     discoverClientRoots(home).then((roots) =>
       c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),
