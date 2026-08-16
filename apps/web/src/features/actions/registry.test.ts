@@ -28,5 +28,7 @@ describe("ACTION_REGISTRY", () => {
     expect(getAction("create-group").verb).toBe("新建分组");
     expect(getAction("delete-group").destructive).toBe(true);
     expect(getAction("add-to-group").verb).toBe("挂到分组");
+    expect(getAction("analyze").verb).toBe("分析");
+    expect(getAction("analyze").destructive).toBe(false);
   });
 });

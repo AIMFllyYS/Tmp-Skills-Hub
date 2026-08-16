@@ -1,5 +1,5 @@
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
-import type { AdoptResponse, ArchiveResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
+import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchSkills(): Promise<SkillRecord[]> {
@@ -130,6 +130,21 @@ export async function saveSkillFile(hash: string, relPath: string, content: stri
 }
 
 /** 翻译代理:本地服务代发,密钥绝不出现在前端。失败抛可读 Error(原文不受影响)。 */
+export async function analyzeSkill(target: string): Promise<AnalyzeResponse> {
+  const res = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ target }),
+  });
+  const body = (await res.json().catch(() => null)) as AnalyzeResponse | { ok: false; code?: string; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    const err = new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+    (err as { code?: string }).code = body !== null && "code" in body ? body.code : "analyze-failed";
+    throw err;
+  }
+  return body;
+}
+
 export async function translateText(text: string): Promise<string> {
   const res = await fetch("/api/translate", {
     method: "POST",
