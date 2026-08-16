@@ -12,10 +12,12 @@ interface SkillCardProps {
   /** 最近一次操作失败的可读原因(展示在卡片内,不静默) */
   error: string | null;
   onToggle: (clientId: string, enable: boolean) => void;
+  /** 编辑保存成功(哈希已更新)→ 上层刷新列表 */
+  onSaved: (newHash: string) => void;
 }
 
 /** 单个 skill 卡片:名称、描述、来源徽标、调用次数、每个客户端的启用开关;点击标题展开内容查看器。 */
-export function SkillCard({ skill, clients, usage, pending, error, onToggle }: SkillCardProps): React.JSX.Element {
+export function SkillCard({ skill, clients, usage, pending, error, onToggle, onSaved }: SkillCardProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const origins = skill.origins.map((o) => o.kind).join(" / ");
   const total = (usage?.show ?? 0) + (usage?.enable ?? 0);
@@ -34,7 +36,7 @@ export function SkillCard({ skill, clients, usage, pending, error, onToggle }: S
           </p>
         </div>
       </button>
-      {open && <SkillViewer hash={skill.hash} onClose={() => setOpen(false)} />}
+      {open && <SkillViewer hash={skill.hash} onClose={() => setOpen(false)} onSaved={onSaved} />}
       <ul className="mt-3 space-y-1.5">
         {clients.map((client) => {
           const enabled = skill.visibleIn.includes(client.clientId);

@@ -141,6 +141,7 @@ export default function App() {
             pendingHash={pendingHash}
             errors={errors}
             onToggle={handleToggle}
+            onSaved={() => setReload((n) => n + 1)}
           />
         </>
       )}

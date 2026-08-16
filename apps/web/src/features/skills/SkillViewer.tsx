@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { marked, type Tokens } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
-import { fetchSkillFile, fetchSkillTree } from "./api.js";
+import { fetchSkillFile, fetchSkillTree, saveSkillFile } from "./api.js";
 import type { SkillFileEntry } from "./types.js";
 
 /** 代码块高亮:marked 新版已移除内置 highlight 选项,用自定义 renderer 挂 hljs。 */
@@ -25,16 +25,23 @@ function Notice({ text, tone }: { text: string; tone: "warn" | "error" }): React
 interface SkillViewerProps {
   hash: string;
   onClose: () => void;
+  /** 保存成功回调(新哈希),上层据此刷新列表 */ 
+  onSaved: (newHash: string) => void;
 }
 
 /** skill 内容查看器:文件树 + 选中文件内容;Markdown 可读渲染,代码块高亮。 */
-export function SkillViewer({ hash, onClose }: SkillViewerProps): React.JSX.Element {
+export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React.JSX.Element {
   const [entries, setEntries] = useState<SkillFileEntry[]>([]);
   const [selected, setSelected] = useState("SKILL.md");
   const [content, setContent] = useState("");
   const [treeError, setTreeError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedHash, setSavedHash] = useState<string | null>(null);
 
   useEffect(() => {
     // 组件每次展开全新挂载,初始 state 即 loading/null,无需同步重置
@@ -63,6 +70,9 @@ export function SkillViewer({ hash, onClose }: SkillViewerProps): React.JSX.Elem
       setFileError(null);
       setContent("");
       setSelected(rel);
+      setEditing(false);
+      setSaveError(null);
+      setSavedHash(null);
       try {
         const res = await fetchSkillFile(hash, rel);
         setContent(res.content);
@@ -72,6 +82,28 @@ export function SkillViewer({ hash, onClose }: SkillViewerProps): React.JSX.Elem
     },
     [hash],
   );
+
+  const startEdit = useCallback(() => {
+    setDraft(content);
+    setSaveError(null);
+    setEditing(true);
+  }, [content]);
+
+  const save = useCallback(async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const newHash = await saveSkillFile(hash, selected, draft);
+      setSavedHash(newHash);
+      setEditing(false);
+      setContent(draft);
+      onSaved(newHash);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [hash, selected, draft, onSaved]);
 
   const html = useMemo(() => {
     if (content === "") return "";
@@ -111,10 +143,54 @@ export function SkillViewer({ hash, onClose }: SkillViewerProps): React.JSX.Elem
           </ul>
         </nav>
         <div className="min-h-24 max-h-96 overflow-y-auto">
+          {savedHash !== null && <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">已保存,新哈希 {savedHash.slice(0, 12)}…</p>}
           {fileError !== null && <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />}
+          {fileError === null && !editing && html !== "" && (
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={startEdit}
+                className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong hover:text-ink-strong"
+              >
+                编辑
+              </button>
+            </div>
+          )}
+          {editing && (
+            <div className="mb-2 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setEditing(false)}
+                className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void save()}
+                className={[
+                  "rounded-full px-3 py-1 text-xs",
+                  saving ? "bg-ink-faint text-white" : "bg-ink-strong text-white hover:opacity-90",
+                ].join(" ")}
+              >
+                {saving ? "保存中…" : "保存"}
+              </button>
+            </div>
+          )}
+          {saveError !== null && <Notice text={saveError} tone="error" />}
           {selected !== "" && fileError === null && content === "" && <p className="text-xs text-ink-mid">加载中…</p>}
-          {fileError === null && html !== "" && (
+          {fileError === null && !editing && html !== "" && (
             <div className="skill-md text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
+          )}
+          {fileError === null && editing && (
+            <textarea
+              value={draft}
+              onChange={(ev) => setDraft(ev.target.value)}
+              spellCheck={false}
+              className="h-72 w-full resize-y rounded-lg border border-line bg-white p-2 font-mono text-xs text-ink-strong focus:border-line-strong focus:outline-none"
+            />
           )}
         </div>
       </div>

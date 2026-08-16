@@ -13,6 +13,7 @@ import {
   readLinksLedger,
   readSkillFile,
   readStoreIndex,
+  saveSkillFile,
   readUsageStats,
   resolveStoreRoot,
   usageRanking,
@@ -250,6 +251,26 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
         return err(c, "skill-file", res.code, res.message, status);
       }
       return c.json({ ok: true, command: "skill-file", dirName: path.basename(skillDir), path: rel, content: res.content, sizeBytes: res.sizeBytes });
+    }),
+  );
+
+  /** 编辑写回(#37):PUT body { content },原子写 + 版本追溯 + 哈希更新。 */
+  app.put("/api/skills/:hash/file", (c) =>
+    withStore(c, "skill-file-save", async (root) => {
+      const skillDir = await resolveSkillDir(root, c.req.param("hash") ?? "");
+      if (skillDir === null) return err(c, "skill-file-save", "not-found", "未找到: " + c.req.param("hash"), 404);
+      const rel = c.req.query("path") ?? "";
+      if (rel === "") return err(c, "skill-file-save", "bad-usage", "缺少 path 查询参数(?path=SKILL.md)", 400);
+      const body = (await c.req.json().catch(() => null)) as { content?: unknown } | null;
+      if (body === null || typeof body?.content !== "string") {
+        return err(c, "skill-file-save", "bad-usage", "body 需要 { content: string }", 400);
+      }
+      const res = await saveSkillFile({ storeRoot: root, skillDir, relPath: rel, content: body.content });
+      if (!res.ok) {
+        const status = res.code === "outside" ? 400 : res.code === "too-large" ? 422 : 500;
+        return err(c, "skill-file-save", res.code, res.message, status);
+      }
+      return c.json({ ok: true, command: "skill-file-save", dirName: path.basename(skillDir), path: rel, hash: res.newHash });
     }),
   );
 

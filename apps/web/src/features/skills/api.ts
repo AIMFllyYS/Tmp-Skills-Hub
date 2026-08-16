@@ -52,6 +52,20 @@ export async function fetchSkillFile(hash: string, relPath: string): Promise<Ski
   return body;
 }
 
+/** 编辑写回:PUT { content };成功返回新哈希(记录已更新,不静默失真)。 */
+export async function saveSkillFile(hash: string, relPath: string, content: string): Promise<string> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/file?path=" + encodeURIComponent(relPath), {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  const body = (await res.json().catch(() => null)) as { ok: boolean; hash?: string; message?: string } | null;
+  if (!res.ok || body === null || !body.ok || typeof body.hash !== "string") {
+    throw new Error(body?.message ?? "HTTP " + res.status);
+  }
+  return body.hash;
+}
+
 export async function fetchArchive(): Promise<ArchiveResponse["archived"]> {
   const res = await fetch("/api/archive");
   if (!res.ok) throw new Error("GET /api/archive → " + res.status);
