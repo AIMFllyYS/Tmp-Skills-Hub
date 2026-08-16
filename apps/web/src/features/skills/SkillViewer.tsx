@@ -163,7 +163,7 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
     return marked.parse(content) as string;
   }, [content]);
 
-  if (loading) return <p className="px-4 pb-4 text-xs text-ink-mid">加载内容…</p>;
+  if (loading) return <p className="px-4 pb-4 text-xs text-ink-mid" data-testid="skill-loading">加载内容…</p>;
 
   return (
     <div className="border-t border-line">
@@ -248,12 +248,12 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
             </div>
           )}
           {saveError !== null && <Notice text={saveError} tone="error" />}
-          {fileLoading && <p className="text-xs text-ink-mid">加载中…</p>}
+          {fileLoading && <p className="text-xs text-ink-mid" data-testid="skill-loading">加载中…</p>}
           {!fileLoading && selected === "" && fileError === null && treeError === null && (
             <p className="text-xs text-ink-mid">此 skill 没有可显示的文件</p>
           )}
           {fileError === null && !editing && html !== "" && (
-            <div className="skill-md text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: showTranslated && translated !== null ? (marked.parse(translated) as string) : html }} />
+            <div className="skill-md text-sm leading-relaxed" data-testid="skill-md" dangerouslySetInnerHTML={{ __html: showTranslated && translated !== null ? (marked.parse(translated) as string) : html }} />
           )}
           {fileError === null && editing && (
             <textarea

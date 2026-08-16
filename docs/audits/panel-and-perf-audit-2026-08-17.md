@@ -157,6 +157,7 @@ root 列表里)。后果:
     # 浏览器侧(需要本机 Chrome)
     node .sandbox/cdp-probe.mjs  http://127.0.0.1:4321/
     node .sandbox/cdp-probe2.mjs http://127.0.0.1:4321/
+    # 正式冒烟(沙箱库存,不依赖本机真实库存): pnpm smoke  → scripts/smoke-panel.mjs (#100)
 
 判定口径:
 - 「静置 10 s 的 CPU 增量」> 0.1 s 即认为存在自激循环

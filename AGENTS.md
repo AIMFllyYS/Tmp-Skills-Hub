@@ -21,6 +21,7 @@
 - CLI dev: `pnpm dev:cli scan` / `pnpm dev:cli ui`（tsx 直跑源码）
 - 构建后的 CLI: `node packages/cli/dist/index.js <command>`
 - 单包操作: `pnpm --filter @skills-hub/core <script>`
+- 面板冒烟: `pnpm smoke`（需先 `pnpm build`；无 Chrome 时跳过、退出码 0）
 
 ## Shell Environment
 

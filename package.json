@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "test": "pnpm -r run test",
     "dev:web": "pnpm --filter @skills-hub/web dev",
-    "dev:cli": "pnpm --filter @skills-hub/cli dev"
+    "dev:cli": "pnpm --filter @skills-hub/cli dev",
+    "smoke": "node scripts/smoke-panel.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
