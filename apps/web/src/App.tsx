@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchClients, fetchGroups, fetchSkills, setSkillEnabled } from "./features/skills/api.js";
+import { fetchArchive, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
+import { ArchivePanel } from "./features/skills/ArchivePanel.js";
 import { applyFilters, ALL_GROUP, ALL_SOURCE, sourceKindsOf } from "./features/skills/filters.js";
 import { SkillList } from "./features/skills/SkillList.js";
-import type { ClientInfo, GroupDef, SkillRecord } from "./features/skills/types.js";
+import type { ArchivedSkill, ClientInfo, GroupDef, SkillRecord, UsageCounters } from "./features/skills/types.js";
 
 type LoadState = "loading" | "ready" | "offline";
+type SortMode = "name" | "usage";
+type Tab = "skills" | "archive";
 
 export default function App() {
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [groups, setGroups] = useState<GroupDef[]>([]);
   const [clients, setClients] = useState<ClientInfo[]>([]);
+  const [usageByHash, setUsageByHash] = useState<Map<string, UsageCounters>>(new Map());
+  const [archived, setArchived] = useState<ArchivedSkill[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [query, setQuery] = useState("");
   const [sourceKind, setSourceKind] = useState(ALL_SOURCE);
   const [groupId, setGroupId] = useState(ALL_GROUP);
+  const [sortMode, setSortMode] = useState<SortMode>("name");
+  const [tab, setTab] = useState<Tab>("skills");
   /** 正在执行写操作的 skill 哈希 */
   const [pendingHash, setPendingHash] = useState<string | null>(null);
   /** 失败原因,按 skill 哈希存(展示不静默) */
@@ -21,11 +28,13 @@ export default function App() {
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    Promise.all([fetchSkills(), fetchGroups(), fetchClients()])
-      .then(([s, g, c]) => {
+    Promise.all([fetchSkills(), fetchGroups(), fetchClients(), fetchStats(), fetchArchive()])
+      .then(([s, g, c, st, ar]) => {
         setSkills(s);
         setGroups(g);
         setClients(c);
+        setUsageByHash(new Map(Object.entries(st.stats.counters)));
+        setArchived(ar);
         setState("ready");
       })
       .catch(() => setState("offline"));
@@ -52,11 +61,24 @@ export default function App() {
   }, []);
 
   const sources = useMemo(() => sourceKindsOf(skills), [skills]);
-  const visible = useMemo(() => applyFilters(skills, groups, { query, sourceKind, groupId }), [skills, groups, query, sourceKind, groupId]);
+  /** 过滤后按排序模式排列:name = dirName 升序;usage = 调用次数降序(零视为 0)。 */
+  const visible = useMemo(() => {
+    const filtered = applyFilters(skills, groups, { query, sourceKind, groupId });
+    if (sortMode === "usage") {
+      const total = (s: SkillRecord) => {
+        const u = usageByHash.get(s.hash);
+        return (u?.show ?? 0) + (u?.enable ?? 0);
+      };
+      return [...filtered].sort((a, b) => total(b) - total(a) || a.dirName.localeCompare(b.dirName));
+    }
+    return [...filtered].sort((a, b) => a.dirName.localeCompare(b.dirName));
+  }, [skills, groups, query, sourceKind, groupId, sortMode, usageByHash]);
   const enabledCount = useMemo(() => skills.filter((s) => s.visibleIn.length > 0).length, [skills]);
 
   const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
   const inputClass = "w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint";
+  const tabClass = (active: boolean) =>
+    "rounded-full px-3 py-1 text-sm transition-colors duration-150 " + (active ? "bg-ink-strong text-white" : "text-ink-mid hover:bg-surface");
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -68,29 +90,11 @@ export default function App() {
         </p>
       </header>
 
-      <div className="mb-6 flex gap-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索名称 / 描述…"
-          className={inputClass}
-        />
-        <select value={sourceKind} onChange={(e) => setSourceKind(e.target.value)} className={selectClass}>
-          <option value={ALL_SOURCE}>全部来源</option>
-          {sources.map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-        </select>
-        <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className={selectClass}>
-          <option value={ALL_GROUP}>全部分组</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
+      <div className="mb-6 flex items-center gap-3">
+        <nav className="flex gap-1">
+          <button type="button" className={tabClass(tab === "skills")} onClick={() => setTab("skills")}>技能</button>
+          <button type="button" className={tabClass(tab === "archive")} onClick={() => setTab("archive")}>归档区</button>
+        </nav>
       </div>
 
       {state === "loading" && <p className="text-sm text-ink-mid">加载中…</p>}
@@ -102,8 +106,43 @@ export default function App() {
         </p>
       )}
 
-      {state === "ready" && (
-        <SkillList skills={visible} clients={clients} pendingHash={pendingHash} errors={errors} onToggle={handleToggle} />
+      {state === "ready" && tab === "archive" && <ArchivePanel archived={archived} />}
+
+      {state === "ready" && tab === "skills" && (
+        <>
+          <div className="mb-6 flex gap-3">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索名称 / 描述…"
+              className={inputClass}
+            />
+            <select value={sourceKind} onChange={(e) => setSourceKind(e.target.value)} className={selectClass}>
+              <option value={ALL_SOURCE}>全部来源</option>
+              {sources.map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+            <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className={selectClass}>
+              <option value={ALL_GROUP}>全部分组</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+            <select value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)} className={selectClass}>
+              <option value="name">按名称</option>
+              <option value="usage">按调用次数</option>
+            </select>
+          </div>
+          <SkillList
+            skills={visible}
+            clients={clients}
+            usageByHash={usageByHash}
+            pendingHash={pendingHash}
+            errors={errors}
+            onToggle={handleToggle}
+          />
+        </>
       )}
     </main>
   );

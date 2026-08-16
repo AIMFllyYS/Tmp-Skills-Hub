@@ -49,6 +49,33 @@ export interface ClientsResponse {
   clients: ClientInfo[];
 }
 
+export interface UsageCounters {
+  show: number;
+  enable: number;
+}
+
+export interface StatsResponse {
+  ok: true;
+  command: "stats";
+  stats: { version: number; counters: Record<string, UsageCounters> };
+  ranking: { hash: string; total: number; show: number; enable: number }[];
+}
+
+export interface ArchivedSkill {
+  file: string;
+  name: string;
+  sizeBytes: number;
+  archivedAt: string;
+}
+
+export interface ArchiveResponse {
+  ok: true;
+  command: "archive";
+  verb: "list";
+  archiveDir: string;
+  archived: ArchivedSkill[];
+}
+
 export interface ApiError {
   ok: false;
   command: string;
