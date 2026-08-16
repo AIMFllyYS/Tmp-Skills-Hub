@@ -5,6 +5,7 @@ import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import {
   archiveSkill,
+  classifyClientLink,
   discoverClientRoots,
   discoverClientRootsAt,
   listArchivedSkills,
@@ -148,6 +149,24 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const hit = skills.find((s) => s.hash.startsWith(needle.toLowerCase())) ?? skills.find((s) => s.dirName === needle);
       if (hit === undefined) return err(c, "skill", "not-found", "未找到: " + needle, 404);
       return c.json({ ok: true, command: "skill", skill: hit });
+    }),
+  );
+
+  app.get("/api/skills/:hash/links", (c) =>
+    withStore(c, "skill-links", async (root) => {
+      const needle = c.req.param("hash");
+      const skills = await readStoreIndex(root);
+      const hit = skills.find((s) => s.hash.startsWith(needle.toLowerCase())) ?? skills.find((s) => s.dirName === needle);
+      if (hit === undefined) return err(c, "skill-links", "not-found", "未找到: " + needle, 404);
+      const ledger = await readLinksLedger(root);
+      const roots = await discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined);
+      const links = [];
+      for (const r of roots) {
+        const inLedger = ledger.some((e) => e.clientId === r.clientId && e.entryName === hit.dirName);
+        const status = await classifyClientLink(path.join(r.skillsDir, hit.dirName), inLedger);
+        links.push({ clientId: r.clientId, state: status.state, detail: status.detail });
+      }
+      return c.json({ ok: true, command: "skill-links", hash: hit.hash, links });
     }),
   );
 

@@ -165,12 +165,9 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
   if (loading) return <p className="px-4 pb-4 text-xs text-ink-mid" data-testid="skill-loading">加载内容…</p>;
 
   return (
-    <div className="border-t border-line">
-      <div className="flex items-center justify-between px-4 pt-3">
-        <h3 className="text-xs font-medium text-ink-strong">内容</h3>
-      </div>
-      <div className="grid grid-cols-[10rem_1fr] gap-4 p-4">
-        <nav className="max-h-72 overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="grid min-h-0 flex-1 grid-cols-[10rem_1fr] gap-4 p-4">
+        <nav className="min-h-0 overflow-y-auto">
           {treeError !== null && <Notice text={treeError} tone="error" />}
           <ul className="space-y-0.5">
             {entries.map((e) => (

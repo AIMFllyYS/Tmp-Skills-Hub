@@ -261,6 +261,21 @@ export default function App() {
               onClose={() => setFocusedHash(null)}
               onToggle={handleToggle}
               onSaved={handleSaved}
+              onArchive={(s) => {
+                if (!window.confirm("将归档 " + s.dirName + "（软删除，可从归档区恢复）。确定？")) return;
+                void (async () => {
+                  try {
+                    await archiveSkill(s.hash);
+                    setSkills((prev) => prev.filter((x) => x.hash !== s.hash));
+                    if (focusedHash === s.hash) setFocusedHash(null);
+                    dispatchSelection({ type: "toggle", hash: s.hash, next: false });
+                    setArchived(await fetchArchive());
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    setErrors((prev) => new Map(prev).set(s.hash, "归档失败: " + msg));
+                  }
+                })();
+              }}
             />
           </aside>
         </div>

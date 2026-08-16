@@ -28,6 +28,8 @@ export {
 } from "./store.js";
 export type { AdoptionOutcome, AdoptionReport, AdoptInput, AdoptOptions, StoreIndexFile } from "./store.js";
 export { findDanglingLinks, probeLinkTypes, readLinkTarget } from "./link-probe.js";
+export { classifyClientLink } from "./link-status.js";
+export type { ClientLinkState, ClientLinkStatus } from "./link-status.js";
 export type { DanglingLink, LinkTypeProbe } from "./link-probe.js";
 export {
   checkLinksLedger,

@@ -169,6 +169,15 @@ describe("http-api 契约", () => {
     expect(missBody.code).toBe("not-found");
   });
 
+  it("skill links:未启用客户端为 off", async () => {
+    const list = await (await app.request("/api/skills")).json() as { skills: { hash: string }[] };
+    const res = await app.request("/api/skills/" + list.skills[0]!.hash + "/links");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; command: string; links: { clientId: string; state: string; detail: string }[] };
+    expect(body.command).toBe("skill-links");
+    expect(body.links.some((l) => l.clientId === "claude" && l.state === "off")).toBe(true);
+  });
+
   it("groups:5 个内置分组", async () => {
     const res = await app.request("/api/groups");
     expect(res.status).toBe(200);
