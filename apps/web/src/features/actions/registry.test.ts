@@ -22,5 +22,6 @@ describe("ACTION_REGISTRY", () => {
     }
     expect(getAction("preview-links").supportsPreview).toBe(true);
     expect(getAction("apply-links").supportsPreview).toBe(true);
+    expect(getAction("adopt").verb).toBe("收录");
   });
 });

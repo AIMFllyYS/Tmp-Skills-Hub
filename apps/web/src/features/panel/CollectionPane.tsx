@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
 import type { SkillRowClientView } from "../skills/SkillRow.js";
 import type { ArchivedSkill, SkillRecord } from "../skills/types.js";
+import { AdoptForm } from "./AdoptForm.js";
 import type { ClientEnableFilter } from "./client-view.js";
 import { isSkillScope, scopeKey, type ScopeSelection } from "./scope.js";
 import { masterCheckState, selectionSummary } from "./selection.js";
@@ -37,6 +38,7 @@ interface CollectionPaneProps {
   onSelectStore: () => void;
   onFocus: (hash: string) => void;
   clientView: ClientViewInfo | null;
+  onAdopted: () => void;
 }
 
 const inputClass =
@@ -111,6 +113,7 @@ export function CollectionPane({
   onSelectStore,
   onFocus,
   clientView,
+  onAdopted,
 }: CollectionPaneProps): React.JSX.Element {
   if (scope.kind === "archive") {
     return (
@@ -145,6 +148,7 @@ export function CollectionPane({
           <option value="usage">按调用次数</option>
         </select>
       </div>
+      <AdoptForm onDone={onAdopted} />
       {clientView !== null && (
         <div data-testid="client-view-header" className="shrink-0 border-b border-line px-4 py-2">
           <p className="text-sm font-medium text-ink-strong">{clientView.clientId}</p>

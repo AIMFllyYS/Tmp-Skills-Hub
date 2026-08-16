@@ -498,6 +498,112 @@ describe("http-api 契约", () => {
     expect(arch.archived[0]!.name).toBe("demo");
   });
 
+  it("adopt 本地:重复内容返回已存在", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-dup-"));
+    tempRoots.push(dir);
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      ["---", "name: adopt-dup", "description: duplicate fixture", "---", "", "# adopt-dup"].join("\n") + "\n",
+      "utf8",
+    );
+    const first = await app.request("/api/adopt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: dir }),
+    });
+    expect(first.status).toBe(200);
+    expect(((await first.json()) as { adopted: number }).adopted).toBe(1);
+    const res = await app.request("/api/adopt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: dir }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { command: string; adopted: number; duplicates: number };
+    expect(body.command).toBe("adopt");
+    expect(body.adopted).toBe(0);
+    expect(body.duplicates).toBe(1);
+  });
+
+  it("adopt 本地:同名不同内容冲突且原件不变", async () => {
+    const other = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-conflict-"));
+    tempRoots.push(other);
+    await writeFile(
+      path.join(other, "SKILL.md"),
+      ["---", "name: adopt-dup", "description: different content must not overwrite", "---", "", "# other"].join("\n") + "\n",
+      "utf8",
+    );
+    const original = await readFile(path.join(storeRoot, "skills", "adopt-dup", "SKILL.md"), "utf8");
+    const res = await app.request("/api/adopt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: other }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { conflicts: number; adopted: number };
+    expect(body.conflicts).toBe(1);
+    expect(body.adopted).toBe(0);
+    expect(await readFile(path.join(storeRoot, "skills", "adopt-dup", "SKILL.md"), "utf8")).toBe(original);
+  });
+
+  it("adopt GitHub:fetch 替身收录", async () => {
+    const skillMd = ["---", "name: gh-demo", "description: from github stub", "---", "", "# gh-demo"].join("\n") + "\n";
+    const fetchImpl = async (url: string): Promise<Response> => {
+      if (url.startsWith("https://api.github.com/repos/org/repo/git/trees/main?recursive=1")) {
+        return new Response(JSON.stringify({ tree: [{ path: "skills/gh-demo/SKILL.md", type: "blob" }] }), { status: 200 });
+      }
+      if (url.startsWith("https://api.github.com/repos/org/repo/git/trees/main")) {
+        return new Response(JSON.stringify({ tree: [] }), { status: 200 });
+      }
+      if (url.startsWith("https://api.github.com/repos/org/repo")) {
+        return new Response(JSON.stringify({ default_branch: "main" }), { status: 200 });
+      }
+      if (url.startsWith("https://raw.githubusercontent.com/org/repo/main/")) {
+        return new Response(skillMd, { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    };
+    const ghApp = createUiApp({ storeRoot, home, fetchImpl });
+    const res = await ghApp.request("/api/adopt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: "https://github.com/org/repo" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { adopted: number; outcomes: { folder: string }[] };
+    expect(body.adopted).toBe(1);
+    expect(body.outcomes[0]?.folder).toBe("gh-demo");
+  });
+
+  it("adopt skills.sh:fetch 替身收录", async () => {
+    const skillMd = ["---", "name: sh-demo", "description: from skills.sh stub", "---", "", "# sh-demo"].join("\n") + "\n";
+    const fetchImpl = async (url: string): Promise<Response> => {
+      if (url.startsWith("https://api.github.com/repos/org/repo/git/trees/main?recursive=1")) {
+        return new Response(JSON.stringify({ tree: [{ path: "skills/sh-demo/SKILL.md", type: "blob" }] }), { status: 200 });
+      }
+      if (url.startsWith("https://api.github.com/repos/org/repo/git/trees/main")) {
+        return new Response(JSON.stringify({ tree: [] }), { status: 200 });
+      }
+      if (url.startsWith("https://api.github.com/repos/org/repo")) {
+        return new Response(JSON.stringify({ default_branch: "main" }), { status: 200 });
+      }
+      if (url.startsWith("https://raw.githubusercontent.com/org/repo/main/")) {
+        return new Response(skillMd, { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    };
+    const shApp = createUiApp({ storeRoot, home, fetchImpl });
+    const res = await shApp.request("/api/adopt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: "https://skills.sh/org/repo/sh-demo" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { adopted: number; outcomes: { folder: string }[] };
+    expect(body.adopted).toBe(1);
+    expect(body.outcomes[0]?.folder).toBe("sh-demo");
+  });
+
   it("未配置库存:store-not-configured 503", async () => {
     const bare = createUiApp({ storeRoot: null, home });
     const res = await bare.request("/api/skills");
