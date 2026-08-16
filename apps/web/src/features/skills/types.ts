@@ -76,6 +76,29 @@ export interface ArchiveResponse {
   archived: ArchivedSkill[];
 }
 
+export interface SkillFileEntry {
+  path: string;
+  kind: "file" | "dir";
+  sizeBytes: number;
+}
+
+export interface SkillTreeResponse {
+  ok: true;
+  command: "skill-tree";
+  dirName: string;
+  entries: SkillFileEntry[];
+  truncated: boolean;
+}
+
+export interface SkillFileResponse {
+  ok: true;
+  command: "skill-file";
+  dirName: string;
+  path: string;
+  content: string;
+  sizeBytes: number;
+}
+
 export interface ApiError {
   ok: false;
   command: string;

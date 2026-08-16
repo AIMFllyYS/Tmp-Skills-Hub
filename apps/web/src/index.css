@@ -9,3 +9,25 @@
   --color-line-strong: #9ca3af; /* gray-400:悬停/聚焦边框 */
   --color-surface: #f9fafb;   /* gray-50 */
 }
+
+/* skill 内容查看器的 Markdown 排版(灰阶、克制) */
+.skill-md h1, .skill-md h2, .skill-md h3 {
+  font-weight: 600;
+  color: var(--color-ink-strong);
+  margin: 1em 0 0.5em;
+}
+.skill-md h1 { font-size: 1.25rem; }
+.skill-md h2 { font-size: 1.125rem; }
+.skill-md h3 { font-size: 1rem; }
+.skill-md p { margin: 0.5em 0; color: var(--color-ink-mid); }
+.skill-md ul, .skill-md ol { margin: 0.5em 0; padding-left: 1.25em; list-style: disc; }
+.skill-md ol { list-style: decimal; }
+.skill-md li { margin: 0.2em 0; color: var(--color-ink-mid); }
+.skill-md a { color: var(--color-ink-strong); text-decoration: underline; }
+.skill-md code { font-family: ui-monospace, monospace; font-size: 0.8125em; background: var(--color-surface); border-radius: 0.25rem; padding: 0.1em 0.3em; }
+.skill-md pre { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 0.5rem; padding: 0.75rem; overflow-x: auto; margin: 0.75em 0; }
+.skill-md pre code { background: none; padding: 0; }
+.skill-md blockquote { border-left: 2px solid var(--color-line); padding-left: 0.75em; color: var(--color-ink-mid); margin: 0.75em 0; }
+.skill-md table { border-collapse: collapse; margin: 0.75em 0; }
+.skill-md th, .skill-md td { border: 1px solid var(--color-line); padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+.skill-md hr { border: none; border-top: 1px solid var(--color-line); margin: 1em 0; }

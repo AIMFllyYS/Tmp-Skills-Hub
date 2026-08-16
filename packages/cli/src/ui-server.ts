@@ -8,8 +8,10 @@ import {
   discoverClientRoots,
   discoverClientRootsAt,
   listArchivedSkills,
+  listSkillFiles,
   readGroups,
   readLinksLedger,
+  readSkillFile,
   readStoreIndex,
   readUsageStats,
   resolveStoreRoot,
@@ -102,7 +104,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const home = opts.home ?? resolveHome();
   const webRoot = opts.webRoot ?? defaultWebRoot();
 
-  const err = (c: Context, command: string, code: string, message: string, status: 400 | 404 | 409 | 503) =>
+  const err = (c: Context, command: string, code: string, message: string, status: 400 | 404 | 409 | 422 | 500 | 503) =>
     c.json({ ok: false, command, code, message }, status);
 
   const withStore = (c: Context, command: string, fn: (root: string) => Promise<Response>): Promise<Response> =>
@@ -209,6 +211,47 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
           removed: result.removed,
         });
       });
+
+  // ---- 内容查看端点(#36) ----
+
+  /** 按 hash 前缀或 dirName 解析到 skill 目录;找不到返回 null。 */
+  const resolveSkillDir = async (root: string, needle: string): Promise<string | null> => {
+    const skills = await readStoreIndex(root);
+    let dirName: string;
+    try {
+      const hit = resolveNames(needle, skills)[0];
+      if (hit === undefined) return null;
+      dirName = hit;
+    } catch {
+      return null;
+    }
+    return path.join(root, "skills", dirName);
+  };
+
+  app.get("/api/skills/:hash/tree", (c) =>
+    withStore(c, "skill-tree", async (root) => {
+      const skillDir = await resolveSkillDir(root, c.req.param("hash") ?? "");
+      if (skillDir === null) return err(c, "skill-tree", "not-found", "未找到: " + c.req.param("hash"), 404);
+      const res = await listSkillFiles(skillDir);
+      if (!res.ok) return err(c, "skill-tree", res.code, res.message, 500);
+      return c.json({ ok: true, command: "skill-tree", dirName: path.basename(skillDir), entries: res.entries, truncated: res.truncated });
+    }),
+  );
+
+  app.get("/api/skills/:hash/file", (c) =>
+    withStore(c, "skill-file", async (root) => {
+      const skillDir = await resolveSkillDir(root, c.req.param("hash") ?? "");
+      if (skillDir === null) return err(c, "skill-file", "not-found", "未找到: " + c.req.param("hash"), 404);
+      const rel = c.req.query("path") ?? "";
+      if (rel === "") return err(c, "skill-file", "bad-usage", "缺少 path 查询参数(?path=SKILL.md)", 400);
+      const res = await readSkillFile(skillDir, rel);
+      if (!res.ok) {
+        const status = res.code === "outside" ? 400 : res.code === "not-found" ? 404 : res.code === "binary" || res.code === "too-large" ? 422 : 500;
+        return err(c, "skill-file", res.code, res.message, status);
+      }
+      return c.json({ ok: true, command: "skill-file", dirName: path.basename(skillDir), path: rel, content: res.content, sizeBytes: res.sizeBytes });
+    }),
+  );
 
   app.post("/api/skills/:hash/enable", linkEndpoint("enable"));
   app.post("/api/skills/:hash/disable", linkEndpoint("disable"));

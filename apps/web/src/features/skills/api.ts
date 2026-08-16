@@ -1,4 +1,4 @@
-import type { ArchiveResponse, ClientsResponse, GroupsResponse, SkillRecord, SkillsResponse, StatsResponse } from "./types.js";
+import type { ArchiveResponse, ClientsResponse, GroupsResponse, SkillFileEntry, SkillFileResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchSkills(): Promise<SkillRecord[]> {
@@ -30,6 +30,25 @@ export async function fetchStats(): Promise<StatsResponse> {
   if (!res.ok) throw new Error("GET /api/stats → " + res.status);
   const body = (await res.json()) as StatsResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
+  return body;
+}
+
+export async function fetchSkillTree(hash: string): Promise<SkillFileEntry[]> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/tree");
+  if (!res.ok) throw new Error("GET skill-tree → " + res.status);
+  const body = (await res.json()) as SkillTreeResponse | { ok: false; message: string };
+  if (!body.ok) throw new Error(body.message);
+  return body.entries;
+}
+
+/** 读取文件内容;二进制/大文件/穿越等降级由服务端信封说明。 */
+export async function fetchSkillFile(hash: string, relPath: string): Promise<SkillFileResponse> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/file?path=" + encodeURIComponent(relPath));
+  const body = (await res.json().catch(() => null)) as SkillFileResponse | { ok: false; code: string; message: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    const msg = body !== null && "message" in body ? body.message : "HTTP " + res.status;
+    throw new Error(msg);
+  }
   return body;
 }
 
