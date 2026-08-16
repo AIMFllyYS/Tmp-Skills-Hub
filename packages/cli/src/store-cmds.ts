@@ -21,11 +21,12 @@ import {
   type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
+import { emitError, emitOk } from "./json-out.js";
 
 export const POINTER_REL = path.join(".skills-hub", "config.json");
 
-/** 解析库存位置;未配置时打印错误并返回 null(exit 2 由调用方处理)。 */
-export async function resolveStoreRootOrFail(args: { home: string | undefined }): Promise<string | null> {
+/** 解析库存位置;未配置时输出契约失败信封并返回 null(退出码 2 由 helper 设置)。 */
+export async function resolveStoreRootOrFail(args: { home: string | undefined; json: boolean | undefined }, command: string): Promise<string | null> {
   const home = resolveHome(args.home);
   const opts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
   if (args.home !== undefined && args.home !== "") opts.cliHome = args.home;
@@ -33,18 +34,16 @@ export async function resolveStoreRootOrFail(args: { home: string | undefined })
   if (envHome !== undefined && envHome !== "") opts.envHome = envHome;
   const store = await resolveStoreRoot(opts);
   if (!store.ok) {
-    console.error("库存未配置:" + store.message + " — 请先运行 skills-hub init --home <path> --yes");
-    process.exitCode = 2;
+    emitError(args.json === true, command, "store-not-configured", "库存未配置:" + store.message + " — 请先运行 skills-hub init --home <path> --yes");
     return null;
   }
   return store.storeRoot;
 }
 
 /** 写操作授权铁律(cli-commands-v0.md §2):非交互环境必须显式 --yes。 */
-export function requireWriteAuth(args: { yes: boolean | undefined }): boolean {
+export function requireWriteAuth(args: { yes: boolean | undefined; json: boolean | undefined }, command: string): boolean {
   if (process.stdin.isTTY || args.yes === true) return true;
-  console.error("写操作需要显式授权:非交互环境请加 --yes。");
-  process.exitCode = 2;
+  emitError(args.json === true, command, "auth-required", "写操作需要显式授权:非交互环境请加 --yes。");
   return false;
 }
 
@@ -64,8 +63,8 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
     return;
   }
   const dryRun = args.dryRun === true;
-  if (!dryRun && !requireWriteAuth(args)) return;
-  const storeRoot = await resolveStoreRootOrFail(args);
+  if (!dryRun && !requireWriteAuth(args, "adopt")) return;
+  const storeRoot = await resolveStoreRootOrFail(args, "adopt");
   if (storeRoot === null) return;
 
   const inputs: AdoptInput[] = paths.map((p) => ({
@@ -75,7 +74,7 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
   const report = await adoptMany(storeRoot, inputs, { dryRun });
 
   if (args.json) {
-    console.log(JSON.stringify({
+    emitOk("adopt", {
       dryRun,
       storeRoot,
       outcomes: report.outcomes.map((o) => ({
@@ -89,7 +88,7 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
       duplicates: report.duplicates,
       conflicts: report.conflicts,
       invalid: report.invalid,
-    }, null, 2));
+    });
     return;
   }
   for (const o of report.outcomes) {
@@ -109,7 +108,7 @@ export interface ListArgs {
 }
 
 export async function runList(args: ListArgs): Promise<void> {
-  const storeRoot = await resolveStoreRootOrFail(args);
+  const storeRoot = await resolveStoreRootOrFail(args, "list");
   if (storeRoot === null) return;
   let skills = await readStoreIndex(storeRoot);
   if (args.source !== undefined && args.source !== "") {
@@ -122,7 +121,7 @@ export async function runList(args: ListArgs): Promise<void> {
     skills = skills.filter((s) => s.visibleIn.length > 0);
   }
   if (args.json) {
-    console.log(JSON.stringify({ storeRoot, total: skills.length, skills }, null, 2));
+    emitOk("list", { storeRoot, total: skills.length, skills });
     return;
   }
   if (skills.length === 0) {
@@ -144,27 +143,25 @@ export interface ShowArgs {
 }
 
 export async function runShow(args: ShowArgs): Promise<void> {
-  const storeRoot = await resolveStoreRootOrFail(args);
+  const storeRoot = await resolveStoreRootOrFail(args, "show");
   if (storeRoot === null) return;
   const needle = String(args._[0] ?? "").trim();
   if (needle === "") {
-    console.error("用法: skills-hub show <skill名或哈希前缀>");
-    process.exitCode = 2;
+    emitError(args.json === true, "show", "bad-usage", "用法: skills-hub show <skill名或哈希前缀>");
     return;
   }
   const skills = await readStoreIndex(storeRoot);
   const exact = skills.find((s) => s.dirName === needle);
   const byHash = exact === undefined ? skills.filter((s) => s.hash.startsWith(needle.toLowerCase())) : [];
   if (exact === undefined && byHash.length === 0) {
-    console.error("未找到: " + needle + "。先 skills-hub list 看有哪些。" + (skills.length === 0 ? "(库存为空)" : ""));
-    process.exitCode = 2;
+    emitError(args.json === true, "show", "not-found", "未找到: " + needle + "。先 skills-hub list 看有哪些。" + (skills.length === 0 ? "(库存为空)" : ""));
     return;
   }
   const records: SkillRecord[] = exact !== undefined ? [exact] : byHash.slice(0, 10);
   // #27:show 是一次真实使用意图,每条展示的记录记一次(失败静默,不影响主流程)
   for (const s of records) await recordUsage(storeRoot, s.hash, "show").catch(() => undefined);
   if (args.json) {
-    console.log(JSON.stringify({ storeRoot, matches: records }, null, 2));
+    emitOk("show", { storeRoot, matches: records });
     return;
   }
   for (const s of records) {
@@ -184,7 +181,7 @@ export interface VerifyArgs {
 }
 
 export async function runVerify(args: VerifyArgs): Promise<void> {
-  const storeRoot = await resolveStoreRootOrFail(args);
+  const storeRoot = await resolveStoreRootOrFail(args, "verify");
   if (storeRoot === null) return;
   const skills = await readStoreIndex(storeRoot);
   const drifted: { name: string; recordedHash: string; actualHash: string }[] = [];
@@ -281,56 +278,52 @@ async function resolveLinkTargets(
   args: LinkCmdArgs,
   skills: Awaited<ReturnType<typeof readStoreIndex>>,
   storeRoot: string,
+  command: "enable" | "disable",
 ): Promise<string[] | null> {
   const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
   const groupId = args.group;
   if (names.length > 0 && groupId !== undefined) {
-    console.error("enable/disable 不能同时按名与按分组(--group),请二选一。");
-    process.exitCode = 2;
+    emitError(args.json === true, command, "bad-usage", "enable/disable 不能同时按名与按分组(--group),请二选一。");
     return null;
   }
   if (groupId !== undefined) {
     const groups = await readGroups(storeRoot);
     const g = groups.groups.find((x) => x.id === groupId);
     if (g === undefined) {
-      console.error("分组不存在: " + groupId + "。skills-hub group list 查看。");
-      process.exitCode = 2;
+      emitError(args.json === true, command, "group-not-found", "分组不存在: " + groupId + "。skills-hub group list 查看。");
       return null;
     }
     const memberHashes = new Set(g.memberHashes);
     const dirNames = skills.filter((s) => memberHashes.has(s.hash)).map((s) => s.dirName);
     if (dirNames.length === 0) {
-      console.error("分组 " + groupId + " 里没有 skill。先 skills-hub group add <id> <skill名...> 加入。");
-      process.exitCode = 2;
+      emitError(args.json === true, command, "group-empty", "分组 " + groupId + " 里没有 skill。先 skills-hub group add <id> <skill名...> 加入。");
       return null;
     }
     return dirNames;
   }
   if (names.length === 0) {
-    console.error("用法: skills-hub enable <skill名或哈希前缀...> --client <id> [--group <id>] [--scope global|project] [--yes] [--dry-run]");
-    process.exitCode = 2;
+    emitError(args.json === true, command, "bad-usage", "用法: skills-hub enable <skill名或哈希前缀...> --client <id> [--group <id>] [--scope global|project] [--yes] [--dry-run]");
     return null;
   }
   try {
     return names.flatMap((n) => resolveNames(n, skills));
   } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
-    process.exitCode = 2;
+    emitError(args.json === true, command, "not-found", e instanceof Error ? e.message : String(e));
     return null;
   }
 }
 
 export async function runEnable(args: LinkCmdArgs): Promise<void> {
   const dryRun = args.dryRun === true;
-  if (!dryRun && !requireWriteAuth(args)) return;
-  const storeRoot = await resolveStoreRootOrFail(args);
+  if (!dryRun && !requireWriteAuth(args, "enable")) return;
+  const storeRoot = await resolveStoreRootOrFail(args, "enable");
   if (storeRoot === null) return;
   const client = await resolveClientSkillsDir(args);
   if (client === null) return;
   const scope = args.scope === "project" ? "project" : "global";
 
   const skills = await readStoreIndex(storeRoot);
-  const dirNames = await resolveLinkTargets(args, skills, storeRoot);
+  const dirNames = await resolveLinkTargets(args, skills, storeRoot, "enable");
   if (dirNames === null) return;
 
   const ledger = await readLinksLedger(storeRoot);
@@ -358,7 +351,7 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
   if (dryRun) {
     const wouldCreate = added.map((e) => e.entryName);
     const wouldRemove = existing.filter((e) => !desired.some((d) => d.id === e.id)).map((e) => e.entryName);
-    if (args.json) console.log(JSON.stringify({ dryRun: true, action: "enable", clientId: client.clientId, scope, targetDir: client.skillsDir, wouldCreate, wouldRemove }, null, 2));
+    if (args.json) emitOk("enable", { dryRun: true, clientId: client.clientId, scope, targetDir: client.skillsDir, wouldCreate, wouldRemove });
     else {
       console.log("预演(不写盘):");
       for (const n of wouldCreate) console.log("  将建立链接: " + n + " → " + client.skillsDir);
@@ -370,10 +363,13 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
 
   const result = await applyLinkSet(storeRoot, { targetDir: client.skillsDir, entries: desired });
   if (!result.ok) {
-    console.error("enable 失败: " + result.message);
-    if (result.code === "unregistered-conflict") console.error("落点被用户自己的目录占据且台账未登记 — 绝不覆盖,请人工处理。");
-    if (result.code === "not-link-conflict") console.error("台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。");
-    process.exitCode = 2;
+    const extra =
+      result.code === "unregistered-conflict"
+        ? "落点被用户自己的目录占据且台账未登记 — 绝不覆盖,请人工处理。"
+        : result.code === "not-link-conflict"
+          ? "台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。"
+          : "";
+    emitError(args.json === true, "enable", "link-failed", "enable 失败: " + result.message + (extra !== "" ? " " + extra : ""));
     return;
   }
   await syncVisibleIn(storeRoot, result.ledger);
@@ -384,7 +380,7 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
     if (record !== undefined) await recordUsage(storeRoot, record.hash, "enable").catch(() => undefined);
   }
   if (args.json) {
-    console.log(JSON.stringify({ ok: true, action: "enable", clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed }, null, 2));
+    emitOk("enable", { clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed });
     return;
   }
   for (const p of result.created) console.log("✓ 已启用: " + path.basename(p) + " → " + client.skillsDir);
@@ -394,15 +390,15 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
 
 export async function runDisable(args: LinkCmdArgs): Promise<void> {
   const dryRun = args.dryRun === true;
-  if (!dryRun && !requireWriteAuth(args)) return;
-  const storeRoot = await resolveStoreRootOrFail(args);
+  if (!dryRun && !requireWriteAuth(args, "disable")) return;
+  const storeRoot = await resolveStoreRootOrFail(args, "disable");
   if (storeRoot === null) return;
   const client = await resolveClientSkillsDir(args);
   if (client === null) return;
   const scope = args.scope === "project" ? "project" : "global";
 
   const skills = await readStoreIndex(storeRoot);
-  const dirNames = await resolveLinkTargets(args, skills, storeRoot);
+  const dirNames = await resolveLinkTargets(args, skills, storeRoot, "disable");
   if (dirNames === null) return;
 
   const ledger = await readLinksLedger(storeRoot);
@@ -412,7 +408,7 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
   const toRemove = existing.filter((e) => drop.has(e.entryName));
 
   if (dryRun) {
-    if (args.json) console.log(JSON.stringify({ dryRun: true, action: "disable", clientId: client.clientId, scope, targetDir: client.skillsDir, wouldRemove: toRemove.map((e) => e.entryName) }, null, 2));
+    if (args.json) emitOk("disable", { dryRun: true, clientId: client.clientId, scope, targetDir: client.skillsDir, wouldRemove: toRemove.map((e) => e.entryName) });
     else {
       console.log("预演(不写盘):");
       for (const e of toRemove) console.log("  将摘除链接: " + e.entryName + "(原件保留在库存)");
@@ -422,21 +418,20 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
   }
 
   if (toRemove.length === 0) {
-    if (args.json) console.log(JSON.stringify({ ok: true, action: "disable", clientId: client.clientId, scope, targetDir: client.skillsDir, created: [], removed: [], unchanged: dirNames }, null, 2));
+    if (args.json) emitOk("disable", { clientId: client.clientId, scope, targetDir: client.skillsDir, created: [], removed: [], unchanged: dirNames });
     else console.log("未变更:这些 skill 未在 " + client.clientId + " 启用(原件保留在库存)。");
     return;
   }
 
   const result = await applyLinkSet(storeRoot, { targetDir: client.skillsDir, entries: desired });
   if (!result.ok) {
-    console.error("disable 失败: " + result.message);
-    if (result.code === "not-link-conflict") console.error("台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。");
-    process.exitCode = 2;
+    const extra = result.code === "not-link-conflict" ? "台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。" : "";
+    emitError(args.json === true, "disable", "link-failed", "disable 失败: " + result.message + (extra !== "" ? " " + extra : ""));
     return;
   }
   await syncVisibleIn(storeRoot, result.ledger);
   if (args.json) {
-    console.log(JSON.stringify({ ok: true, action: "disable", clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed }, null, 2));
+    emitOk("disable", { clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed });
     return;
   }
   for (const p of result.removed) console.log("✓ 已禁用(摘除链接): " + path.basename(p));
@@ -455,14 +450,14 @@ export interface ArchiveArgs {
 
 export async function runArchive(args: ArchiveArgs): Promise<void> {
   const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
-  const storeRoot = await resolveStoreRootOrFail(args);
+  const storeRoot = await resolveStoreRootOrFail(args, "archive");
   if (storeRoot === null) return;
 
   // 无参数:列出归档区(可被列出与定位)
   if (names.length === 0) {
     const archived = await listArchivedSkills(storeRoot);
     if (args.json) {
-      console.log(JSON.stringify({ archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), archived }, null, 2));
+      emitOk("archive", { verb: "list", archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), archived });
       return;
     }
     if (archived.length === 0) {
@@ -475,14 +470,13 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
   }
 
   const dryRun = args.dryRun === true;
-  if (!dryRun && !requireWriteAuth(args)) return;
+  if (!dryRun && !requireWriteAuth(args, "archive")) return;
   const skills = await readStoreIndex(storeRoot);
   let dirNames: string[];
   try {
     dirNames = names.flatMap((n) => resolveNames(n, skills));
   } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
-    process.exitCode = 2;
+    emitError(args.json === true, "archive", "not-found", e instanceof Error ? e.message : String(e));
     return;
   }
 
@@ -491,7 +485,7 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
       dirName: n,
       action: "归档:打包成 zip 移入归档区,先摘全部受管链接,原件不删除",
     }));
-    if (args.json) console.log(JSON.stringify({ dryRun: true, plan }, null, 2));
+    if (args.json) emitOk("archive", { dryRun: true, plan });
     else {
       console.log("预演(不写盘):");
       for (const p of plan) console.log("  " + p.dirName + " — " + p.action);
@@ -513,7 +507,7 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
     }
   }
   if (args.json) {
-    console.log(JSON.stringify({ archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), results, failed }, null, 2));
+    emitOk("archive", { archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), results, failed });
   } else {
     console.log("归档完成:" + (dirNames.length - failed) + " 成功 / " + failed + " 失败。");
     console.log("本工具没有真删除。如需彻底删除,请自行处理归档区文件:" + path.join(storeRoot, STORE_ARCHIVE_DIR));
