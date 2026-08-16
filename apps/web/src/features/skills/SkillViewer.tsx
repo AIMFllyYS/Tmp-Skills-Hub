@@ -3,6 +3,7 @@ import { marked, type Tokens } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
 import { fetchSkillFile, fetchSkillTree, saveSkillFile, translateText } from "./api.js";
+import { isAbortError } from "./async-resource.js";
 import { loadSkillView } from "./skill-view-load.js";
 import type { SkillFileEntry } from "./types.js";
 
@@ -26,8 +27,8 @@ function Notice({ text, tone }: { text: string; tone: "warn" | "error" }): React
 interface SkillViewerProps {
   hash: string;
   onClose: () => void;
-  /** 保存成功回调(新哈希),上层据此刷新列表 */ 
-  onSaved: (newHash: string) => void;
+  /** 保存成功回调(旧哈希,新哈希),上层按 key 替换,不整表重拉 */
+  onSaved: (oldHash: string, newHash: string) => void;
 }
 
 /** skill 内容查看器:文件树 + 选中文件内容;Markdown 可读渲染,代码块高亮。 */
@@ -53,9 +54,10 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
   useEffect(() => {
     let cancelled = false;
     const gen = loadGen.current;
+    const ac = new AbortController();
     void loadSkillView(hash, {
-      fetchTree: fetchSkillTree,
-      fetchFile: fetchSkillFile,
+      fetchTree: (h) => fetchSkillTree(h, ac.signal),
+      fetchFile: (h, p) => fetchSkillFile(h, p, ac.signal),
       isCancelled: () => cancelled || gen !== loadGen.current,
     }).then((result) => {
       if (result.status === "cancelled") return;
@@ -79,6 +81,7 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
     });
     return () => {
       cancelled = true;
+      ac.abort();
       loadGen.current += 1;
     };
   }, [hash]);
@@ -101,7 +104,7 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
         if (gen !== loadGen.current) return;
         setContent(res.content);
       } catch (e) {
-        if (gen !== loadGen.current) return;
+        if (gen !== loadGen.current || isAbortError(e)) return;
         setFileError(e instanceof Error ? e.message : String(e));
       } finally {
         if (gen === loadGen.current) setFileLoading(false);
@@ -147,7 +150,7 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
       setSavedHash(newHash);
       setEditing(false);
       setContent(draft);
-      onSaved(newHash);
+      onSaved(hash, newHash);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
     } finally {

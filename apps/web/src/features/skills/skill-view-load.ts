@@ -1,3 +1,4 @@
+import { isAbortError } from "./async-resource.js";
 import type { SkillFileEntry } from "./types.js";
 
 /** 优先 SKILL.md,否则第一个文件;没有任何文件时返回空串。 */
@@ -28,7 +29,7 @@ export async function loadSkillView(hash: string, deps: SkillViewLoadDeps): Prom
   try {
     entries = await deps.fetchTree(hash);
   } catch (e) {
-    if (deps.isCancelled()) return { status: "cancelled" };
+    if (deps.isCancelled() || isAbortError(e)) return { status: "cancelled" };
     return { status: "tree-error", message: e instanceof Error ? e.message : String(e) };
   }
   if (deps.isCancelled()) return { status: "cancelled" };
@@ -39,7 +40,7 @@ export async function loadSkillView(hash: string, deps: SkillViewLoadDeps): Prom
     if (deps.isCancelled()) return { status: "cancelled" };
     return { status: "ok", entries, selected, content: file.content };
   } catch (e) {
-    if (deps.isCancelled()) return { status: "cancelled" };
+    if (deps.isCancelled() || isAbortError(e)) return { status: "cancelled" };
     return {
       status: "file-error",
       entries,

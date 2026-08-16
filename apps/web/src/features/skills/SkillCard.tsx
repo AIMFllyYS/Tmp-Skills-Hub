@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { ClientInfo, SkillRecord, UsageCounters } from "./types.js";
 import { SkillViewer } from "./SkillViewer.js";
 
@@ -11,13 +11,13 @@ interface SkillCardProps {
   pending: boolean;
   /** 最近一次操作失败的可读原因(展示在卡片内,不静默) */
   error: string | null;
-  onToggle: (clientId: string, enable: boolean) => void;
-  /** 编辑保存成功(哈希已更新)→ 上层刷新列表 */
-  onSaved: (newHash: string) => void;
+  onToggle: (skill: SkillRecord, clientId: string, enable: boolean) => void;
+  /** 编辑保存成功:上层按旧哈希替换,不整表重拉 */
+  onSaved: (oldHash: string, newHash: string) => void;
 }
 
 /** 单个 skill 卡片:名称、描述、来源徽标、调用次数、每个客户端的启用开关;点击标题展开内容查看器。 */
-export function SkillCard({ skill, clients, usage, pending, error, onToggle, onSaved }: SkillCardProps): React.JSX.Element {
+export const SkillCard = memo(function SkillCard({ skill, clients, usage, pending, error, onToggle, onSaved }: SkillCardProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const origins = skill.origins.map((o) => o.kind).join(" / ");
   const total = (usage?.show ?? 0) + (usage?.enable ?? 0);
@@ -36,7 +36,14 @@ export function SkillCard({ skill, clients, usage, pending, error, onToggle, onS
           </p>
         </div>
       </button>
-      {open && <SkillViewer key={skill.hash} hash={skill.hash} onClose={() => setOpen(false)} onSaved={onSaved} />}
+      {open && (
+        <SkillViewer
+          key={skill.hash}
+          hash={skill.hash}
+          onClose={() => setOpen(false)}
+          onSaved={onSaved}
+        />
+      )}
       <ul className="mt-3 space-y-1.5">
         {clients.map((client) => {
           const enabled = skill.visibleIn.includes(client.clientId);
@@ -47,7 +54,7 @@ export function SkillCard({ skill, clients, usage, pending, error, onToggle, onS
                 type="button"
                 aria-pressed={enabled}
                 disabled={pending}
-                onClick={() => onToggle(client.clientId, !enabled)}
+                onClick={() => onToggle(skill, client.clientId, !enabled)}
                 className={[
                   "rounded-full px-3 py-1 text-xs transition-colors duration-150",
                   enabled ? "bg-ink-strong text-white" : "border border-line bg-white text-ink-mid hover:border-line-strong",
@@ -63,4 +70,4 @@ export function SkillCard({ skill, clients, usage, pending, error, onToggle, onS
       {error !== null && <p className="mt-2 text-xs text-red-700">{error}</p>}
     </li>
   );
-}
+});
