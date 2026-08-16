@@ -6,7 +6,8 @@ import { InspectorPane } from "./features/panel/InspectorPane.js";
 import { emptySelection, selectionReducer } from "./features/panel/selection.js";
 import { ScopeNav, scopeOptions } from "./features/panel/ScopeNav.js";
 import { buildScopeCounts, isSkillScope, scopeKey, skillsForScope, type ScopeSelection } from "./features/panel/scope.js";
-import { archiveSkill, fetchArchive, fetchClientSkillStates, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
+import { getAction } from "./features/actions/registry.js";
+import { fetchArchive, fetchClientSkillStates, fetchClients, fetchGroups, fetchSkills, fetchStats } from "./features/skills/api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./features/skills/async-resource.js";
 import { applyFilters, ALL_GROUP, ALL_SOURCE } from "./features/skills/filters.js";
 import type { ArchivedSkill, ClientInfo, ClientSkillStatesResponse, GroupDef, SkillRecord, UsageCounters } from "./features/skills/types.js";
@@ -72,7 +73,7 @@ export default function App() {
       return next;
     });
     try {
-      await setSkillEnabled(skill.hash, clientId, enable);
+      await getAction(enable ? "enable" : "disable").execute({ hash: skill.hash, clientId });
       setSkills((prev) =>
         prev.map((s) => {
           if (s.hash !== skill.hash) return s;
@@ -169,7 +170,7 @@ export default function App() {
     setBatchBusy(true);
     try {
       for (const hash of hashes) {
-        await setSkillEnabled(hash, clientId, enable);
+        await getAction(enable ? "enable" : "disable").execute({ hash, clientId });
       }
       const chosen = new Set(hashes);
       setSkills((prev) =>
@@ -210,7 +211,7 @@ export default function App() {
     setBatchBusy(true);
     try {
       for (const hash of hashes) {
-        await archiveSkill(hash);
+        await getAction("archive").execute({ hash });
       }
       const gone = new Set(hashes);
       setSkills((prev) => prev.filter((s) => !gone.has(s.hash)));
@@ -337,7 +338,7 @@ export default function App() {
                 if (!window.confirm("将归档 " + s.dirName + "（软删除，可从归档区恢复）。确定？")) return;
                 void (async () => {
                   try {
-                    await archiveSkill(s.hash);
+                    await getAction("archive").execute({ hash: s.hash });
                     setSkills((prev) => prev.filter((x) => x.hash !== s.hash));
                     if (focusedHash === s.hash) setFocusedHash(null);
                     dispatchSelection({ type: "toggle", hash: s.hash, next: false });

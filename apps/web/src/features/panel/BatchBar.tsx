@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getAction } from "../actions/registry.js";
 import type { ClientInfo } from "../skills/types.js";
 
 interface BatchBarProps {
@@ -69,6 +70,9 @@ export function BatchBar({
   lockedClientId,
 }: BatchBarProps): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
+  const enable = getAction("enable");
+  const disable = getAction("disable");
+  const archive = getAction("archive");
   return (
     <div
       data-testid="batch-bar"
@@ -83,7 +87,7 @@ export function BatchBar({
             onClick={() => onEnableTo(lockedClientId)}
             className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
           >
-            启用
+            {enable.verb}
           </button>
           <button
             type="button"
@@ -99,12 +103,12 @@ export function BatchBar({
             onClick={() => onDisableFrom(lockedClientId)}
             className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
           >
-            停用
+            {disable.verb}
           </button>
         </>
       ) : (
         <>
-          <ClientMenu label="启用到…" clients={clients} disabled={busy} onPick={onEnableTo} />
+          <ClientMenu label={enable.verb + "到…"} clients={clients} disabled={busy} onPick={onEnableTo} />
           <button
             type="button"
             disabled
@@ -113,7 +117,7 @@ export function BatchBar({
           >
             挂到分组…
           </button>
-          <ClientMenu label="停用" clients={clients} disabled={busy} onPick={onDisableFrom} />
+          <ClientMenu label={disable.verb} clients={clients} disabled={busy} onPick={onDisableFrom} />
         </>
       )}
       <div className="relative">
@@ -137,7 +141,7 @@ export function BatchBar({
                 onArchive();
               }}
             >
-              归档
+              {archive.verb}
             </button>
           </div>
         )}

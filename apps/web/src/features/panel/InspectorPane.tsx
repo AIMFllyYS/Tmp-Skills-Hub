@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getAction } from "../actions/registry.js";
 import { fetchSkillLinks } from "../skills/api.js";
 import { ClientSwitches } from "../skills/ClientSwitches.js";
 import { SkillViewer } from "../skills/SkillViewer.js";
@@ -117,7 +118,7 @@ function InspectorBody({
           onClick={() => onArchive(skill)}
           className="text-xs text-red-700 hover:underline disabled:opacity-50"
         >
-          归档此技能
+          {getAction("archive").verb}此技能
         </button>
       </footer>
     </div>

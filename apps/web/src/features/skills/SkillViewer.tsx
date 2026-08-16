@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked, type Tokens } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
-import { fetchSkillFile, fetchSkillTree, saveSkillFile, translateText } from "./api.js";
+import { getAction } from "../actions/registry.js";
+import { fetchSkillFile, fetchSkillTree } from "./api.js";
 import { isAbortError } from "./async-resource.js";
 import { loadSkillView } from "./skill-view-load.js";
 import type { SkillFileEntry } from "./types.js";
@@ -125,7 +126,7 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
     setTranslating(true);
     setTranslateError(null);
     try {
-      const t = await translateText(content);
+      const t = await getAction("translate").execute({ text: content });
       setTranslated(t);
       setShowTranslated(true);
     } catch (e) {
@@ -145,7 +146,7 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
     setSaving(true);
     setSaveError(null);
     try {
-      const newHash = await saveSkillFile(hash, selected, draft);
+      const newHash = await getAction("save").execute({ hash, relPath: selected, content: draft });
       setSavedHash(newHash);
       setEditing(false);
       setContent(draft);

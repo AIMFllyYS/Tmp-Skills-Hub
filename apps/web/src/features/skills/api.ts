@@ -77,6 +77,8 @@ export async function fetchSkillFile(hash: string, relPath: string, signal?: Abo
   return loadResource(fileResourceKey(hash, relPath), (s) => loadSkillFile(hash, relPath, s), signal);
 }
 
+/** 写操作只给动作注册表用;UI 按 id 取 execute,不要直接调这些函数。 */
+
 /** 编辑写回:PUT { content };成功返回新哈希(记录已更新,不静默失真)。 */
 export async function saveSkillFile(hash: string, relPath: string, content: string): Promise<string> {
   const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/file?path=" + encodeURIComponent(relPath), {
