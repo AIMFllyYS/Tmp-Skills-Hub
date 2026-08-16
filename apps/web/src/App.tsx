@@ -1,70 +1,72 @@
 import { useEffect, useMemo, useState } from "react";
-
-interface SkillItem {
-  hash: string;
-  name: string;
-  description: string;
-  clientId: string;
-}
+import { fetchGroups, fetchSkills } from "./features/skills/api.js";
+import { applyFilters, ALL_GROUP, ALL_SOURCE, sourceKindsOf } from "./features/skills/filters.js";
+import { SkillList } from "./features/skills/SkillList.js";
+import type { GroupDef, SkillRecord } from "./features/skills/types.js";
 
 type LoadState = "loading" | "ready" | "offline";
 
 export default function App() {
-  const [skills, setSkills] = useState<SkillItem[]>([]);
+  const [skills, setSkills] = useState<SkillRecord[]>([]);
+  const [groups, setGroups] = useState<GroupDef[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [query, setQuery] = useState("");
-  const [clientFilter, setClientFilter] = useState<string>("all");
+  const [sourceKind, setSourceKind] = useState(ALL_SOURCE);
+  const [groupId, setGroupId] = useState(ALL_GROUP);
 
   useEffect(() => {
-    fetch("/api/skills")
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data: { skills: SkillItem[] }) => {
-        setSkills(data.skills);
+    Promise.all([fetchSkills(), fetchGroups()])
+      .then(([s, g]) => {
+        setSkills(s);
+        setGroups(g);
         setState("ready");
       })
       .catch(() => setState("offline"));
   }, []);
 
-  const clients = useMemo(() => [...new Set(skills.map((s) => s.clientId))].sort(), [skills]);
+  const sources = useMemo(() => sourceKindsOf(skills), [skills]);
+  const visible = useMemo(() => applyFilters(skills, groups, { query, sourceKind, groupId }), [skills, groups, query, sourceKind, groupId]);
+  const enabledCount = useMemo(() => skills.filter((s) => s.visibleIn.length > 0).length, [skills]);
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return skills.filter(
-      (s) =>
-        (clientFilter === "all" || s.clientId === clientFilter) &&
-        (q === "" || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)),
-    );
-  }, [skills, query, clientFilter]);
+  const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
+  const inputClass = "w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint";
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">skill-hub</h1>
-        <p className="mt-1 text-sm text-gray-500">社团内部的 Agent Skill 共享与统一管理中心</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">skill-hub</h1>
+        <p className="mt-1 text-sm text-ink-mid">社团内部的 Agent Skill 共享与统一管理中心</p>
+        <p className="mt-1 text-xs text-ink-faint">
+          {state === "ready" ? "库存 " + skills.length + " 个 · 已启用 " + enabledCount + " 个" : " "}
+        </p>
       </header>
 
       <div className="mb-6 flex gap-3">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索 name / description…"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
+          placeholder="搜索名称 / 描述…"
+          className={inputClass}
         />
-        <select
-          value={clientFilter}
-          onChange={(e) => setClientFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option value="all">全部客户端</option>
-          {clients.map((s) => (
-            <option key={s} value={s}>
-              {s}
+        <select value={sourceKind} onChange={(e) => setSourceKind(e.target.value)} className={selectClass}>
+          <option value={ALL_SOURCE}>全部来源</option>
+          {sources.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+        <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className={selectClass}>
+          <option value={ALL_GROUP}>全部分组</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
             </option>
           ))}
         </select>
       </div>
 
-      {state === "loading" && <p className="text-sm text-gray-500">加载中…</p>}
+      {state === "loading" && <p className="text-sm text-ink-mid">加载中…</p>}
 
       {state === "offline" && (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -73,23 +75,7 @@ export default function App() {
         </p>
       )}
 
-      {state === "ready" && (
-        <ul className="space-y-3">
-          {visible.map((skill) => (
-            <li key={skill.hash} className="rounded-xl border border-gray-200 p-4">
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className="font-medium">{skill.name}</h2>
-                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                  {skill.clientId}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-gray-600">{skill.description}</p>
-              <p className="mt-2 font-mono text-xs text-gray-400">{skill.hash.slice(0, 12)}</p>
-            </li>
-          ))}
-          {visible.length === 0 && <p className="text-sm text-gray-500">没有匹配的 skill。</p>}
-        </ul>
-      )}
+      {state === "ready" && <SkillList skills={visible} />}
     </main>
   );
 }

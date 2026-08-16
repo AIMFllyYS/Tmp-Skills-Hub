@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* ui-design-v0.md §8:语义 token 由 @theme 定义,组件只引用 token 类 */
+@theme {
+  --color-ink-strong: #030712; /* gray-950 */
+  --color-ink-mid: #4b5563;   /* gray-600 */
+  --color-ink-faint: #9ca3af; /* gray-400 */
+  --color-line: #e5e7eb;      /* gray-200 */
+  --color-line-strong: #9ca3af; /* gray-400:悬停/聚焦边框 */
+  --color-surface: #f9fafb;   /* gray-50 */
+}
