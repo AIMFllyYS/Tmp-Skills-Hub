@@ -1,17 +1,18 @@
 ---
 name: skills-hub
-description: 何时调用我:你需要管理本机 Agent Skill 的库存时——收录新 skill、查某个 skill 的分组与描述、按需启用/撤回它在某个客户端的可见性、软删除不再需要的 skill。只读这一份就能跑通全流程,不需要其他对话。
+description: 何时调用我:你需要管理本机 Agent Skill 的库存时——收录新 skill(本地目录/GitHub/skills.sh)、查某个 skill 的分组与描述、按需启用/撤回它在某个客户端的可见性、软删除不再需要的 skill、做相近/冲突分析。只读这一份就能跑通全流程,不需要其他对话。
 ---
 
 # skills-hub:本机 Agent Skill 统一管理
 
 ## 什么时候该调用我
 
-- **收录**:用户说「帮我存一下这个 skill / 这个目录是个 skill」→ 用 adopt 收录进统一库存
+- **收录**:用户说「帮我存一下这个 skill / 这个目录是个 skill / 这个 GitHub 链接」→ 用 adopt 收录进统一库存(支持本地目录、GitHub 仓库或目录、skills.sh 三段链接)
 - **查询**:想知道库存里有什么、某 skill 的分组与描述 → list / group list / show
 - **按需启用**:想让某个 skill 在 Claude/Codex 等客户端可见 → enable
 - **撤回**:不想让它再可见(原件保留)→ disable
 - **软删除**:确定不要了 → archive(打包进归档区,不真删除)
+- **分析**:想知道库存里哪个 skill 与某个 skill 相近或冲突 → analyze(模型判断,只建议不写盘)
 
 不需要调用我的场景:只是修改 skill 内容(那是 skill 自身的事,改完可 verify 校验哈希)。
 
@@ -27,11 +28,21 @@ CLI 入口:仓库内 node packages/cli/dist/index.js <command>(需先 pnpm build
 
     skills-hub init --home <SANDBOX_HOME> --yes
 
-### 2. 收录 skill
+### 2. 收录 skill(本地目录)
 
     skills-hub adopt <本地skill目录路径> --home <SANDBOX_HOME> --yes
 
 重复收录同一内容 → 显示「已存在(内容相同)」并并入来源;同名不同内容 → 冲突,绝不覆盖。
+
+### 2b. 收录 skill(GitHub / skills.sh 链接,需网络)
+
+    skills-hub adopt https://github.com/<owner>/<repo> --home <SANDBOX_HOME> --yes
+    skills-hub adopt https://github.com/<owner>/<repo>/tree/<ref>/<路径> --home <SANDBOX_HOME> --yes
+    skills-hub adopt https://skills.sh/<owner>/<repo>/<skill> --home <SANDBOX_HOME> --yes
+
+- GitHub 仓库根模式 → 发现全部含 SKILL.md 的目录;tree/blob 模式 → 只收指定目录。
+- skills.sh 三段链接解析为 GitHub 源复用同一套判定;site/ 与 p/ 前缀会给出明确的不支持提示。
+- 匿名 API 60 次/小时,超限时报 403 并提示设置 GITHUB_TOKEN 提升额度。
 
 ### 3. 看库存与读 description
 
@@ -70,17 +81,41 @@ CLI 入口:仓库内 node packages/cli/dist/index.js <command>(需先 pnpm build
     skills-hub verify --home <SANDBOX_HOME>
     skills-hub doctor --home <SANDBOX_HOME>
 
+verify 重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改写。
+
+### 9. 相近/冲突分析(文本判断交给模型)
+
+    skills-hub analyze <本地skill目录|库存skill名> --home <SANDBOX_HOME>
+    skills-hub analyze <库存skill名> --home <SANDBOX_HOME> --json
+
+- 对照库存 description 给出相近(similar)与可能冲突(conflict)清单及理由;
+- 只读建议,不触发任何写操作;
+- 需要 DEEPSEEK_API_KEY(写在仓库根 .env,已被 git 忽略,绝不提交);无密钥时明确降级提示,不编造结论。
+
+### 10. 本地查看服务(面板)
+
+    skills-hub ui --home <SANDBOX_HOME> --port 4321
+
+浏览器打开 http://127.0.0.1:4321 查看列表/搜索/分组/统计,并可直接在面板上启用/编辑/归档;仅绑 127.0.0.1。
+
 ## 禁止事项(红线)
 
 - **没有真删除**:archive 是唯一移除方式,且库存原件一个字节不删;disable 只摘链接。任何"彻底删除"只能由用户自己处理归档区文件。
 - **写操作必须显式授权**:非交互环境不带 --yes 会被拒绝(exit 2)。不要绕过,也不要替用户想当然。
 - **只写沙箱**:除非用户明确指定,库存写操作一律在沙箱 home 验证。
 - **不碰客户端目录内容**:enable/disable 只挂/摘链接(junction),绝不移动或修改用户已有目录。
+- **不提交密钥**:DEEPSEEK_API_KEY / GITHUB_TOKEN 只从环境变量或 .env 读取,不进日志、不进报告、不进发往前端的响应。
 
 ## 机器可读输出
 
 所有命令支持 --json,结构契约见 docs/specs/json-contract-v0.md(成功信封 ok+command,失败信封 ok:false+code+message,退出码 0/1/2)。
 
+## 开发与自测
+
+改动前后跑四检:pnpm lint / pnpm typecheck / pnpm build / pnpm test。
+沙箱 E2E:init → adopt(本地+GitHub+skills.sh)→ list/show → enable/disable(--group 批量)→ verify → archive → analyze,全部在 --home <SANDBOX_HOME> 下。
+
 ## 自测记录
 
 - 2026-08-16:沙箱全流程实测 init → adopt×2 → group list(5 内置)/create/add → enable(2 链接)→ disable(清空)→ rename/delete → archive,全部通过;show/enable 计数正确写入 stats.json;exit 2 路径(重复创建、名+组互斥、空组、缺 --yes)验证通过。
+- 2026-08-16:analyze 真实密钥 E2E(命中相近+冲突,理由具体,无写操作;无密钥降级、not-found 均验证);GitHub/skills.sh 收录 E2E(404/限流可读降级、tmp 零残留)。
