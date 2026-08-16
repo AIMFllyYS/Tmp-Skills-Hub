@@ -1,3 +1,4 @@
+import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
 import type { ArchiveResponse, ClientsResponse, GroupsResponse, SkillFileEntry, SkillFileResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
@@ -33,23 +34,31 @@ export async function fetchStats(): Promise<StatsResponse> {
   return body;
 }
 
-export async function fetchSkillTree(hash: string): Promise<SkillFileEntry[]> {
-  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/tree");
+async function loadSkillTree(hash: string, signal: AbortSignal): Promise<SkillFileEntry[]> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/tree", { signal });
   if (!res.ok) throw new Error("GET skill-tree → " + res.status);
   const body = (await res.json()) as SkillTreeResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
   return body.entries;
 }
 
+export async function fetchSkillTree(hash: string, signal?: AbortSignal): Promise<SkillFileEntry[]> {
+  return loadResource(treeResourceKey(hash), (s) => loadSkillTree(hash, s), signal);
+}
+
 /** 读取文件内容;二进制/大文件/穿越等降级由服务端信封说明。 */
-export async function fetchSkillFile(hash: string, relPath: string): Promise<SkillFileResponse> {
-  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/file?path=" + encodeURIComponent(relPath));
+async function loadSkillFile(hash: string, relPath: string, signal: AbortSignal): Promise<SkillFileResponse> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/file?path=" + encodeURIComponent(relPath), { signal });
   const body = (await res.json().catch(() => null)) as SkillFileResponse | { ok: false; code: string; message: string } | null;
   if (!res.ok || body === null || !body.ok) {
     const msg = body !== null && "message" in body ? body.message : "HTTP " + res.status;
     throw new Error(msg);
   }
   return body;
+}
+
+export async function fetchSkillFile(hash: string, relPath: string, signal?: AbortSignal): Promise<SkillFileResponse> {
+  return loadResource(fileResourceKey(hash, relPath), (s) => loadSkillFile(hash, relPath, s), signal);
 }
 
 /** 编辑写回:PUT { content };成功返回新哈希(记录已更新,不静默失真)。 */
