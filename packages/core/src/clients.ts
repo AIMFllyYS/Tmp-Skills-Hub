@@ -1,35 +1,135 @@
+import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import type { LinkScope } from "./types.js";
 
 /**
- * 已知客户端的目录约定(通用层)。
- * 只描述「skills 目录在哪」,link/unlink 的实现在 M1 里程碑落地。
- * 各家 YAML 精致适配是后置项,登记在 docs/issues/backlog-from-first-sync.md。
+ * 客户端 skills 根目录发现:按目录形状扫描,不维护品牌名单。
+ *
+ * 规则(实现口径 docs/specs/store-and-paths-v0.md §4,调研底稿
+ * docs/audits/client-skills-directories-2026-08-16.md):
+ * 1. <home> 下每个直接子目录,凡存在 <home>/<client>/skills 即为一个 root
+ * 2. 已知嵌套惯例(存在才算):.cursor/skills-cursor、.gemini/antigravity/skills、
+ *    .codeium/windsurf/skills,以及 XDG 风格 config/<client>/skills
+ *    (Devin CLI / OpenCode 的官方全局目录,见审计文档 §1.6/§1.9)
+ * 3. 解析真实路径并去重(.codex/skills 与 .agents/skills 等可能互为 symlink)
+ * 4. 排除:builtin_skills、插件/市场缓存、扩展目录、浏览器 profile、临时目录
+ * 5. 绝不创建不存在的目录——本函数只读,找不到就返回空
  */
-export interface KnownClient {
-  id: string;
-  /** 相对 home(全局)或项目根(项目级)的 skills 目录。 */
-  relativeSkillsDir: string;
+export interface ClientRoot {
+  /** 客户端 id:直接子目录名(如 claude/codex/trae-cn),嵌套惯例用其所属 id */
+  clientId: string;
+  /** skills 根目录绝对路径(已解析真实路径) */
+  skillsDir: string;
 }
 
-export const KNOWN_CLIENTS: readonly KnownClient[] = [
-  { id: "claude", relativeSkillsDir: ".claude/skills" },
-  { id: "codex", relativeSkillsDir: ".codex/skills" },
-  { id: "cursor", relativeSkillsDir: ".cursor/skills" },
-  { id: "agents", relativeSkillsDir: ".agents/skills" },
+/** 已知嵌套惯例(存在才算)。前三条为规范 §4 原始约定,XDG 风格为通用扫描(见 audit §5)。 */
+const NESTED_CONVENTIONS: ReadonlyArray<{ clientId: string; relDir: string }> = [
+  { clientId: "cursor", relDir: ".cursor/skills-cursor" },
+  { clientId: "gemini", relDir: ".gemini/antigravity/skills" },
+  { clientId: "windsurf", relDir: ".codeium/windsurf/skills" },
 ];
 
 /**
- * 解析某客户端在指定范围下的 skills 目录绝对路径。
- *
- * home 必须由调用方显式传入:core 内部不再自行决定写入位置,
- * 沙箱重定向(--home / SKILLS_HUB_HOME)的唯一入口在 cli 层,
- * 见 docs/specs/store-and-paths-v0.md §1、§5。
+ * 排除清单:命中即跳过(不区分大小写,按路径段精确匹配)。
+ * 这些目录归客户端所有,客户端更新时会被覆盖,不应视为用户技能资产
+ * (规范 §4 排除项 + 审计文档 §4)。
  */
-export function resolveSkillsDir(client: KnownClient, scope: LinkScope, home: string, projectRoot?: string): string {
-  const base = scope === "global" ? home : projectRoot;
-  if (base === undefined) {
-    throw new Error(`project scope requires projectRoot (client: ${client.id})`);
+const EXCLUDED_SEGMENTS: readonly string[] = [
+  // 内置技能目录
+  "builtin_skills",
+  // 插件与市场缓存
+  "plugins",
+  "cache",
+  "caches",
+  // 扩展目录
+  "extensions",
+  // 临时目录
+  "tmp",
+  "temp",
+  // 浏览器 profile(精确匹配段名,避免 knowledge 之类含 "edge" 的误伤)
+  "google-chrome",
+  "chromium",
+  "firefox",
+  "msedge",
+  "brave",
+  "opera",
+  "vivaldi",
+  "safari",
+];
+
+/**
+ * skills 目录是否命中排除清单。
+ * 只判定 home 之下的相对段:排除语义针对客户端目录名,不针对 home 自身位置
+ * (否则沙箱/临时 home 会被 "tmp/temp" 段误杀)。段名去前导点后比较,大小写不敏感。
+ */
+export function isExcludedRoot(skillsDir: string, home: string): boolean {
+  const rel = path.relative(home, skillsDir);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return false; // 不在 home 下,无从判定
+  const segments = rel.split(/[\\/]/).map((s) => s.replace(/^\.+/, "").toLowerCase());
+  return segments.some((s) => EXCLUDED_SEGMENTS.includes(s));
+}
+
+/**
+ * 发现 home 下的全部客户端 skills 根目录(只读)。
+ * - 直接子目录形状 + 嵌套惯例 + XDG 风格,全部解析真实路径并去重
+ * - 输出按 clientId 排序,结果确定
+ * - home 不存在/不可读时返回空数组,绝不创建任何目录
+ */
+export async function discoverClientRoots(home: string): Promise<ClientRoot[]> {
+  const found = new Map<string, ClientRoot>();
+
+  // 同名真实路径只保留第一个(确定性顺序下先到者胜,clientId 取先到者)
+  const addRoot = async (clientId: string, skillsDir: string): Promise<void> => {
+    if (isExcludedRoot(skillsDir, home)) return;
+    const real = await realpath(skillsDir).catch(() => skillsDir);
+    if (!found.has(real)) {
+      found.set(real, { clientId, skillsDir: real });
+    }
+  };
+
+  // 1. 直接子目录形状:<home>/<client>/skills
+  const entries = await readdir(home, { withFileTypes: true }).catch(() => []);
+  const dirNames = entries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort(); // 确定性
+  for (const name of dirNames) {
+    const skillsDir = path.join(home, name, "skills");
+    if (await isDirectory(skillsDir)) {
+      await addRoot(name.replace(/^\.+/, ""), skillsDir); // 去前导点:.claude → claude
+    }
   }
-  return path.join(base, client.relativeSkillsDir);
+
+  // 2. 已知嵌套惯例(存在才算)
+  for (const c of NESTED_CONVENTIONS) {
+    const skillsDir = path.join(home, c.relDir);
+    if (await isDirectory(skillsDir)) {
+      await addRoot(c.clientId, skillsDir);
+    }
+  }
+
+  // 3. XDG 风格:<home>/.config/<client>/skills(Devin CLI / OpenCode 官方全局目录)
+  const configDir = path.join(home, ".config");
+  if (await isDirectory(configDir)) {
+    const configEntries = await readdir(configDir, { withFileTypes: true }).catch(() => []);
+    const configNames = configEntries
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+    for (const name of configNames) {
+      const skillsDir = path.join(configDir, name, "skills");
+      if (await isDirectory(skillsDir)) {
+        await addRoot(name, skillsDir);
+      }
+    }
+  }
+
+  return [...found.values()].sort((a, b) => a.clientId.localeCompare(b.clientId));
+}
+
+async function isDirectory(p: string): Promise<boolean> {
+  try {
+    return (await stat(p)).isDirectory();
+  } catch {
+    return false;
+  }
 }

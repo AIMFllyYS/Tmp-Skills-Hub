@@ -72,16 +72,18 @@
 
 **不维护品牌名单**，只认目录形状。本机有 100+ 个点目录，硬编码品牌名必然漏。
 
-1. 扫描 `<home>` 下的每个直接子目录，凡存在 `<home>/<client>/skills` 即为一个 root
-2. 追加三个已知嵌套惯例（存在才算）：`.cursor/skills-cursor`、`.gemini/antigravity/skills`、`.codeium/windsurf/skills`
-3. 解析真实路径并去重
+1. 扫描 `<home>` 下的每个直接子目录，凡存在 `<home>/<client>/skills` 即为一个 root（`.agents` 视为普通客户端目录，天然覆盖跨客户端标准）
+2. 追加已知嵌套惯例（存在才算）：`.cursor/skills-cursor`、`.gemini/antigravity/skills`、`.codeium/windsurf/skills`、`config/<client>/skills`（XDG 风格，Devin CLI / OpenCode 的官方全局目录）
+3. 解析真实路径并去重（`.codex/skills` 与 `.agents/skills` 等可能互为 symlink，不去重会重复计数）
 
-**排除**：名为 `builtin_skills` 的目录、插件/市场缓存、扩展目录、浏览器 profile、临时目录。这些归客户端所有，客户端更新时会被覆盖。
+**排除**（只判定 home 之下的相对段，命中即跳过）：名为 `builtin_skills` 的目录、插件/市场缓存（`plugins`、`cache`）、扩展目录（`extensions`）、浏览器 profile（`google-chrome`、`firefox` 等）、临时目录（`tmp`、`temp`）。这些归客户端所有，客户端更新时会被覆盖。
+
+**系统级目录**（`/etc/<client>/skills`、`/Library/Application Support/...`、`ProgramData` 等）**不在 home 扫描范围**，留给 `doctor` 提权检测。
 
 **绝不创建**不存在的 root。发现只认既存目录。
 
-> 本节规则来自本机已验证可用的 `distributing-skills-across-local-agents` skill，直接沿用。
-> macOS / Linux 上的目录约定**本机无法实证**，必须联网调研后再补，见对应 issue。
+> 本节规则来自本机已验证可用的 `distributing-skills-across-local-agents` skill，直接沿用；
+> 2026-08-16 依据 [调研文档](../audits/client-skills-directories-2026-08-16.md) 修订（XDG 惯例、系统级边界、排除清单显式化），并随 issue #13 落地为 `discoverClientRoots`。
 
 ## 5. 沙箱与验证边界（硬约束）
 
