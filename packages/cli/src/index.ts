@@ -19,6 +19,7 @@ import { scanKnownClients } from "./scan.js";
 import { runGroup } from "./group-cmds.js";
 import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
+import { loadEnvFile } from "./env.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
 async function writePointerFile(home: string, storeRoot: string): Promise<string> {
@@ -333,5 +334,9 @@ const main = defineCommand({
   },
   subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, verify, ui },
 });
+
+// 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。
+// ESM 顶层 await:先完成加载再启动命令解析,避免竞态。
+await loadEnvFile();
 
 runMain(main);
