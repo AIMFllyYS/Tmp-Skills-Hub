@@ -139,6 +139,34 @@ describe("adoptSkillFolder: 去重与冲突", () => {
     expect(outcome.kind).toBe("conflict");
     expect(await readFile(path.join(store, STORE_SKILLS_DIR, "manual", "SKILL.md"), "utf8")).toBe("user file");
   });
+
+  it("dryRun:adopted 只报告不落盘", async () => {
+    const store = await fakeStore();
+    const parent = await mkdtemp(path.join(os.tmpdir(), "skills-hub-src-"));
+    tempDirs.push(parent);
+    const folder = await makeSkill(parent, "demo-dry", "demo-dry", "dry test");
+
+    const outcome = await adoptSkillFolder(store, folder, src(folder), { dryRun: true });
+    expect(outcome.kind).toBe("adopted");
+    // 目录未复制、清单未写入、tmp 无残留
+    expect(await readdir(path.join(store, STORE_SKILLS_DIR))).toEqual([]);
+    expect(await readStoreIndex(store)).toEqual([]);
+    const tmpFiles = await readdir(path.join(store, STORE_TMP_DIR));
+    expect(tmpFiles).toEqual([]);
+  });
+
+  it("dryRun:duplicate 不追加来源", async () => {
+    const store = await fakeStore();
+    const parent = await mkdtemp(path.join(os.tmpdir(), "skills-hub-src-"));
+    tempDirs.push(parent);
+    const folder = await makeSkill(parent, "demo-dry", "demo-dry", "dry test");
+    const other = await makeSkill(parent, "copy-dir", "demo-dry", "dry test");
+
+    await adoptSkillFolder(store, folder, src(folder));
+    const dup = await adoptSkillFolder(store, other, src(other), { dryRun: true });
+    expect(dup.kind).toBe("duplicate");
+    expect((await readStoreIndex(store))[0]!.origins).toHaveLength(1);
+  });
 });
 
 describe("adoptSkillFolder: 缺字段与报告", () => {
