@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { runBootstrap } from "../src/bootstrap.js";
+import { backupAllClientSkills, restoreBackupSnapshot, runBootstrap } from "../src/bootstrap.js";
 
 const tempRoots: string[] = [];
 
@@ -44,12 +44,19 @@ describe("runBootstrap", () => {
     expect(skills).toContain("sample-a");
     expect(skills).toContain("sample-b");
     // 备份快照
-    const backups = await import("node:fs/promises").then((m) => m.readdir(path.join(store, "backups")));
+    const backups = await readdir(path.join(store, "backups"));
     expect(backups.length).toBe(1);
     const snap = path.join(store, "backups", backups[0]!);
-    await expect(readFile(path.join(snap, "manifest.json"), "utf8")).resolves.toContain('"skillDirs": 2');
+    const manifest = JSON.parse(await readFile(path.join(snap, "manifest.json"), "utf8")) as {
+      skillDirs: number;
+      logicalFiles: number;
+      writtenFiles: number;
+    };
+    expect(manifest.skillDirs).toBe(2);
+    const restored = path.join(home, "restored");
+    await restoreBackupSnapshot(snap, restored);
     await expect(
-      readFile(path.join(snap, "roots", "claude", ".claude", "skills", "sample-a", "SKILL.md"), "utf8"),
+      readFile(path.join(restored, "claude", ".claude", "skills", "sample-a", "SKILL.md"), "utf8"),
     ).resolves.toContain("name: sample-a");
     expect(ask.called.length).toBe(3);
   });
@@ -116,10 +123,49 @@ describe("runBootstrap", () => {
     const ask = answers(["", "Y", "Y"]);
     await runBootstrap({ home }, { readLine: ask as never, ui: false });
     // 链接内容被复制(而非尝试重建链接 → Windows EPERM)
-    const backups = await import("node:fs/promises").then((m) => m.readdir(path.join(home, "backups")));
+    const backups = await readdir(path.join(home, "backups"));
     const snap = path.join(home, "backups", backups[0]!);
+    const restored = path.join(home, "restored");
+    await restoreBackupSnapshot(snap, restored);
     await expect(
-      readFile(path.join(snap, "roots", "claude", ".claude", "skills", "linked-skill", "SKILL.md"), "utf8"),
+      readFile(path.join(restored, "claude", ".claude", "skills", "linked-skill", "SKILL.md"), "utf8"),
     ).resolves.toContain("name: linked-skill");
+  });
+
+  it("三客户端指向同一内容时只写一份 blob,源目录零写入", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "skills-hub-backup-dedup-"));
+    tempRoots.push(home);
+    const real = path.join(home, "real-skill");
+    await mkdir(real, { recursive: true });
+    const body = ["---", "name: shared", "description: shared skill", "---", "", "# shared"].join("\n") + "\n";
+    const srcFile = path.join(real, "SKILL.md");
+    await writeFile(srcFile, body, "utf8");
+    const before = await readFile(srcFile);
+    for (const c of [".claude", ".cursor", ".codex"]) {
+      await mkdir(path.join(home, c, "skills"), { recursive: true });
+      await symlink(real, path.join(home, c, "skills", "shared"), "junction");
+    }
+    const bak = await backupAllClientSkills(home, path.join(home, "backups"));
+    const after = await readFile(srcFile);
+    expect(Buffer.compare(before, after)).toBe(0);
+    expect(bak.logicalFiles).toBe(3);
+    expect(bak.writtenFiles).toBe(1);
+    expect(bak.bytesSaved).toBeGreaterThan(0);
+    const snap = path.join(home, "backups", bak.snapshotId);
+    const manifest = JSON.parse(await readFile(path.join(snap, "manifest.json"), "utf8")) as {
+      logicalFiles: number;
+      writtenFiles: number;
+      bytesSaved: number;
+    };
+    expect(manifest.logicalFiles).toBeGreaterThan(manifest.writtenFiles);
+    expect(manifest.bytesSaved).toBeGreaterThan(0);
+    expect(await readdir(path.join(snap, "blobs"))).toHaveLength(1);
+    const restored = path.join(home, "restored");
+    await restoreBackupSnapshot(snap, restored);
+    for (const id of ["claude", "cursor", "codex"]) {
+      await expect(
+        readFile(path.join(restored, id, "." + id, "skills", "shared", "SKILL.md"), "utf8"),
+      ).resolves.toBe(body);
+    }
   });
 });
