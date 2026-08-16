@@ -766,6 +766,88 @@ describe("http-api 契约", () => {
     expect(body.outcomes[0]?.folder).toBe("sh-demo");
   });
 
+  it("POST /api/share:成功返回 tree 链接;无 token 503;远端冲突 409", async () => {
+    const prev = process.env.GITHUB_TOKEN;
+    process.env.GITHUB_TOKEN = "test-token";
+    try {
+      const posted: Array<{ path: string }> = [];
+      const fetchImpl = async (url: string | URL, init?: RequestInit): Promise<Response> => {
+        const u = String(url);
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (u === "https://api.github.com/repos/club/skills") return new Response(JSON.stringify({ default_branch: "main" }));
+        if (u.includes("/git/trees/main?recursive=1")) return new Response(JSON.stringify({ tree: [] }));
+        if (u.includes("/git/ref/heads/main") && method === "GET") {
+          return new Response(JSON.stringify({ object: { sha: "aaa111aaa111aaa111aaa111aaa111aaa111aaaa" } }));
+        }
+        if (u.includes("/git/commits/") && method === "GET") {
+          return new Response(JSON.stringify({ tree: { sha: "tree111tree111tree111tree111tree111tree1" } }));
+        }
+        if (u.endsWith("/git/trees") && method === "POST") {
+          const body = JSON.parse(String(init?.body ?? "{}")) as { tree?: Array<{ path: string }> };
+          posted.push(...(body.tree ?? []));
+          return new Response(JSON.stringify({ sha: "tree222" }), { status: 201 });
+        }
+        if (u.endsWith("/git/commits") && method === "POST") {
+          return new Response(JSON.stringify({ sha: "ccc222" }), { status: 201 });
+        }
+        if (u.includes("/git/refs/heads/main") && method === "PATCH") {
+          return new Response(JSON.stringify({ object: { sha: "ccc222" } }));
+        }
+        return new Response("nope " + method + " " + u, { status: 404 });
+      };
+      const sapp = createUiApp({ storeRoot, home, fetchImpl });
+      const ok = await sapp.request("/api/share", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ target: "demo", repo: "club/skills" }),
+      });
+      expect(ok.status).toBe(200);
+      const body = (await ok.json()) as { ok: boolean; command: string; url: string; dirName: string };
+      expect(body.ok).toBe(true);
+      expect(body.command).toBe("share");
+      expect(body.dirName).toBe("demo");
+      expect(body.url).toBe("https://github.com/club/skills/tree/main/skills/demo");
+      expect(posted.some((p) => p.path === "skills/demo/SKILL.md")).toBe(true);
+
+      const conflictFetch: typeof fetch = async (url) => {
+        const u = String(url);
+        if (u === "https://api.github.com/repos/club/skills") return new Response(JSON.stringify({ default_branch: "main" }));
+        if (u.includes("/git/trees/main?recursive=1")) {
+          return new Response(JSON.stringify({ tree: [{ path: "skills/demo/SKILL.md", type: "blob" }] }));
+        }
+        if (u.startsWith("https://raw.githubusercontent.com/")) return new Response("other-bytes\n");
+        return new Response("nope", { status: 404 });
+      };
+      const capp = createUiApp({ storeRoot, home, fetchImpl: conflictFetch });
+      const conflict = await capp.request("/api/share", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ target: "demo", repo: "club/skills" }),
+      });
+      expect(conflict.status).toBe(409);
+      const cb = (await conflict.json()) as { code: string };
+      expect(cb.code).toBe("remote-conflict");
+    } finally {
+      if (prev === undefined) delete process.env.GITHUB_TOKEN;
+      else process.env.GITHUB_TOKEN = prev;
+    }
+
+    delete process.env.GITHUB_TOKEN;
+    const noTok = createUiApp({
+      storeRoot,
+      home,
+      fetchImpl: async () => new Response("should-not", { status: 500 }),
+    });
+    const denied = await noTok.request("/api/share", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ target: "demo", repo: "club/skills" }),
+    });
+    expect(denied.status).toBe(503);
+    expect(((await denied.json()) as { code: string }).code).toBe("auth-required");
+    if (prev !== undefined) process.env.GITHUB_TOKEN = prev;
+  });
+
   it("未配置库存:store-not-configured 503", async () => {
     const bare = createUiApp({ storeRoot: null, home });
     const res = await bare.request("/api/skills");

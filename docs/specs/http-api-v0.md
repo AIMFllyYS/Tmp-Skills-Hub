@@ -53,6 +53,7 @@
 | DELETE /api/groups/:id | — | { ok, command: "group", verb: "delete", id, memberCount }(只删分组定义,不删 skill) | 404 group-not-found;503 |
 | POST /api/groups/:id/members | { hashes, action: add\|remove } | { ok, command: "group", verb: "add"\|"remove", id, hashes, changed } | 400;404 group-not-found\|not-found;503 |
 | POST /api/analyze | { target }(hash 前缀或 dirName) | { ok, command: "analyze", target, similar, conflict }(只建议,不写盘) | 400 bad-usage;404 not-found;503 not-configured;502 analyze-failed |
+| POST /api/share | { target, repo? }(hash 前缀或 dirName;repo 覆盖 manifest.trustedRepo) | { ok, command: "share", dirName, url, idempotent, dryRun } | 400 bad-usage;404 not-found;409 remote-conflict;503 auth-required(无 GITHUB_TOKEN);502 github-push-failed |
 
 - `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
@@ -73,6 +74,9 @@
 | io-error(预留) | 500 |
 | github-fetch-failed | 502 |
 | analyze-failed | 502 |
+| github-push-failed | 502 |
+| remote-conflict | 409 |
+| auth-required | 503 |
 
 > 注:auth-required / group-empty / invalid-skill 是 CLI 专属 code(交互授权、按空组 enable)。分组写操作走 HTTP,code 与 CLI 同口径。
 

@@ -184,6 +184,15 @@ describe("json 契约 v0(#28)", () => {
     expect(v.issues).toEqual([]);
   });
 
+  it("share --json:无 token 报 auth-required", () => {
+    const r = runCli(["share", "demo", "--home", home, "--yes", "--json", "--repo", "club/skills"], { env: { GITHUB_TOKEN: "" } });
+    expect(r.code).toBe(2);
+    const out = JSON.parse(r.stdout) as { ok: boolean; command: string; code: string };
+    expect(out.ok).toBe(false);
+    expect(out.command).toBe("share");
+    expect(out.code).toBe("auth-required");
+  });
+
   it("未配置库存:store-not-configured 信封 + exit 2(--home 是显式库存根,此例用非法 env 路径触发)", () => {
     const r = runCli(["list", "--json"], { env: { SKILLS_HUB_HOME: "relative-path" } });
     expect(r.code).toBe(2);

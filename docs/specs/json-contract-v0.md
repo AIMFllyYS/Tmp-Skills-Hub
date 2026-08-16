@@ -135,6 +135,16 @@ dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed �
 ```
 - 无快照:`code: "not-found"`;blob 缺失或哈希不符:`code: "verify-failed"`,附加 `issues: [{ hash, rel, reason }]`。
 
+### 2.9 share
+
+```json
+{ "ok": true, "command": "share", "dirName": "demo", "url": "https://github.com/org/repo/tree/main/skills/demo", "idempotent": false, "dryRun": false }
+```
+
+远端已有且内容哈希相同:`idempotent: true`,不新建提交。dry-run 附加 `"dryRun": true`,不写远端。
+
+失败:`auth-required`(无 token / 非交互缺 --yes);`remote-conflict`(远端同名不同内容,不覆盖);`github-push-failed`(401/403/限流/分支保护);`not-found`;`bad-usage`。
+
 ## 3. 错误 code 枚举
 
 | code | 场景 |
@@ -150,6 +160,8 @@ dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed �
 | invalid-skill | 缺 name/description 的目录 |
 | link-failed | 链接切换失败(回滚完成) |
 | verify-failed | backup verify 发现 blob 缺失或哈希不符 |
+| github-push-failed | share 推送被 GitHub 拒绝(无权限/限流/分支保护) |
+| remote-conflict | share 远端已有同名不同内容,不覆盖 |
 | io-error | 文件系统故障 |
 
 ## 4. ui-server 的 /api/skills(实时扫描视图)

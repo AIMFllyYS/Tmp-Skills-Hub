@@ -30,5 +30,7 @@ describe("ACTION_REGISTRY", () => {
     expect(getAction("add-to-group").verb).toBe("挂到分组");
     expect(getAction("analyze").verb).toBe("分析");
     expect(getAction("analyze").destructive).toBe(false);
+    expect(getAction("share").verb).toBe("分享");
+    expect(getAction("share").destructive).toBe(false);
   });
 });

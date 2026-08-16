@@ -10,6 +10,7 @@ describe("filterActions", () => {
     expect(ids("归档")).toContain("archive");
     expect(ids("enable")).toContain("enable");
     expect(ids("分析")).toContain("analyze");
+    expect(ids("分享")).toContain("share");
   });
 });
 
@@ -19,6 +20,7 @@ describe("actionUnavailableReason", () => {
     expect(actionUnavailableReason("archive", empty)).toBe("先选一个 skill");
     expect(actionUnavailableReason("enable", empty)).toBe("先选一个 skill");
     expect(actionUnavailableReason("analyze", empty)).toBe("先选一个 skill");
+    expect(actionUnavailableReason("share", empty)).toBe("先选一个 skill");
     expect(actionUnavailableReason("adopt", empty)).toBeNull();
   });
 });

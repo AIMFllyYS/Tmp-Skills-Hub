@@ -33,6 +33,7 @@ import { resolveHome } from "./home.js";
 import { performAdopt, performVerify, POINTER_REL, resolveNames } from "./store-cmds.js";
 import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze } from "./analyze.js";
+import { performShare } from "./share.js";
 import { applyLinkBatch, performLinkChange, previewLinkChange, type LinkChangeRequest, type LinkConflictItem, type LinkDiffItem } from "./link-actions.js";
 import { chatCompletion } from "./deepseek.js";
 
@@ -335,6 +336,23 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
         return err(c, "analyze", res.code, res.message, status);
       }
       return c.json({ ok: true, command: "analyze", target: res.target, similar: res.similar, conflict: res.conflict });
+    }),
+  );
+
+  app.post("/api/share", (c) =>
+    withStore(c, "share", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { target?: unknown; repo?: unknown } | null;
+      const target = typeof raw?.target === "string" ? raw.target.trim() : "";
+      if (target === "") return err(c, "share", "bad-usage", "body 需要 { target: string }", 400);
+      const shareOpts: { dryRun: false; fetchImpl?: typeof fetch; repo?: string } = { dryRun: false };
+      if (fetchImpl !== undefined) shareOpts.fetchImpl = fetchImpl;
+      if (typeof raw?.repo === "string" && raw.repo.trim() !== "") shareOpts.repo = raw.repo.trim();
+      const res = await performShare(root, target, shareOpts);
+      if (!res.ok) {
+        const status = res.code === "bad-usage" ? 400 : res.code === "not-found" ? 404 : res.code === "remote-conflict" ? 409 : res.code === "auth-required" ? 503 : 502;
+        return err(c, "share", res.code, res.message, status);
+      }
+      return c.json({ ok: true, command: "share", dirName: res.dirName, url: res.url, idempotent: res.idempotent, dryRun: res.dryRun });
     }),
   );
   app.get("/api/clients", (c) =>

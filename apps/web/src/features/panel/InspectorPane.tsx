@@ -5,6 +5,7 @@ import { ClientSwitches } from "../skills/ClientSwitches.js";
 import { SkillViewer } from "../skills/SkillViewer.js";
 import type { ClientInfo, ClientLinkRow, SkillRecord, UsageCounters } from "../skills/types.js";
 import { AnalyzePanel } from "./AnalyzePanel.js";
+import { SharePanel } from "./SharePanel.js";
 
 type InspectorTab = "content" | "clients" | "analyze";
 
@@ -115,14 +116,17 @@ function InspectorBody({
         )}
       </div>
       <footer className="shrink-0 border-t border-line px-4 py-2">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => onArchive(skill)}
-          className="text-xs text-red-700 hover:underline disabled:opacity-50"
-        >
-          {getAction("archive").verb}此技能
-        </button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <SharePanel target={skill.dirName} />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onArchive(skill)}
+            className="text-xs text-red-700 hover:underline disabled:opacity-50"
+          >
+            {getAction("archive").verb}此技能
+          </button>
+        </div>
       </footer>
     </div>
   );
