@@ -11,7 +11,8 @@ import path from "node:path";
  *    .codeium/windsurf/skills,以及 XDG 风格 config/<client>/skills
  *    (Devin CLI / OpenCode 的官方全局目录,见审计文档 §1.6/§1.9)
  * 3. 解析真实路径并去重(.codex/skills 与 .agents/skills 等可能互为 symlink)
- * 4. 排除:builtin_skills、插件/市场缓存、扩展目录、浏览器 profile、临时目录
+ * 4. 排除:builtin_skills、插件/市场缓存、扩展目录、浏览器 profile、临时目录、
+ *    本项目自己的目录(skills-hub 及带后缀变体)、以及调用方声明的库存根
  * 5. 绝不创建不存在的目录——本函数只读,找不到就返回空
  */
 export interface ClientRoot {
@@ -56,16 +57,53 @@ const EXCLUDED_SEGMENTS: readonly string[] = [
   "safari",
 ];
 
+/** 本项目自己的目录名前缀(去前导点后)。带后缀变体如 pre-bootstrap 时间戳也要排除。 */
+const OWN_DIR_PREFIX = "skills-hub";
+
+export interface DiscoverRootsOptions {
+  /** 库存根:其自身及子目录永不作为客户端 root */
+  storeRoot?: string;
+}
+
+function isOwnProjectSegment(segment: string): boolean {
+  return segment === OWN_DIR_PREFIX || segment.startsWith(OWN_DIR_PREFIX + ".");
+}
+
+function samePath(a: string, b: string): boolean {
+  return path.relative(a, b) === "";
+}
+
+function isInside(inner: string, outer: string): boolean {
+  const rel = path.relative(outer, inner);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+/**
+ * 库存根被当成客户端的两种形态:
+ * - `<storeRoot>/skills` 本身(默认库存落在 home 下时,形状扫描会把它收成一个 root)
+ * - 库存布局子树(backups/archive/tmp)里再出现 skills/
+ * 当 --home 让 storeRoot 等于 home 时,home 下的 .claude 等客户端必须保留。
+ */
+function isStoreOwnedSkillsDir(skillsDir: string, storeRoot: string): boolean {
+  if (samePath(path.dirname(skillsDir), storeRoot)) return true;
+  for (const sub of ["skills", "backups", "archive", "tmp"]) {
+    if (isInside(skillsDir, path.join(storeRoot, sub))) return true;
+  }
+  return false;
+}
+
 /**
  * skills 目录是否命中排除清单。
  * 只判定 home 之下的相对段:排除语义针对客户端目录名,不针对 home 自身位置
  * (否则沙箱/临时 home 会被 "tmp/temp" 段误杀)。段名去前导点后比较,大小写不敏感。
+ * storeRoot 是额外保护:库存根本身及其子目录永不作为客户端,即使名字不像 skills-hub。
  */
-export function isExcludedRoot(skillsDir: string, home: string): boolean {
+export function isExcludedRoot(skillsDir: string, home: string, storeRoot?: string): boolean {
+  if (storeRoot !== undefined && storeRoot !== "" && isStoreOwnedSkillsDir(skillsDir, storeRoot)) return true;
   const rel = path.relative(home, skillsDir);
   if (rel.startsWith("..") || path.isAbsolute(rel)) return false; // 不在 home 下,无从判定
   const segments = rel.split(/[\\/]/).map((s) => s.replace(/^\.+/, "").toLowerCase());
-  return segments.some((s) => EXCLUDED_SEGMENTS.includes(s));
+  return segments.some((s) => EXCLUDED_SEGMENTS.includes(s) || isOwnProjectSegment(s));
 }
 
 /**
@@ -74,21 +112,26 @@ export function isExcludedRoot(skillsDir: string, home: string): boolean {
  * - 输出按 clientId 排序,结果确定
  * - home 不存在/不可读时返回空数组,绝不创建任何目录
  */
-export async function discoverClientRoots(home: string): Promise<ClientRoot[]> {
-  return discoverClientRootsAt(home);
+export async function discoverClientRoots(home: string, opts?: DiscoverRootsOptions): Promise<ClientRoot[]> {
+  return discoverClientRootsAt(home, opts);
 }
 
 /**
  * 在任意基准目录下发现客户端 skills 根(全局用 home,项目侧用 cwd;#22)。
  * 规则与 discoverClientRoots 相同,只读,绝不创建目录。
  */
-export async function discoverClientRootsAt(base: string): Promise<ClientRoot[]> {
+export async function discoverClientRootsAt(base: string, opts?: DiscoverRootsOptions): Promise<ClientRoot[]> {
   const found = new Map<string, ClientRoot>();
+  const declared = opts?.storeRoot;
+  const storeRoot = declared !== undefined && declared !== ""
+    ? await realpath(declared).catch(() => path.resolve(declared))
+    : undefined;
 
   // 同名真实路径只保留第一个(确定性顺序下先到者胜,clientId 取先到者)
   const addRoot = async (clientId: string, skillsDir: string): Promise<void> => {
-    if (isExcludedRoot(skillsDir, base)) return;
+    if (isExcludedRoot(skillsDir, base, storeRoot)) return;
     const real = await realpath(skillsDir).catch(() => skillsDir);
+    if (storeRoot !== undefined && isStoreOwnedSkillsDir(real, storeRoot)) return;
     if (!found.has(real)) {
       found.set(real, { clientId, skillsDir: real });
     }

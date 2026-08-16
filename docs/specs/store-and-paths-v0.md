@@ -81,7 +81,9 @@
 2. 追加已知嵌套惯例（存在才算）：`.cursor/skills-cursor`、`.gemini/antigravity/skills`、`.codeium/windsurf/skills`、`config/<client>/skills`（XDG 风格，Devin CLI / OpenCode 的官方全局目录）
 3. 解析真实路径并去重（`.codex/skills` 与 `.agents/skills` 等可能互为 symlink，不去重会重复计数）
 
-**排除**（只判定 home 之下的相对段，命中即跳过）：名为 `builtin_skills` 的目录、插件/市场缓存（`plugins`、`cache`）、扩展目录（`extensions`）、浏览器 profile（`google-chrome`、`firefox` 等）、临时目录（`tmp`、`temp`）。这些归客户端所有，客户端更新时会被覆盖。
+**排除**（只判定 home 之下的相对段，命中即跳过）：名为 `builtin_skills` 的目录、插件/市场缓存（`plugins`、`cache`）、扩展目录（`extensions`）、浏览器 profile（`google-chrome`、`firefox` 等）、临时目录（`tmp`、`temp`）、**本项目自己的目录**（段名去前导点后等于 `skills-hub` 或以 `skills-hub.` 开头，覆盖 `.skills-hub`、`.skills-hub.pre-bootstrap-*`、`.skills-hub.bak` 等）。这些归客户端所有或由本项目自己产生，不应再被当成客户端。
+
+**库存根**：调用方若已知库存根，必须把它传给 `discoverClientRoots`。排除的是库存自己的 `skills/`（以及 `backups/`、`archive/`、`tmp/` 子树），不是库存根下面的一切——`--home` 双重语义下库存根等于 home，`.claude` 等客户端必须继续被发现。默认库存 `~/.skills-hub` 一旦建出 `skills/`，形状扫描会把它当成客户端，自我备份、自我收录；前缀排除与库存根声明一起挡住这件事。
 
 **系统级目录**（`/etc/<client>/skills`、`/Library/Application Support/...`、`ProgramData` 等）**不在 home 扫描范围**，留给 `doctor` 提权检测。
 

@@ -188,6 +188,23 @@ describe("isExcludedRoot: 排除清单", () => {
     expect(isExcludedRoot(HOME + "/.Claude/Skills", HOME)).toBe(false);
   });
 
+  it("本项目自己的目录按前缀排除:.skills-hub 及其带后缀变体", () => {
+    expect(isExcludedRoot(HOME + "/.skills-hub/skills", HOME)).toBe(true);
+    expect(isExcludedRoot(HOME + "/.skills-hub.pre-bootstrap-20260101T000000/skills", HOME)).toBe(true);
+    expect(isExcludedRoot(HOME + "/.skills-hub.bak/skills", HOME)).toBe(true);
+  });
+
+  it("库存根显式传入时,即使位于 home 下也被排除", () => {
+    const store = HOME + "/my-store";
+    expect(isExcludedRoot(store + "/skills", HOME, store)).toBe(true);
+    expect(isExcludedRoot(HOME + "/.claude/skills", HOME, store)).toBe(false);
+  });
+
+  it("storeRoot 等于 home 时不误杀 .claude 等客户端(--home 双重语义)", () => {
+    expect(isExcludedRoot(HOME + "/.claude/skills", HOME, HOME)).toBe(false);
+    expect(isExcludedRoot(HOME + "/skills", HOME, HOME)).toBe(true);
+  });
+
   it("排除只针对 home 之下的段:home 自身路径含 tmp/temp 不误杀", () => {
     const tmpHome = "/var/folders/xx/Temp/skills-hub-test-home";
     expect(isExcludedRoot(tmpHome + "/.claude/skills", tmpHome)).toBe(false);
@@ -219,5 +236,39 @@ describe("discoverClientRoots: 沙箱隔离与确定性", () => {
     const b = await discoverClientRoots(home);
     expect(a.map((r) => r.clientId)).toEqual(["alpha", "mid", "zeta"]);
     expect(b).toEqual(a);
+  });
+});
+
+describe("discoverClientRoots: 本项目目录与库存根", () => {
+  it("不把 .skills-hub 及其 pre-bootstrap 变体当成客户端,仍发现 .claude", async () => {
+    const home = await fakeHome();
+    await mkdir(path.join(home, ".skills-hub", "skills"), { recursive: true });
+    await mkdir(path.join(home, ".skills-hub.pre-bootstrap-20260101T000000", "skills"), { recursive: true });
+    await mkdir(path.join(home, ".claude", "skills"), { recursive: true });
+
+    const roots = await discoverClientRoots(home);
+    expect(roots.map((r) => r.clientId)).toEqual(["claude"]);
+  });
+
+  it("库存根显式传入时,即使位于 home 下也不被当成客户端", async () => {
+    const home = await fakeHome();
+    const store = path.join(home, "my-store");
+    await mkdir(path.join(store, "skills"), { recursive: true });
+    await mkdir(path.join(home, ".claude", "skills"), { recursive: true });
+
+    const without = await discoverClientRoots(home);
+    expect(without.map((r) => r.clientId).sort()).toEqual(["claude", "my-store"]);
+
+    const withStore = await discoverClientRoots(home, { storeRoot: store });
+    expect(withStore.map((r) => r.clientId)).toEqual(["claude"]);
+  });
+
+  it("storeRoot 等于 home 时仍发现 .claude(--home 双重语义)", async () => {
+    const home = await fakeHome();
+    await mkdir(path.join(home, "skills"), { recursive: true });
+    await mkdir(path.join(home, ".claude", "skills"), { recursive: true });
+
+    const roots = await discoverClientRoots(home, { storeRoot: home });
+    expect(roots.map((r) => r.clientId)).toEqual(["claude"]);
   });
 });
