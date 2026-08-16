@@ -136,3 +136,42 @@ export interface ApiError {
   code: string;
   message: string;
 }
+
+export interface LinksBatchParams {
+  hashes: string[];
+  clientIds: string[];
+  action: "enable" | "disable";
+}
+
+export interface LinkDiffItem {
+  hash: string;
+  dirName: string;
+  clientId: string;
+  dest: string;
+}
+
+export interface LinkConflictItem extends LinkDiffItem {
+  at: string;
+  reason: string;
+  code: string;
+}
+
+export interface LinksPreviewResponse {
+  ok: true;
+  command: "links-preview";
+  action: "enable" | "disable";
+  add: number;
+  remove: number;
+  conflictCount: number;
+  wouldCreate: LinkDiffItem[];
+  wouldRemove: LinkDiffItem[];
+  conflicts: LinkConflictItem[];
+}
+
+export interface LinksApplyResponse {
+  ok: true;
+  command: "links-apply";
+  action: "enable" | "disable";
+  created: string[];
+  removed: string[];
+}

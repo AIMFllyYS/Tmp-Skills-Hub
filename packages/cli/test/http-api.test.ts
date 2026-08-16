@@ -422,6 +422,67 @@ describe("http-api 契约", () => {
     expect(after.skills[0]!.visibleIn).toEqual([]);
   });
 
+  it("links preview:不写盘;占用落点列为冲突", async () => {
+    const list = await (await app.request("/api/skills")).json() as { skills: { hash: string }[] };
+    const hash = list.skills[0]!.hash;
+    const dest = path.join(home, ".claude", "skills", "demo");
+    await mkdir(dest, { recursive: true });
+    await writeFile(path.join(dest, "occupied.txt"), "user", "utf8");
+    const before = await readFile(path.join(storeRoot, "links.json"), "utf8");
+    const res = await app.request("/api/links/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [hash], clientIds: ["claude"], action: "enable" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { command: string; add: number; conflictCount: number; conflicts: { code: string; at: string }[] };
+    expect(body.command).toBe("links-preview");
+    expect(body.add).toBe(0);
+    expect(body.conflictCount).toBe(1);
+    expect(body.conflicts[0]?.code).toBe("unregistered-conflict");
+    expect(body.conflicts[0]?.at.toLowerCase()).toContain("demo");
+    expect(await readFile(path.join(storeRoot, "links.json"), "utf8")).toBe(before);
+    const apply = await app.request("/api/links/apply", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [hash], clientIds: ["claude"], action: "enable" }),
+    });
+    expect(apply.status).toBe(409);
+    expect(await readFile(path.join(storeRoot, "links.json"), "utf8")).toBe(before);
+    await rm(dest, { recursive: true, force: true });
+  });
+
+  it("links apply:一次提交启用再停用", async () => {
+    const list = await (await app.request("/api/skills")).json() as { skills: { hash: string }[] };
+    const hash = list.skills[0]!.hash;
+    const preview = await app.request("/api/links/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [hash], clientIds: ["claude"], action: "enable" }),
+    });
+    const pre = (await preview.json()) as { add: number; conflictCount: number };
+    expect(pre.add).toBe(1);
+    expect(pre.conflictCount).toBe(0);
+    const apply = await app.request("/api/links/apply", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [hash], clientIds: ["claude"], action: "enable" }),
+    });
+    expect(apply.status).toBe(200);
+    const body = (await apply.json()) as { command: string; created: string[] };
+    expect(body.command).toBe("links-apply");
+    expect(body.created.length).toBe(1);
+    const link = path.join(home, ".claude", "skills", "demo");
+    expect((await readlink(link)).toLowerCase()).toContain("demo");
+    const off = await app.request("/api/links/apply", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hashes: [hash], clientIds: ["claude"], action: "disable" }),
+    });
+    expect(off.status).toBe(200);
+    await expect(readlink(link)).rejects.toThrow();
+  });
+
   it("archive:软删除端点 + 库存减少 + 归档区可见", async () => {
     const list = await (await app.request("/api/skills")).json() as { skills: { hash: string }[] };
     const hash = list.skills[0]!.hash.slice(0, 12);

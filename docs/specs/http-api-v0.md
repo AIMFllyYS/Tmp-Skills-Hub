@@ -41,6 +41,8 @@
 | --- | --- | --- | --- |
 | POST /api/skills/:hash/enable | { clientId, scope? } | { ok, command: "enable", clientId, scope, targetDir, created, removed } | 400 bad-usage(缺 clientId);404 not-found(客户端或 skill 不存在);409 link-failed;503 |
 | POST /api/skills/:hash/disable | 同上 | { ok, command: "disable", ... } | 同上 |
+| POST /api/links/preview | { hashes, clientIds, action: enable\|disable, scope? } | { ok, command: "links-preview", action, add, remove, conflictCount, wouldCreate, wouldRemove, conflicts }(不写盘) | 400 bad-usage;404 not-found;503 |
+| POST /api/links/apply | 同上 | { ok, command: "links-apply", action, created, removed }(按落点各一次 applyLinkSet) | 400;404;409 link-failed(含 conflicts,未写盘);503 |
 | POST /api/skills/:hash/archive | —(无 body) | { ok, command: "archive", dirName, archiveFile, sizeBytes, removedLinks } | 404 not-found;409(归档失败);503 |
 
 - `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀
@@ -62,4 +64,4 @@
 
 ## 5. 测试
 
-packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、503 未配置。
+packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、links preview/apply、503 未配置。

@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   applyLinkSet,
+  classifyClientLink,
   readLinksLedger,
   readStoreIndex,
   recordUsage,
@@ -25,7 +26,28 @@ export interface LinkChangeRequest {
 
 export type LinkChangeResult =
   | { ok: true; created: string[]; removed: string[] }
-  | { ok: false; code: "link-failed"; message: string };
+  | { ok: false; code: "link-failed"; message: string; conflicts?: LinkConflictItem[] };
+
+export interface LinkDiffItem {
+  hash: string;
+  dirName: string;
+  clientId: string;
+  dest: string;
+}
+
+export interface LinkConflictItem extends LinkDiffItem {
+  at: string;
+  reason: string;
+  code: string;
+}
+
+export interface LinkPreview {
+  clientId: string;
+  skillsDir: string;
+  wouldCreate: LinkDiffItem[];
+  wouldRemove: LinkDiffItem[];
+  conflicts: LinkConflictItem[];
+}
 
 /** 同步 index.json 的 visibleIn(由台账推导:某 dirName 在哪些客户端有链接)。 */
 export async function syncVisibleIn(storeRoot: string, ledger: LinkEntry[]): Promise<void> {
@@ -104,4 +126,78 @@ export async function performLinkChange(
     }
   }
   return { ok: true, created: result.created, removed: result.removed };
+}
+
+/** 不写盘的 diff:将新增 / 将摘除 / 冲突(含 at 与原因)。 */
+export async function previewLinkChange(
+  req: LinkChangeRequest,
+  action: "enable" | "disable",
+): Promise<LinkPreview> {
+  const skills = await readStoreIndex(req.storeRoot);
+  const ledger = await readLinksLedger(req.storeRoot);
+  const wouldCreate: LinkDiffItem[] = [];
+  const wouldRemove: LinkDiffItem[] = [];
+  const conflicts: LinkConflictItem[] = [];
+  for (const name of req.dirNames) {
+    const record = skills.find((s) => s.dirName === name);
+    if (record === undefined) continue;
+    const dest = path.join(req.skillsDir, name);
+    const inLedger = ledger.some((e) => e.clientId === req.clientId && e.entryName === name);
+    const status = await classifyClientLink(dest, inLedger);
+    const item: LinkDiffItem = { hash: record.hash, dirName: name, clientId: req.clientId, dest };
+    if (action === "enable") {
+      if (status.state === "managed") continue;
+      if (status.state === "off" || status.state === "dangling") {
+        wouldCreate.push(item);
+        continue;
+      }
+      conflicts.push({ ...item, at: dest, reason: status.detail, code: status.state });
+    } else {
+      if (status.state === "off") continue;
+      if (status.state === "managed" || status.state === "dangling") {
+        wouldRemove.push(item);
+        continue;
+      }
+      conflicts.push({ ...item, at: dest, reason: status.detail, code: status.state });
+    }
+  }
+  return { clientId: req.clientId, skillsDir: req.skillsDir, wouldCreate, wouldRemove, conflicts };
+}
+
+/**
+ * 按落点各调用一次 applyLinkSet。任一失败则对已成功的落点做反向切换,整单回到变更前。
+ */
+export async function applyLinkBatch(
+  items: LinkChangeRequest[],
+  action: "enable" | "disable",
+): Promise<LinkChangeResult> {
+  const allConflicts: LinkConflictItem[] = [];
+  for (const req of items) {
+    const preview = await previewLinkChange(req, action);
+    allConflicts.push(...preview.conflicts);
+  }
+  if (allConflicts.length > 0) {
+    return {
+      ok: false,
+      code: "link-failed",
+      message: "预检到 " + String(allConflicts.length) + " 处冲突,未写盘。",
+      conflicts: allConflicts,
+    };
+  }
+  const created: string[] = [];
+  const removed: string[] = [];
+  const done: LinkChangeRequest[] = [];
+  for (const req of items) {
+    const result = await performLinkChange(req, action);
+    if (!result.ok) {
+      for (const prev of [...done].reverse()) {
+        await performLinkChange(prev, action === "enable" ? "disable" : "enable");
+      }
+      return result;
+    }
+    created.push(...result.created);
+    removed.push(...result.removed);
+    done.push(req);
+  }
+  return { ok: true, created, removed };
 }

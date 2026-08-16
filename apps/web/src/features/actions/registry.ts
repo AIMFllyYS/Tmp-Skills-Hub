@@ -1,6 +1,7 @@
-import { archiveSkill, saveSkillFile, setSkillEnabled, translateText } from "../skills/api.js";
+import { applyLinks, archiveSkill, previewLinks, saveSkillFile, setSkillEnabled, translateText } from "../skills/api.js";
+import type { LinksBatchParams } from "../skills/types.js";
 
-export type ActionId = "enable" | "disable" | "archive" | "save" | "translate";
+export type ActionId = "enable" | "disable" | "archive" | "save" | "translate" | "preview-links" | "apply-links";
 
 export interface ActionMeta {
   id: ActionId;
@@ -71,6 +72,20 @@ export const ACTION_REGISTRY = {
     destructive: false,
     supportsPreview: false,
     execute: (p: TranslateParams) => translateText(p.text),
+  },
+  "preview-links": {
+    id: "preview-links",
+    verb: "预览链接",
+    destructive: false,
+    supportsPreview: true,
+    execute: (p: LinksBatchParams) => previewLinks(p),
+  },
+  "apply-links": {
+    id: "apply-links",
+    verb: "应用链接",
+    destructive: false,
+    supportsPreview: true,
+    execute: (p: LinksBatchParams) => applyLinks(p),
   },
 } as const;
 

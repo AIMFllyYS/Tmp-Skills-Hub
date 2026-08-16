@@ -167,11 +167,24 @@ export default function App() {
 
   const handleBatchLink = useCallback(async (clientId: string, enable: boolean) => {
     const hashes = [...selection.hashes];
+    if (hashes.length === 0) return;
     setBatchBusy(true);
     try {
-      for (const hash of hashes) {
-        await getAction(enable ? "enable" : "disable").execute({ hash, clientId });
+      const params = { hashes, clientIds: [clientId], action: enable ? "enable" as const : "disable" as const };
+      const preview = await getAction("preview-links").execute(params);
+      if (preview.conflictCount > 0) {
+        window.alert(
+          "冲突 " + String(preview.conflictCount) + " 条，未执行。\n" +
+          preview.conflicts.map((c) => c.dirName + ": " + c.reason).join("\n"),
+        );
+        return;
       }
+      if (preview.add === 0 && preview.remove === 0) {
+        window.alert("无变更");
+        return;
+      }
+      if (!window.confirm("将新增 " + String(preview.add) + " 条 / 摘除 " + String(preview.remove) + " 条。确定？")) return;
+      await getAction("apply-links").execute(params);
       const chosen = new Set(hashes);
       setSkills((prev) =>
         prev.map((s) => {
