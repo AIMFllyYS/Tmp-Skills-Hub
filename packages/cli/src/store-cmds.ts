@@ -1,11 +1,17 @@
 import path from "node:path";
 import {
   adoptMany,
+  applyLinkSet,
+  discoverClientRoots,
+  discoverClientRootsAt,
   hashSkillFolder,
+  readLinksLedger,
   readStoreIndex,
   resolveStoreRoot,
   STORE_SKILLS_DIR,
+  writeStoreIndex,
   type AdoptInput,
+  type LinkEntry,
   type SkillRecord,
   type StoreRootOptions,
 } from "@skills-hub/core";
@@ -198,3 +204,207 @@ export async function runVerify(args: VerifyArgs): Promise<void> {
   if (drifted.length === 0 && missing.length === 0) console.log("全部一致,无漂移。");
   else console.log("发现 " + (drifted.length + missing.length) + " 处漂移/缺失 — verify 不自动改写,如需更新请重新 adopt 或人工处理。");
 }
+
+// ============ enable / disable(#22):受管链接集合的 CLI 入口 ============
+
+export interface LinkCmdArgs {
+  home: string | undefined;
+  yes: boolean | undefined;
+  dryRun: boolean | undefined;
+  json: boolean | undefined;
+  client: string | undefined;
+  /** global(默认,home 下)/ project(cwd 下) */
+  scope: string | undefined;
+  _: (string | number)[];
+}
+
+/** 解析目标客户端 skills 根。默认行为:未指定 --client 时报错并列出可用客户端,绝不猜默认写入对象。 */
+export async function resolveClientSkillsDir(args: LinkCmdArgs): Promise<{ clientId: string; skillsDir: string } | null> {
+  const scope = args.scope === "project" ? "project" : "global";
+  const base = scope === "project" ? process.cwd() : resolveHome(args.home);
+  const roots = scope === "project" ? await discoverClientRootsAt(base) : await discoverClientRoots(base);
+  if (args.client === undefined || args.client === "") {
+    const list = roots.length > 0 ? roots.map((r) => r.clientId).join(", ") : "(无)";
+    console.error("未指定 --client。可用客户端(" + scope + "侧): " + list);
+    console.error("默认行为:未指定 --client 时报错并列出可用客户端,绝不猜默认写入对象。");
+    process.exitCode = 2;
+    return null;
+  }
+  const root = roots.find((r) => r.clientId === args.client);
+  if (root === undefined) {
+    const list = roots.length > 0 ? roots.map((r) => r.clientId).join(", ") : "(无)";
+    console.error("未找到客户端 " + args.client + "(" + scope + "侧)。可用: " + list);
+    process.exitCode = 2;
+    return null;
+  }
+  return { clientId: root.clientId, skillsDir: root.skillsDir };
+}
+
+/** 名称解析:dirName 精确,否则哈希前缀(与 show 同口径)。解析失败抛错。 */
+export function resolveNames(needle: string, skills: SkillRecord[]): string[] {
+  const exact = skills.find((s) => s.dirName === needle);
+  if (exact !== undefined) return [exact.dirName];
+  const byHash = skills.filter((s) => s.hash.startsWith(needle.toLowerCase()));
+  if (byHash.length === 1) return [byHash[0]!.dirName];
+  if (byHash.length > 1) {
+    throw new Error("哈希前缀不唯一: " + needle + " 命中 " + byHash.length + " 个,请用完整哈希或目录名。");
+  }
+  throw new Error("库存中没有 " + needle + "(名字或哈希前缀都不匹配)。先 skills-hub list 看有哪些。");
+}
+
+/** 同步 index.json 的 visibleIn(由台账推导:某 dirName 在哪些客户端有链接)。 */
+export async function syncVisibleIn(storeRoot: string, ledger: LinkEntry[]): Promise<void> {
+  const skills = await readStoreIndex(storeRoot);
+  let changed = false;
+  for (const s of skills) {
+    const visible = [...new Set(ledger.filter((e) => e.entryName === s.dirName).map((e) => e.clientId))].sort();
+    const same = visible.length === s.visibleIn.length && visible.every((v, i) => v === s.visibleIn[i]);
+    if (!same) {
+      s.visibleIn = visible;
+      changed = true;
+    }
+  }
+  if (changed) await writeStoreIndex(storeRoot, skills);
+}
+
+export async function runEnable(args: LinkCmdArgs): Promise<void> {
+  const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
+  if (names.length === 0) {
+    console.error("用法: skills-hub enable <skill名或哈希前缀...> --client <id> [--scope global|project] [--yes] [--dry-run]");
+    process.exitCode = 2;
+    return;
+  }
+  const dryRun = args.dryRun === true;
+  if (!dryRun && !requireWriteAuth(args)) return;
+  const storeRoot = await resolveStoreRootOrFail(args);
+  if (storeRoot === null) return;
+  const client = await resolveClientSkillsDir(args);
+  if (client === null) return;
+  const scope = args.scope === "project" ? "project" : "global";
+
+  const skills = await readStoreIndex(storeRoot);
+  let dirNames: string[];
+  try {
+    dirNames = names.flatMap((n) => resolveNames(n, skills));
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 2;
+    return;
+  }
+
+  const ledger = await readLinksLedger(storeRoot);
+  const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
+  const kind = process.platform === "win32" ? "junction" : "symlink";
+  const now = new Date().toISOString();
+  const planNames = new Set(dirNames);
+  const keep = existing.filter((e) => !planNames.has(e.entryName));
+  const added = dirNames.map((name) => {
+    const record = skills.find((s) => s.dirName === name)!;
+    const prev = existing.find((e) => e.entryName === name);
+    return {
+      id: prev?.id ?? client.clientId + ":" + scope + ":" + name,
+      clientId: client.clientId,
+      scope,
+      targetDir: client.skillsDir,
+      entryName: name,
+      skillHash: record.hash,
+      kind: prev?.kind ?? kind,
+      createdAt: prev?.createdAt ?? now,
+    } satisfies LinkEntry;
+  });
+  const desired = [...keep, ...added];
+
+  if (dryRun) {
+    const wouldCreate = added.map((e) => e.entryName);
+    const wouldRemove = existing.filter((e) => !desired.some((d) => d.id === e.id)).map((e) => e.entryName);
+    if (args.json) console.log(JSON.stringify({ dryRun: true, action: "enable", clientId: client.clientId, scope, targetDir: client.skillsDir, wouldCreate, wouldRemove }, null, 2));
+    else {
+      console.log("预演(不写盘):");
+      for (const n of wouldCreate) console.log("  将建立链接: " + n + " → " + client.skillsDir);
+      for (const n of wouldRemove) console.log("  将摘除链接: " + n);
+      if (wouldCreate.length === 0 && wouldRemove.length === 0) console.log("  无变更");
+    }
+    return;
+  }
+
+  const result = await applyLinkSet(storeRoot, { targetDir: client.skillsDir, entries: desired });
+  if (!result.ok) {
+    console.error("enable 失败: " + result.message);
+    if (result.code === "unregistered-conflict") console.error("落点被用户自己的目录占据且台账未登记 — 绝不覆盖,请人工处理。");
+    if (result.code === "not-link-conflict") console.error("台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。");
+    process.exitCode = 2;
+    return;
+  }
+  await syncVisibleIn(storeRoot, result.ledger);
+  if (args.json) {
+    console.log(JSON.stringify({ ok: true, action: "enable", clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed }, null, 2));
+    return;
+  }
+  for (const p of result.created) console.log("✓ 已启用: " + path.basename(p) + " → " + client.skillsDir);
+  for (const p of result.removed) console.log("  (更新:摘除旧链接 " + path.basename(p) + ")");
+  console.log("enable 完成,共 " + result.created.length + " 个。" + (result.removed.length > 0 ? "(顺带清理 " + result.removed.length + " 个旧链接)" : ""));
+}
+
+export async function runDisable(args: LinkCmdArgs): Promise<void> {
+  const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
+  if (names.length === 0) {
+    console.error("用法: skills-hub disable <skill名或哈希前缀...> --client <id> [--scope global|project] [--yes] [--dry-run]");
+    process.exitCode = 2;
+    return;
+  }
+  const dryRun = args.dryRun === true;
+  if (!dryRun && !requireWriteAuth(args)) return;
+  const storeRoot = await resolveStoreRootOrFail(args);
+  if (storeRoot === null) return;
+  const client = await resolveClientSkillsDir(args);
+  if (client === null) return;
+  const scope = args.scope === "project" ? "project" : "global";
+
+  const skills = await readStoreIndex(storeRoot);
+  let dirNames: string[];
+  try {
+    dirNames = names.flatMap((n) => resolveNames(n, skills));
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 2;
+    return;
+  }
+
+  const ledger = await readLinksLedger(storeRoot);
+  const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
+  const drop = new Set(dirNames);
+  const desired = existing.filter((e) => !drop.has(e.entryName));
+  const toRemove = existing.filter((e) => drop.has(e.entryName));
+
+  if (dryRun) {
+    if (args.json) console.log(JSON.stringify({ dryRun: true, action: "disable", clientId: client.clientId, scope, targetDir: client.skillsDir, wouldRemove: toRemove.map((e) => e.entryName) }, null, 2));
+    else {
+      console.log("预演(不写盘):");
+      for (const e of toRemove) console.log("  将摘除链接: " + e.entryName + "(原件保留在库存)");
+      if (toRemove.length === 0) console.log("  无变更(这些 skill 未在此客户端启用)");
+    }
+    return;
+  }
+
+  if (toRemove.length === 0) {
+    if (args.json) console.log(JSON.stringify({ ok: true, action: "disable", clientId: client.clientId, scope, targetDir: client.skillsDir, created: [], removed: [], unchanged: dirNames }, null, 2));
+    else console.log("未变更:这些 skill 未在 " + client.clientId + " 启用(原件保留在库存)。");
+    return;
+  }
+
+  const result = await applyLinkSet(storeRoot, { targetDir: client.skillsDir, entries: desired });
+  if (!result.ok) {
+    console.error("disable 失败: " + result.message);
+    if (result.code === "not-link-conflict") console.error("台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。");
+    process.exitCode = 2;
+    return;
+  }
+  await syncVisibleIn(storeRoot, result.ledger);
+  if (args.json) {
+    console.log(JSON.stringify({ ok: true, action: "disable", clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed }, null, 2));
+    return;
+  }
+  for (const p of result.removed) console.log("✓ 已禁用(摘除链接): " + path.basename(p));
+  console.log("disable 完成,摘除 " + result.removed.length + " 个链接。库存原件一个字节未动。" + (result.created.length > 0 ? "(顺带建立 " + result.created.length + " 个新链接)" : ""));
+}
+

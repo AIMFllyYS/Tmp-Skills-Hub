@@ -74,6 +74,7 @@ export async function writeStoreIndex(storeRoot: string, skills: SkillRecord[]):
     STORE_TMP_DIR,
     "index." + process.pid + "-" + Date.now() + ".tmp",
   );
+  await mkdir(path.dirname(tmpPath), { recursive: true }); // tmp 可能被清理,自愈重建
   await writeFile(tmpPath, content, "utf8");
   await rename(tmpPath, indexPath);
 }

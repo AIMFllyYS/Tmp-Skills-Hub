@@ -2,7 +2,7 @@ export type { SkillMeta, SkillHash, SkillSource, SkillSourceKind, SkillRecord, L
 export type { StorageProvider, SourceProvider, ClientAdapter, IdentityProvider } from "./interfaces.js";
 export { hashSkillFolder } from "./hash.js";
 export { parseSkillMeta, readSkillMeta } from "./skill-md.js";
-export { discoverClientRoots, isExcludedRoot } from "./clients.js";
+export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot } from "./clients.js";
 export type { ClientRoot } from "./clients.js";
 export { resolveStoreRoot, readPointerStoreRoot } from "./store-location.js";
 export type { StoreRootOptions, StoreRootResolution, StoreRootSource } from "./store-location.js";

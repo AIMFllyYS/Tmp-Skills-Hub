@@ -15,7 +15,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
-import { POINTER_REL, requireWriteAuth, runAdopt, runList, runShow, runVerify } from "./store-cmds.js";
+import { POINTER_REL, requireWriteAuth, runAdopt, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
@@ -246,6 +246,36 @@ const verify = defineCommand({
   },
 });
 
+const enable = defineCommand({
+  meta: { name: "enable", description: "建立链接,让指定 skill 对客户端可见(写操作,非交互需 --yes;未指定 --client 时报错并列出可用客户端,默认挂全局侧)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "预演:只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+    client: { type: "string", description: "目标客户端 id(必填;不填则报错并列出可用客户端)" },
+    scope: { type: "string", description: "global(默认,home 下)或 project(cwd 下)" },
+  },
+  run({ args }) {
+    return runEnable(args);
+  },
+});
+
+const disable = defineCommand({
+  meta: { name: "disable", description: "移除链接,让 skill 对客户端不可见(原件保留;写操作,非交互需 --yes;未指定 --client 时报错并列出可用客户端,默认挂全局侧)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "预演:只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+    client: { type: "string", description: "目标客户端 id(必填;不填则报错并列出可用客户端)" },
+    scope: { type: "string", description: "global(默认,home 下)或 project(cwd 下)" },
+  },
+  run({ args }) {
+    return runDisable(args);
+  },
+});
+
 const ui = defineCommand({
   meta: { name: "ui", description: "启动本地查看服务(App 壳的数据源)" },
   args: {
@@ -261,7 +291,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, verify, ui },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, verify, ui },
 });
 
 runMain(main);
