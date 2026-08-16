@@ -188,6 +188,7 @@
 | 扩展目录 | `.cursor/extensions/`、`.trae/extensions/`、`.vscode/extensions/` | IDE 管理，含大量非技能内容 |
 | 浏览器 profile / 缓存 | Chrome/Firefox profile、`~/.cache`、`~/.tmp` | 非技能资产 |
 | 系统级技能目录 | `/etc/codex/skills`、`/etc/windsurf/skills`、`/Library/Application Support/Windsurf/skills`、`C:\ProgramData\Windsurf\skills` | 需管理员权限、机器级共享；home 扫描无权限也无需触碰，留给 doctor 提权检测 |
+| 本项目自己的目录 | `~/.skills-hub/`、`~/.skills-hub.pre-bootstrap-*`、调用方声明的库存根 | 形状扫描会把带 `skills/` 的自有目录当成客户端；每跑一次 bootstrap 就把上次备份再备一遍，库存自己也会自我收录。按前缀排除 `skills-hub` 及其带后缀变体；库存根由调用方显式传入后整棵子树跳过（#98） |
 
 实现提示：形状判定（`<home>/<client>/skills`）天然排除了大部分——它们要么不叫 `skills`，要么不在 home 下；需要显式过滤的只有「恰好叫 `builtin_skills` 之类」的目录与 `synced` 保留目录。
 
@@ -216,7 +217,7 @@
 > 1. 扫描 `<home>` 下每个直接子目录，凡存在 `<home>/<client>/skills` 即为一个 root（`.agents` 视为普通客户端目录，天然覆盖跨客户端标准）
 > 2. 追加已知嵌套惯例（存在才算）：`.cursor/skills-cursor`、`.gemini/antigravity/skills`、`.codeium/windsurf/skills`、`config/<client>/skills`（XDG 风格，Devin CLI / OpenCode）
 > 3. 解析真实路径并去重（`.codex/skills` 与 `.agents/skills` 等可能互为 symlink）
-> 4. 排除：`builtin_skills`、`~/.claude/skills/synced/`、插件/市场缓存、扩展目录、浏览器 profile、临时目录；系统级目录（`/etc/<client>/skills`、`/Library/Application Support/...`、`ProgramData`）不在 home 扫描范围，留给 doctor 提权检测
+> 4. 排除：`builtin_skills`、`~/.claude/skills/synced/`、插件/市场缓存、扩展目录、浏览器 profile、临时目录、本项目自己的目录（`skills-hub` 及 `skills-hub.*` 前缀）、调用方声明的库存根；系统级目录（`/etc/<client>/skills`、`/Library/Application Support/...`、`ProgramData`）不在 home 扫描范围，留给 doctor 提权检测
 > 5. 绝不创建不存在的 root（不变）
 
 ## 6. 来源清单

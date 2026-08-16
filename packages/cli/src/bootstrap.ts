@@ -138,6 +138,7 @@ async function ingestTree(
 export async function backupAllClientSkills(
   baseHome: string,
   backupRoot: string,
+  storeRoot?: string,
 ): Promise<{
   snapshotId: string;
   clientRoots: number;
@@ -152,7 +153,7 @@ export async function backupAllClientSkills(
   const blobsDir = path.join(snapDir, "blobs");
   await mkdir(blobsDir, { recursive: true });
   const realBase = await realpath(baseHome).catch(() => baseHome);
-  const roots = await discoverClientRoots(baseHome);
+  const roots = await discoverClientRoots(baseHome, storeRoot !== undefined && storeRoot !== "" ? { storeRoot } : undefined);
   const seen = new Map<string, string>();
   const entries: BackupFileEntry[] = [];
   const stats = { logical: 0, written: 0, saved: 0 };
@@ -205,7 +206,7 @@ export async function migrateAllSkills(
   // 指针写 home 基座(baseHome)下,与幂等检查(读 baseHome/.skills-hub/config.json)一致;
   // 若写 storeRoot 内部(无 --home 时 storeRoot=~/.skills-hub),下次 bootstrap 会永远判为未配置。
   await writePointerFile(baseHome, storeRoot);
-  const roots = await discoverClientRoots(baseHome);
+  const roots = await discoverClientRoots(baseHome, { storeRoot });
   const dirs: string[] = [];
   for (const root of roots) {
     let entries;
@@ -266,7 +267,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
   if (doBackup) {
     const backupDir = path.join(storeRoot, "backups");
     console.log("正在备份(只读源目录,复制到 " + backupDir + ")…");
-    const bak = await backupAllClientSkills(base, backupDir);
+    const bak = await backupAllClientSkills(base, backupDir, storeRoot);
     warn(`✓ 已备份 ${bak.skillDirs} 个客户端 root 的 skills 到 ${bak.backupDir}\n  如果出现问题可以一键恢复(恢复能力随 #83 提供,当前请保留该目录)。`);
   } else {
     console.log("已跳过备份。");

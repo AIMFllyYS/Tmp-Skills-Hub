@@ -106,9 +106,11 @@ async function resolveClientSkillsDirAt(
   home: string,
   clientId: string,
   scope: "global" | "project",
+  storeRoot?: string | null,
 ): Promise<{ clientId: string; skillsDir: string } | null> {
   const base = scope === "project" ? process.cwd() : home;
-  const roots = scope === "project" ? await discoverClientRootsAt(base) : await discoverClientRoots(base);
+  const opts = storeRoot !== undefined && storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined;
+  const roots = scope === "project" ? await discoverClientRootsAt(base, opts) : await discoverClientRoots(base, opts);
   const root = roots.find((r) => r.clientId === clientId);
   return root === undefined ? null : { clientId: root.clientId, skillsDir: root.skillsDir };
 }
@@ -189,7 +191,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     return c.json({ ok: true, command: "translate", text: res.content });
   });
   app.get("/api/clients", (c) =>
-    discoverClientRoots(home).then((roots) =>
+    discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined).then((roots) =>
       c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),
     ),
   );
@@ -211,7 +213,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     needle: string,
     body: LinkBody,
   ): Promise<{ dirName: string; clientId: string; scope: "global" | "project"; skillsDir: string } | null> => {
-    const client = await resolveClientSkillsDirAt(home, body.clientId, body.scope);
+    const client = await resolveClientSkillsDirAt(home, body.clientId, body.scope, storeRoot);
     if (client === null) return null;
     const skills = await readStoreIndex(root);
     try {

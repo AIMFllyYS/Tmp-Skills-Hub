@@ -7,7 +7,7 @@ export { isSafeRelativePath, writeGitHubEntries } from "./github-files.js";
 export type { GitHubFileEntry } from "./github-files.js";
 export { parseSkillMeta, readSkillMeta } from "./skill-md.js";
 export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot } from "./clients.js";
-export type { ClientRoot } from "./clients.js";
+export type { ClientRoot, DiscoverRootsOptions } from "./clients.js";
 export { resolveStoreRoot, readPointerStoreRoot } from "./store-location.js";
 export type { StoreRootOptions, StoreRootResolution, StoreRootSource } from "./store-location.js";
 export {
