@@ -15,10 +15,8 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
+import { POINTER_REL, requireWriteAuth, runAdopt, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
-
-/** 指针文件相对 home 的位置(spec §1)。 */
-const POINTER_REL = path.join(".skills-hub", "config.json");
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
 async function writePointerFile(home: string, storeRoot: string): Promise<string> {
@@ -77,11 +75,7 @@ const init = defineCommand({
   },
   async run({ args }) {
     // 写操作铁律(cli-commands-v0.md §2):非交互环境必须显式 --yes,否则拒绝执行
-    if (!args.dryRun && !process.stdin.isTTY && !args.yes) {
-      console.error("写操作需要显式授权:非交互环境请加 --yes。");
-      process.exitCode = 2;
-      return;
-    }
+    if (!args.dryRun && !requireWriteAuth(args)) return;
     const storeRoot = await resolveStoreRootForInit(args);
     if (storeRoot === null) return;
     const home = resolveHome(args.home);
@@ -204,6 +198,54 @@ const doctor = defineCommand({
   },
 });
 
+const adopt = defineCommand({
+  meta: { name: "adopt", description: "把本地 skill 目录收录进库存(写操作,非交互需 --yes)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "预演:只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  run({ args }) {
+    return runAdopt(args);
+  },
+});
+
+const list = defineCommand({
+  meta: { name: "list", description: "列出库存中的 skill(支持来源/启用状态过滤)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    json: { type: "boolean", description: "机器可读输出" },
+    source: { type: "string", description: "按来源过滤(kind 精确或 reference 包含)" },
+    enabled: { type: "boolean", description: "只列已启用的 skill" },
+  },
+  run({ args }) {
+    return runList(args);
+  },
+});
+
+const show = defineCommand({
+  meta: { name: "show", description: "查看单个 skill 的元信息与完整描述" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  run({ args }) {
+    return runShow(args);
+  },
+});
+
+const verify = defineCommand({
+  meta: { name: "verify", description: "重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改写" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  run({ args }) {
+    return runVerify(args);
+  },
+});
+
 const ui = defineCommand({
   meta: { name: "ui", description: "启动本地查看服务(App 壳的数据源)" },
   args: {
@@ -219,7 +261,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, ui },
+  subCommands: { scan, init, doctor, adopt, list, show, verify, ui },
 });
 
 runMain(main);

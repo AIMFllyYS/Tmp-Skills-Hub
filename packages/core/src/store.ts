@@ -82,11 +82,18 @@ export async function writeStoreIndex(storeRoot: string, skills: SkillRecord[]):
  * 收录一个 skill 文件夹(复制进库存,不动源)。
  * 优先级:内容哈希去重 → 同名冲突检测 → 全新收录。
  */
+export interface AdoptOptions {
+  /** 预演模式:只计算与报告,不复制、不写清单、不追加来源。 */
+  dryRun?: boolean;
+}
+
 export async function adoptSkillFolder(
   storeRoot: string,
   folderPath: string,
   origin: SkillSource,
+  options?: AdoptOptions,
 ): Promise<AdoptionOutcome> {
+  const dryRun = options?.dryRun === true;
   const meta = await readSkillMeta(folderPath);
   if (meta === null) {
     return { kind: "invalid", folderPath, reason: "缺少 name 或 description(SKILL.md 未达标)" };
@@ -97,7 +104,7 @@ export async function adoptSkillFolder(
   const byHash = skills.find((s) => s.hash === incomingHash);
   if (byHash !== undefined) {
     // 同内容幂等:只追加新来源,不产生第二份
-    if (!byHash.origins.some((o) => o.kind === origin.kind && o.reference === origin.reference)) {
+    if (!dryRun && !byHash.origins.some((o) => o.kind === origin.kind && o.reference === origin.reference)) {
       byHash.origins.push(origin);
       await writeStoreIndex(storeRoot, skills);
     }
@@ -120,12 +127,6 @@ export async function adoptSkillFolder(
     return { kind: "conflict", name: meta.name, existingHash: "?", incomingHash };
   }
 
-  // 原子入位:先复制到 tmp 再 rename 到 skills/<name>
-  await mkdir(path.join(storeRoot, STORE_TMP_DIR), { recursive: true });
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "adopt." + process.pid + "-" + Date.now());
-  await cp(folderPath, tmpDir, { recursive: true });
-  await rename(tmpDir, dest);
-
   const record: SkillRecord = {
     hash: incomingHash,
     dirName: meta.name,
@@ -134,8 +135,16 @@ export async function adoptSkillFolder(
     visibleIn: [],
     installedAt: new Date().toISOString(),
   };
-  skills.push(record);
-  await writeStoreIndex(storeRoot, skills);
+
+  if (!dryRun) {
+    // 原子入位:先复制到 tmp 再 rename 到 skills/<name>
+    await mkdir(path.join(storeRoot, STORE_TMP_DIR), { recursive: true });
+    const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "adopt." + process.pid + "-" + Date.now());
+    await cp(folderPath, tmpDir, { recursive: true });
+    await rename(tmpDir, dest);
+    skills.push(record);
+    await writeStoreIndex(storeRoot, skills);
+  }
   return { kind: "adopted", record };
 }
 
@@ -143,10 +152,11 @@ export async function adoptSkillFolder(
 export async function adoptMany(
   storeRoot: string,
   inputs: AdoptInput[],
+  options?: AdoptOptions,
 ): Promise<AdoptionReport> {
   const outcomes: AdoptionOutcome[] = [];
   for (const input of inputs) {
-    outcomes.push(await adoptSkillFolder(storeRoot, input.folderPath, input.origin));
+    outcomes.push(await adoptSkillFolder(storeRoot, input.folderPath, input.origin, options));
   }
   const count = (kind: AdoptionOutcome["kind"]) => outcomes.filter((o) => o.kind === kind).length;
   return {

@@ -22,6 +22,6 @@ export {
   writeStoreIndex,
   STORE_INDEX_VERSION,
 } from "./store.js";
-export type { AdoptionOutcome, AdoptionReport, AdoptInput, StoreIndexFile } from "./store.js";
+export type { AdoptionOutcome, AdoptionReport, AdoptInput, AdoptOptions, StoreIndexFile } from "./store.js";
 export { findDanglingLinks, probeLinkTypes } from "./link-probe.js";
 export type { DanglingLink, LinkTypeProbe } from "./link-probe.js";
