@@ -1,14 +1,17 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   addSkillToGroups,
   BUILTIN_GROUPS,
+  createGroup,
+  deleteGroup,
   ensureBuiltinGroups,
   groupsOfSkill,
   readGroups,
   removeSkillFromGroups,
+  renameGroup,
   skillsOfGroup,
 } from "./groups.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
@@ -104,3 +107,25 @@ describe("groups(#25)", () => {
     await expect(readGroups(dir)).rejects.toThrow(/损坏/);
   });
 });
+
+describe("group CRUD(#26 core 侧)", () => {
+  it("create/rename/delete;删除分组不影响 skill", async () => {
+    const dir = await tmp();
+    await ensureBuiltinGroups(dir);
+    await createGroup(dir, { id: "mygroup", name: "我的组", description: "测试" });
+    let g = await readGroups(dir);
+    expect(g.groups.some((x) => x.id === "mygroup")).toBe(true);
+    await expect(createGroup(dir, { id: "mygroup", name: "x", description: "" })).rejects.toThrow(/已存在/);
+    await renameGroup(dir, "mygroup", "新名字");
+    expect((await readGroups(dir)).groups.find((x) => x.id === "mygroup")!.name).toBe("新名字");
+    await expect(renameGroup(dir, "nope", "x")).rejects.toThrow(/不存在/);
+    await addSkillToGroups(dir, ["h1", "h2"], ["mygroup"]);
+    const members = await deleteGroup(dir, "mygroup");
+    expect(members).toBe(2);
+    g = await readGroups(dir);
+    expect(g.groups.some((x) => x.id === "mygroup")).toBe(false);
+    // 只写 groups.json,库存其余文件原样
+    expect((await readdir(dir)).sort()).toEqual(["groups.json", "tmp"]);
+  });
+});
+

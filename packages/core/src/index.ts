@@ -43,10 +43,13 @@ export { crc32, zipDirectory, zipEntries } from "./zip.js";
 export {
   addSkillToGroups,
   BUILTIN_GROUPS,
+  createGroup,
+  deleteGroup,
   ensureBuiltinGroups,
   groupsOfSkill,
   readGroups,
   removeSkillFromGroups,
+  renameGroup,
   skillsOfGroup,
   writeGroups,
   GROUPS_FILE_VERSION,

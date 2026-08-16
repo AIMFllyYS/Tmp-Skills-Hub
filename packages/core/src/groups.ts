@@ -91,33 +91,75 @@ export async function ensureBuiltinGroups(storeRoot: string): Promise<{ wrote: b
   return { wrote: true };
 }
 
-/** 把 skill 加入若干分组(去重;已存在则跳过)。返回实际变更数。 */
-export async function addSkillToGroups(storeRoot: string, skillHash: string, groupIds: string[]): Promise<number> {
-  const current = await readGroups(storeRoot);
-  let changed = 0;
-  for (const g of current.groups) {
-    if (groupIds.includes(g.id) && !g.memberHashes.includes(skillHash)) {
-      g.memberHashes.push(skillHash);
-      changed++;
+/** 把 skill(s) 加入若干分组(去重;已存在则跳过)。返回实际变更数。 */
+export async function addSkillToGroups(storeRoot: string, skillHashes: string | string[], groupIds: string[]): Promise<number> {
+  const hashes = Array.isArray(skillHashes) ? skillHashes : [skillHashes];
+  let total = 0;
+  for (const h of hashes) {
+    const current = await readGroups(storeRoot);
+    let changed = 0;
+    for (const g of current.groups) {
+      if (groupIds.includes(g.id) && !g.memberHashes.includes(h)) {
+        g.memberHashes.push(h);
+        changed++;
+      }
+    }
+    if (changed > 0) {
+      await writeGroups(storeRoot, current);
+      total += changed;
     }
   }
-  if (changed > 0) await writeGroups(storeRoot, current);
-  return changed;
+  return total;
 }
 
-/** 把 skill 移出若干分组。返回实际变更数。 */
-export async function removeSkillFromGroups(storeRoot: string, skillHash: string, groupIds: string[]): Promise<number> {
-  const current = await readGroups(storeRoot);
-  let changed = 0;
-  for (const g of current.groups) {
-    if (groupIds.includes(g.id)) {
-      const before = g.memberHashes.length;
-      g.memberHashes = g.memberHashes.filter((h) => h !== skillHash);
-      if (g.memberHashes.length !== before) changed++;
+/** 把 skill(s) 移出若干分组。返回实际变更数。 */
+export async function removeSkillFromGroups(storeRoot: string, skillHashes: string | string[], groupIds: string[]): Promise<number> {
+  const hashes = Array.isArray(skillHashes) ? skillHashes : [skillHashes];
+  let total = 0;
+  for (const h of hashes) {
+    const current = await readGroups(storeRoot);
+    let changed = 0;
+    for (const g of current.groups) {
+      if (groupIds.includes(g.id)) {
+        const before = g.memberHashes.length;
+        g.memberHashes = g.memberHashes.filter((x) => x !== h);
+        if (g.memberHashes.length !== before) changed++;
+      }
+    }
+    if (changed > 0) {
+      await writeGroups(storeRoot, current);
+      total += changed;
     }
   }
-  if (changed > 0) await writeGroups(storeRoot, current);
-  return changed;
+  return total;
+}
+
+/** 新建分组;id 已存在则抛错。 */
+export async function createGroup(storeRoot: string, def: { id: string; name: string; description: string }): Promise<void> {
+  const current = await readGroups(storeRoot);
+  if (current.groups.some((g) => g.id === def.id)) throw new Error("分组已存在: " + def.id);
+  current.groups.push({ id: def.id, name: def.name, description: def.description, memberHashes: [] });
+  await writeGroups(storeRoot, current);
+}
+
+/** 重命名分组;不存在则抛错。 */
+export async function renameGroup(storeRoot: string, id: string, name: string): Promise<void> {
+  const current = await readGroups(storeRoot);
+  const g = current.groups.find((x) => x.id === id);
+  if (g === undefined) throw new Error("分组不存在: " + id);
+  g.name = name;
+  await writeGroups(storeRoot, current);
+}
+
+/** 删除分组(仅删定义,不删任何 skill)。返回该组当时的成员数。 */
+export async function deleteGroup(storeRoot: string, id: string): Promise<number> {
+  const current = await readGroups(storeRoot);
+  const g = current.groups.find((x) => x.id === id);
+  if (g === undefined) throw new Error("分组不存在: " + id);
+  const members = g.memberHashes.length;
+  current.groups = current.groups.filter((x) => x.id !== id);
+  await writeGroups(storeRoot, current);
+  return members;
 }
 
 /** skill 属于哪些分组(按 id)。 */

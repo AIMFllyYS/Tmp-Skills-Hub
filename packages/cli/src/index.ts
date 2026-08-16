@@ -16,6 +16,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
+import { runGroup } from "./group-cmds.js";
 import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 
@@ -259,6 +260,7 @@ const enable = defineCommand({
     json: { type: "boolean", description: "机器可读输出" },
     client: { type: "string", description: "目标客户端 id(必填;不填则报错并列出可用客户端)" },
     scope: { type: "string", description: "global(默认,home 下)或 project(cwd 下)" },
+    group: { type: "string", description: "按分组批量操作(--group <id>,与按名互斥;一次原子集合切换)" },
   },
   run({ args }) {
     return runEnable(args);
@@ -274,9 +276,25 @@ const disable = defineCommand({
     json: { type: "boolean", description: "机器可读输出" },
     client: { type: "string", description: "目标客户端 id(必填;不填则报错并列出可用客户端)" },
     scope: { type: "string", description: "global(默认,home 下)或 project(cwd 下)" },
+    group: { type: "string", description: "按分组批量操作(--group <id>,与按名互斥;一次原子集合切换)" },
   },
   run({ args }) {
     return runDisable(args);
+  },
+});
+
+const group = defineCommand({
+  meta: { name: "group", description: "分组的增删改查:list / create <id> / rename <id> --name / delete <id> / add|remove <id> <skill...>(写操作需 --yes;删除分组不删除任何 skill)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "预演:只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+    name: { type: "string", description: "新名称(create/rename 用)" },
+    desc: { type: "string", description: "描述(create 用)" },
+  },
+  run({ args }) {
+    return runGroup(args);
   },
 });
 
@@ -308,7 +326,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, archive, verify, ui },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, verify, ui },
 });
 
 runMain(main);
