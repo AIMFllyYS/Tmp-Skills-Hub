@@ -72,7 +72,7 @@ const scan = defineCommand({
 const init = defineCommand({
   meta: { name: "init", description: "设置库存位置,写入指针文件,并建立目录布局" },
   args: {
-    home: { type: "string", description: "库存根目录(绝对路径);同时作为沙箱 home 重定向" },
+    home: { type: "string", description: "库存根目录,同时作为 home 基座(指针文件写入 <home>/.skills-hub/config.json;后续命令需传相同 --home 或设 SKILLS_HUB_HOME)" },
     yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
     dryRun: { type: "boolean", description: "只打印将要发生的变更,不写盘" },
     json: { type: "boolean", description: "机器可读输出" },
