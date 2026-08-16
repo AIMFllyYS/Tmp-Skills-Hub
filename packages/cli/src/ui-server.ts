@@ -352,13 +352,21 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   return app;
 }
 
-export async function startUiServer(port = DEFAULT_UI_PORT, home?: string): Promise<void> {
-  const h = home ?? resolveHome();
-  const opts: StoreRootOptions = { pointerFilePath: path.join(h, POINTER_REL) };
-  if (home !== undefined && home !== "") opts.cliHome = home;
+/** 启动参数具名,避免把 storeRoot 按位置误传成 home(见 #95)。 */
+export interface StartUiServerOptions {
+  port?: number;
+  /** 客户端发现的 home 基座,不是库存根 */
+  home?: string;
+}
+
+export async function startUiServer(opts: StartUiServerOptions = {}): Promise<void> {
+  const port = opts.port ?? DEFAULT_UI_PORT;
+  const h = opts.home ?? resolveHome();
+  const storeOpts: StoreRootOptions = { pointerFilePath: path.join(h, POINTER_REL) };
+  if (opts.home !== undefined && opts.home !== "") storeOpts.cliHome = opts.home;
   const envHome = process.env.SKILLS_HUB_HOME;
-  if (envHome !== undefined && envHome !== "") opts.envHome = envHome;
-  const resolved = await resolveStoreRoot(opts);
+  if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
+  const resolved = await resolveStoreRoot(storeOpts);
   const storeRoot = resolved.ok ? resolved.storeRoot : null;
   serve({ fetch: createUiApp({ storeRoot, home: h }).fetch, port, hostname: "127.0.0.1" }, (info) => {
     console.log("skill-hub ui: http://127.0.0.1:" + info.port + "/api/skills" + (storeRoot === null ? " (库存未配置)" : ""));

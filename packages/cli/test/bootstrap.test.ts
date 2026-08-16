@@ -85,6 +85,25 @@ describe("runBootstrap", () => {
     expect(process.exitCode).toBe(2);
   });
 
+  it("首次初始化后启动面板时传 home 基座,不传 storeRoot", async () => {
+    const home = await newHome();
+    const storeRoot = path.join(home, "hub-store");
+    const captured: { port?: number; home?: string }[] = [];
+    const ask = answers([storeRoot, "N", "Y"]);
+    await runBootstrap({ home }, {
+      readLine: ask as never,
+      ui: async (opts) => {
+        captured.push(opts);
+      },
+    });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]!.home).toBe(home);
+    expect(captured[0]!.home).not.toBe(path.resolve(storeRoot));
+    const pointer = JSON.parse(await readFile(path.join(home, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string };
+    expect(pointer.storeRoot).toBe(path.resolve(storeRoot));
+    expect(captured[0]!.home).not.toBe(pointer.storeRoot);
+  });
+
   it("备份跟随链接复制内容(客户端目录含 junction 时不炸,内容完整)", async () => {
     const home = await newHome();
     // 真实世界形态:.claude/skills 下挂一个指向别处的链接(本项目 enable 即生产这种链接)

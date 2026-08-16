@@ -11,7 +11,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { POINTER_REL, runAdopt } from "./store-cmds.js";
-import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
+import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
 
 /**
  * bootstrap:真机一键体验——交互确认(库存位置/备份/迁移)→ 备份 → 收录全部本机 skills → 自动启动面板。
@@ -39,8 +39,11 @@ export interface BootstrapArgs {
 export interface BootstrapOptions {
   /** 测试注入:问答实现;缺省用 stdin readline */
   readLine?: (prompt: string) => Promise<string>;
-  /** 测试注入:结束时是否启动 ui 服务(默认 true) */
-  ui?: boolean;
+  /**
+   * 测试注入:结束时是否启动 ui 服务(默认 true)。
+   * 传函数则调用该函数而不真起服务,便于断言传入的 home。
+   */
+  ui?: boolean | ((opts: StartUiServerOptions) => Promise<void>);
 }
 
 async function defaultReadLine(): Promise<(prompt: string) => Promise<string>> {
@@ -173,10 +176,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
 
   if (existingRoot !== null) {
     console.log("库存已就绪:" + existingRoot + " — 跳过初始化,直接启动面板。");
-    if (opts.ui !== false) {
-      await startUiServer(port, base);
-      openBrowser("http://127.0.0.1:" + port);
-    }
+    await launchUi(port, base, opts);
     return;
   }
 
@@ -220,10 +220,17 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
   warn(`✓ 全部完成:库存位于 ${storeRoot},收录 ${result.adopted} 份(新增/重复/冲突见上方统计)。`);
   if (result.discovered === 0) console.log("未发现任何达标 skill(缺 name/description 的目录不计入)。");
 
-  // 5. 自动启动面板
+  // 5. 自动启动面板——必须传 home 基座,不能传 storeRoot(#95)
   if (opts.ui !== false) {
     console.log("启动面板:http://127.0.0.1:" + port);
-    await startUiServer(port, storeRoot);
-    openBrowser("http://127.0.0.1:" + port);
   }
+  await launchUi(port, base, opts);
+}
+
+/** 启动面板:home 永远是客户端发现基座。测试可注入函数替身。 */
+async function launchUi(port: number, home: string, opts: BootstrapOptions): Promise<void> {
+  if (opts.ui === false) return;
+  const start = typeof opts.ui === "function" ? opts.ui : startUiServer;
+  await start({ port, home });
+  if (typeof opts.ui !== "function") openBrowser("http://127.0.0.1:" + port);
 }
