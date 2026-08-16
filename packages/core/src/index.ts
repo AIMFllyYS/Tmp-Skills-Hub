@@ -1,6 +1,10 @@
 export type { SkillMeta, SkillHash, SkillSource, SkillSourceKind, SkillRecord, LinkScope } from "./types.js";
 export type { StorageProvider, SourceProvider, ClientAdapter, IdentityProvider } from "./interfaces.js";
 export { hashSkillFolder } from "./hash.js";
+export { isGitHubUrl, parseGitHubUrl } from "./github-url.js";
+export type { GitHubUrlParts } from "./github-url.js";
+export { isSafeRelativePath, writeGitHubEntries } from "./github-files.js";
+export type { GitHubFileEntry } from "./github-files.js";
 export { parseSkillMeta, readSkillMeta } from "./skill-md.js";
 export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot } from "./clients.js";
 export type { ClientRoot } from "./clients.js";
