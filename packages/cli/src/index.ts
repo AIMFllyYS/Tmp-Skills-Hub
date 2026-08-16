@@ -17,6 +17,7 @@ import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEna
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 import { runAnalyze } from "./analyze.js";
 import { runBootstrap } from "./bootstrap.js";
+import { runBackup } from "./backup-cmds.js";
 import { loadEnvFile } from "./env.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
@@ -309,6 +310,20 @@ const ui = defineCommand({
   },
 });
 
+const backup = defineCommand({
+  meta: { name: "backup", description: "备份客户端 skills:默认增量(共享 blob 池复用),--full 强制新建快照;list / verify 只读" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+    full: { type: "boolean", description: "强制全量:新建快照并完整遍历(默认增量只复用已有 blob)" },
+  },
+  run({ args }) {
+    return runBackup(args);
+  },
+});
+
 const bootstrap = defineCommand({
   meta: { name: "bootstrap", description: "一键初始化:备份 → 收录全部本机 skills → 自动启动面板(交互式;库存已就绪时直接启动面板)" },
   args: {
@@ -328,7 +343,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, ui, bootstrap },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, ui, bootstrap },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。

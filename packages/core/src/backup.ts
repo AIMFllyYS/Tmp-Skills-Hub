@@ -184,6 +184,48 @@ export async function readLatestSnapshotId(storeRoot: string): Promise<string | 
   }
 }
 
+export interface BackupSnapshotSummary {
+  snapshotId: string;
+  createdAt: string;
+  files: number;
+  links: number;
+  blobsWritten: number;
+  blobsReused: number;
+}
+
+/** 列 backups/ 下的快照(跳过 blobs/ 与 latest)。按 createdAt 新→旧。 */
+export async function listBackupSnapshots(storeRoot: string): Promise<BackupSnapshotSummary[]> {
+  const root = path.join(storeRoot, STORE_BACKUPS_DIR);
+  let names: string[];
+  try {
+    names = await readdir(root);
+  } catch {
+    return [];
+  }
+  const out: BackupSnapshotSummary[] = [];
+  for (const name of names) {
+    if (name === "blobs" || name === "latest") continue;
+    const dir = path.join(root, name);
+    try {
+      const st = await lstat(dir);
+      if (!st.isDirectory()) continue;
+      const m = await readBackupManifest(dir);
+      out.push({
+        snapshotId: m.snapshotId,
+        createdAt: m.createdAt,
+        files: m.files.length,
+        links: m.links.length,
+        blobsWritten: m.blobsWritten,
+        blobsReused: m.blobsReused,
+      });
+    } catch {
+      /* 残缺目录跳过 */
+    }
+  }
+  out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return out;
+}
+
 export async function readBackupManifest(snapshotDir: string): Promise<BackupManifest> {
   const raw = JSON.parse(await readFile(path.join(snapshotDir, "manifest.json"), "utf8")) as BackupManifest;
   return raw;
