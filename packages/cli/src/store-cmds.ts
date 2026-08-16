@@ -10,6 +10,7 @@ import {
   readGroups,
   readLinksLedger,
   readStoreIndex,
+  recordUsage,
   resolveStoreRoot,
   STORE_ARCHIVE_DIR,
   STORE_SKILLS_DIR,
@@ -160,6 +161,8 @@ export async function runShow(args: ShowArgs): Promise<void> {
     return;
   }
   const records: SkillRecord[] = exact !== undefined ? [exact] : byHash.slice(0, 10);
+  // #27:show 是一次真实使用意图,每条展示的记录记一次(失败静默,不影响主流程)
+  for (const s of records) await recordUsage(storeRoot, s.hash, "show").catch(() => undefined);
   if (args.json) {
     console.log(JSON.stringify({ storeRoot, matches: records }, null, 2));
     return;
@@ -374,6 +377,12 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
     return;
   }
   await syncVisibleIn(storeRoot, result.ledger);
+  // #27:enable 真实生效才计数(预演模式在 applyLinkSet 前已返回,不计数)
+  for (const p of result.created) {
+    const name = path.basename(p);
+    const record = skills.find((s) => s.dirName === name);
+    if (record !== undefined) await recordUsage(storeRoot, record.hash, "enable").catch(() => undefined);
+  }
   if (args.json) {
     console.log(JSON.stringify({ ok: true, action: "enable", clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed }, null, 2));
     return;
