@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readlink, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,19 @@ import { createUiApp } from "../src/ui-server.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(here, "..", "dist", "index.js");
-const sample = path.join(here, "..", "..", "..", ".sandbox", "sample");
+let sample = "";
+
+/** 内联样例 skill(CI 无 .sandbox,必须自包含)。 */
+async function makeSample(): Promise<string> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-sample-"));
+  tempRoots.push(dir);
+  await writeFile(
+    path.join(dir, "SKILL.md"),
+    ["---", "name: demo", "description: sandbox e2e demo skill", "---", "", "# demo", "", "sandbox e2e demo skill."].join("\n") + "\n",
+    "utf8",
+  );
+  return dir;
+}
 
 let home = "";
 const tempRoots: string[] = [];
@@ -29,6 +41,7 @@ async function setupStore(): Promise<void> {
   home = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-"));
   tempRoots.push(home);
   await mkdir(path.join(home, ".claude", "skills"), { recursive: true });
+  sample = await makeSample();
   const init = runCli(["init", "--home", home, "--yes", "--json"]);
   expect(init.code).toBe(0);
   const adopt = runCli(["adopt", sample, "--home", home, "--yes", "--json"]);
