@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { marked, type Tokens } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
-import { fetchSkillFile, fetchSkillTree, saveSkillFile } from "./api.js";
+import { fetchSkillFile, fetchSkillTree, saveSkillFile, translateText } from "./api.js";
 import type { SkillFileEntry } from "./types.js";
 
 /** 代码块高亮:marked 新版已移除内置 highlight 选项,用自定义 renderer 挂 hljs。 */
@@ -42,6 +42,10 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedHash, setSavedHash] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translated, setTranslated] = useState<string | null>(null);
+  const [showTranslated, setShowTranslated] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
 
   useEffect(() => {
     // 组件每次展开全新挂载,初始 state 即 loading/null,无需同步重置
@@ -73,6 +77,9 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
       setEditing(false);
       setSaveError(null);
       setSavedHash(null);
+      setShowTranslated(false);
+      setTranslateError(null);
+      setTranslated(null);
       try {
         const res = await fetchSkillFile(hash, rel);
         setContent(res.content);
@@ -82,6 +89,29 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
     },
     [hash],
   );
+
+  /** 翻译/切回:点击"译"→ 中文;再点 → 原文。未配置或失败给可读提示,原文不丢。 */
+  const toggleTranslate = useCallback(async () => {
+    if (showTranslated) {
+      setShowTranslated(false);
+      return;
+    }
+    if (translated !== null) {
+      setShowTranslated(true);
+      return;
+    }
+    setTranslating(true);
+    setTranslateError(null);
+    try {
+      const t = await translateText(content);
+      setTranslated(t);
+      setShowTranslated(true);
+    } catch (e) {
+      setTranslateError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTranslating(false);
+    }
+  }, [showTranslated, translated, content]);
 
   const startEdit = useCallback(() => {
     setDraft(content);
@@ -146,7 +176,21 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
           {savedHash !== null && <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">已保存,新哈希 {savedHash.slice(0, 12)}…</p>}
           {fileError !== null && <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />}
           {fileError === null && !editing && html !== "" && (
-            <div className="mb-2 flex justify-end">
+            <div className="mb-2 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={translating}
+                onClick={() => void toggleTranslate()}
+                className={[
+                  "rounded-full border px-3 py-1 text-xs transition-colors duration-150",
+                  showTranslated
+                    ? "border-line-strong bg-surface text-ink-strong"
+                    : "border-line bg-white text-ink-mid hover:border-line-strong hover:text-ink-strong",
+                  translating ? "opacity-60" : "",
+                ].join(" ")}
+              >
+                {translating ? "翻译中…" : showTranslated ? "原文" : "译成中文"}
+              </button>
               <button
                 type="button"
                 onClick={startEdit}
@@ -156,6 +200,7 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
               </button>
             </div>
           )}
+          {translateError !== null && <Notice text={translateError} tone={translateError.includes("DEEPSEEK_API_KEY") ? "warn" : "error"} />}
           {editing && (
             <div className="mb-2 flex justify-end gap-2">
               <button
@@ -182,7 +227,7 @@ export function SkillViewer({ hash, onClose, onSaved }: SkillViewerProps): React
           {saveError !== null && <Notice text={saveError} tone="error" />}
           {selected !== "" && fileError === null && content === "" && <p className="text-xs text-ink-mid">加载中…</p>}
           {fileError === null && !editing && html !== "" && (
-            <div className="skill-md text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
+            <div className="skill-md text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: showTranslated && translated !== null ? (marked.parse(translated) as string) : html }} />
           )}
           {fileError === null && editing && (
             <textarea

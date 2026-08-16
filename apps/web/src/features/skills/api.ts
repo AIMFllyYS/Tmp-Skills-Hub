@@ -66,6 +66,20 @@ export async function saveSkillFile(hash: string, relPath: string, content: stri
   return body.hash;
 }
 
+/** 翻译代理:本地服务代发,密钥绝不出现在前端。失败抛可读 Error(原文不受影响)。 */
+export async function translateText(text: string): Promise<string> {
+  const res = await fetch("/api/translate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const body = (await res.json().catch(() => null)) as { ok: boolean; text?: string; message?: string } | null;
+  if (!res.ok || body === null || !body.ok || typeof body.text !== "string") {
+    throw new Error(body?.message ?? "HTTP " + res.status);
+  }
+  return body.text;
+}
+
 export async function fetchArchive(): Promise<ArchiveResponse["archived"]> {
   const res = await fetch("/api/archive");
   if (!res.ok) throw new Error("GET /api/archive → " + res.status);

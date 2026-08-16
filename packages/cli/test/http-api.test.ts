@@ -237,6 +237,49 @@ describe("http-api 契约", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("翻译:本地服务代发成功,返回译文", async () => {
+    const translateImpl = (async (messages: { role: string; content: string }[]) => {
+      // 替身校验系统提示要求保留代码块,只译说明文字
+      const sys = messages.find((m) => m.role === "system")?.content ?? "";
+      expect(sys).toContain("保留原文");
+      return { ok: true, content: "译文内容" } as const;
+    }) as never;
+    const tapp = createUiApp({ storeRoot, home, translateImpl });
+    const res = await tapp.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello world" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; text: string };
+    expect(body.ok).toBe(true);
+    expect(body.text).toBe("译文内容");
+  });
+
+  it("翻译:未配置密钥 → 503 not-configured 可读提示;缺 body → 400", async () => {
+    const translateImpl = (async () => ({
+      ok: false,
+      code: "not-configured",
+      message: "未配置 DEEPSEEK_API_KEY:请在 .env 中填写后重试(功能不可用但不崩溃)。",
+    })) as never;
+    const tapp = createUiApp({ storeRoot, home, translateImpl });
+    const res = await tapp.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello" }),
+    });
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { code: string; message: string };
+    expect(body.code).toBe("not-configured");
+    expect(body.message).toContain("DEEPSEEK_API_KEY");
+    const bad = await tapp.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(bad.status).toBe(400);
+  });
+
   it("查看:路径穿越被拒绝(outside),未知文件 404", async () => {
     const res = await app.request("/api/skills/demo/file?path=..%2F..%2Fsecret.txt");
     expect(res.status).toBe(400);
