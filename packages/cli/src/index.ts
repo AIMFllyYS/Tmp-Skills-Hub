@@ -20,6 +20,7 @@ import { runGroup } from "./group-cmds.js";
 import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 import { runAnalyze } from "./analyze.js";
+import { runBootstrap } from "./bootstrap.js";
 import { loadEnvFile } from "./env.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
@@ -339,12 +340,26 @@ const ui = defineCommand({
   },
 });
 
+const bootstrap = defineCommand({
+  meta: { name: "bootstrap", description: "一键初始化:备份 → 收录全部本机 skills → 自动启动面板(交互式;库存已就绪时直接启动面板)" },
+  args: {
+    home: { type: "string", description: "库存根目录/基座(默认 ~/.skills-hub)" },
+    port: { type: "string", description: "面板端口", default: String(DEFAULT_UI_PORT) },
+    yes: { type: "boolean", description: "非交互环境显式授权全部写操作(跳过全部确认)" },
+  },
+  async run({ args }) {
+    const bootArgs: { port: number; yes: boolean; home?: string } = { port: Number(args.port), yes: args.yes === true };
+    if (args.home !== undefined && args.home !== "") bootArgs.home = args.home;
+    await runBootstrap(bootArgs);
+  },
+});
+
 const main = defineCommand({
   meta: {
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, ui },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, ui, bootstrap },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。
