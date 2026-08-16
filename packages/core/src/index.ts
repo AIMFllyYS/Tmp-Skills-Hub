@@ -15,3 +15,11 @@ export {
   STORE_TMP_DIR,
 } from "./store-layout.js";
 export type { InitLayoutResult, StoreManifest } from "./store-layout.js";
+export {
+  adoptMany,
+  adoptSkillFolder,
+  readStoreIndex,
+  writeStoreIndex,
+  STORE_INDEX_VERSION,
+} from "./store.js";
+export type { AdoptionOutcome, AdoptionReport, AdoptInput, StoreIndexFile } from "./store.js";
