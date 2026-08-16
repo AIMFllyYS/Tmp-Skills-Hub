@@ -21,6 +21,7 @@
 | GET /api/groups | { ok, command: "groups", version, groups: GroupDef[] } | 503 |
 | GET /api/stats | { ok, command: "stats", stats: StatsFile, ranking: UsageRankEntry[] } | 503 |
 | GET /api/archive | { ok, command: "archive", verb: "list", archiveDir, archived: ArchivedSkill[] } | 503 |
+| GET /api/clients | { ok, command: "clients", clients: { clientId, skillsDir }[] }(global 侧发现的客户端) | —(不依赖库存) |
 
 ### SkillRecord(与 json-contract §2 同定义)
 

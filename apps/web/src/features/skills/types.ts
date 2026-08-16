@@ -38,6 +38,17 @@ export interface GroupsResponse {
   groups: GroupDef[];
 }
 
+export interface ClientInfo {
+  clientId: string;
+  skillsDir: string;
+}
+
+export interface ClientsResponse {
+  ok: true;
+  command: "clients";
+  clients: ClientInfo[];
+}
+
 export interface ApiError {
   ok: false;
   command: string;

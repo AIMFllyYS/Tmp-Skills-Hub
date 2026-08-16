@@ -1,27 +1,54 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchGroups, fetchSkills } from "./features/skills/api.js";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchClients, fetchGroups, fetchSkills, setSkillEnabled } from "./features/skills/api.js";
 import { applyFilters, ALL_GROUP, ALL_SOURCE, sourceKindsOf } from "./features/skills/filters.js";
 import { SkillList } from "./features/skills/SkillList.js";
-import type { GroupDef, SkillRecord } from "./features/skills/types.js";
+import type { ClientInfo, GroupDef, SkillRecord } from "./features/skills/types.js";
 
 type LoadState = "loading" | "ready" | "offline";
 
 export default function App() {
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [groups, setGroups] = useState<GroupDef[]>([]);
+  const [clients, setClients] = useState<ClientInfo[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [query, setQuery] = useState("");
   const [sourceKind, setSourceKind] = useState(ALL_SOURCE);
   const [groupId, setGroupId] = useState(ALL_GROUP);
+  /** 正在执行写操作的 skill 哈希 */
+  const [pendingHash, setPendingHash] = useState<string | null>(null);
+  /** 失败原因,按 skill 哈希存(展示不静默) */
+  const [errors, setErrors] = useState<Map<string, string>>(new Map());
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    Promise.all([fetchSkills(), fetchGroups()])
-      .then(([s, g]) => {
+    Promise.all([fetchSkills(), fetchGroups(), fetchClients()])
+      .then(([s, g, c]) => {
         setSkills(s);
         setGroups(g);
+        setClients(c);
         setState("ready");
       })
       .catch(() => setState("offline"));
+  }, [reload]);
+
+  /** 开关:enable/disable 写操作;进行中禁止重复提交;失败展示可读原因。 */
+  const handleToggle = useCallback(async (skill: SkillRecord, clientId: string, enable: boolean) => {
+    setPendingHash(skill.hash);
+    setErrors((prev) => {
+      const next = new Map(prev);
+      next.delete(skill.hash);
+      return next;
+    });
+    try {
+      await setSkillEnabled(skill.hash, clientId, enable);
+      // 成功后重新拉取:状态与磁盘实际链接一致,刷新不漂移
+      setReload((n) => n + 1);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrors((prev) => new Map(prev).set(skill.hash, "操作失败: " + msg));
+    } finally {
+      setPendingHash(null);
+    }
   }, []);
 
   const sources = useMemo(() => sourceKindsOf(skills), [skills]);
@@ -75,7 +102,9 @@ export default function App() {
         </p>
       )}
 
-      {state === "ready" && <SkillList skills={visible} />}
+      {state === "ready" && (
+        <SkillList skills={visible} clients={clients} pendingHash={pendingHash} errors={errors} onToggle={handleToggle} />
+      )}
     </main>
   );
 }

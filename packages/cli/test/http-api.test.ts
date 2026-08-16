@@ -135,6 +135,14 @@ describe("http-api 契约", () => {
     expect(Array.isArray(body.ranking)).toBe(true);
   });
 
+  it("clients:发现 claude(沙箱 home)", async () => {
+    const res = await app.request("/api/clients");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; command: string; clients: { clientId: string }[] };
+    expect(body.command).toBe("clients");
+    expect(body.clients.some((c) => c.clientId === "claude")).toBe(true);
+  });
+
   it("archive 列表:初始为空", async () => {
     const res = await app.request("/api/archive");
     expect(res.status).toBe(200);

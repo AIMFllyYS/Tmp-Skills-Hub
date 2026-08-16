@@ -1,7 +1,17 @@
-import type { SkillRecord } from "./types.js";
+import type { ClientInfo, SkillRecord } from "./types.js";
 
-/** 单个 skill 卡片:名称、描述、来源徽标、客户端可见性(语义不混用)。 */
-export function SkillCard({ skill }: { skill: SkillRecord }): React.JSX.Element {
+interface SkillCardProps {
+  skill: SkillRecord;
+  clients: ClientInfo[];
+  /** 本卡片正在执行写操作(禁止重复提交) */
+  pending: boolean;
+  /** 最近一次操作失败的可读原因(展示在卡片内,不静默) */
+  error: string | null;
+  onToggle: (clientId: string, enable: boolean) => void;
+}
+
+/** 单个 skill 卡片:名称、描述、来源徽标、每个客户端的启用开关(状态 = 磁盘链接状态)。 */
+export function SkillCard({ skill, clients, pending, error, onToggle }: SkillCardProps): React.JSX.Element {
   const origins = skill.origins.map((o) => o.kind).join(" / ");
   return (
     <li className="rounded-xl border border-line bg-white p-4">
@@ -16,6 +26,30 @@ export function SkillCard({ skill }: { skill: SkillRecord }): React.JSX.Element 
           {skill.visibleIn.length > 0 ? "可见于: " + skill.visibleIn.join(", ") : "未在客户端启用"}
         </p>
       </div>
+      <ul className="mt-3 space-y-1.5">
+        {clients.map((client) => {
+          const enabled = skill.visibleIn.includes(client.clientId);
+          return (
+            <li key={client.clientId} className="flex items-center justify-between">
+              <span className="text-xs text-ink-mid">{client.clientId}</span>
+              <button
+                type="button"
+                aria-pressed={enabled}
+                disabled={pending}
+                onClick={() => onToggle(client.clientId, !enabled)}
+                className={[
+                  "rounded-full px-3 py-1 text-xs transition-colors duration-150",
+                  enabled ? "bg-ink-strong text-white" : "border border-line bg-white text-ink-mid hover:border-line-strong",
+                  pending ? "opacity-60" : "",
+                ].join(" ")}
+              >
+                {pending ? "…" : enabled ? "已启用" : "停用"}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {error !== null && <p className="mt-2 text-xs text-red-700">{error}</p>}
     </li>
   );
 }

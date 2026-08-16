@@ -115,6 +115,12 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }),
   );
 
+  app.get("/api/clients", (c) =>
+    discoverClientRoots(home).then((roots) =>
+      c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),
+    ),
+  );
+
   // ---- 写端点 ----
 
   interface LinkBody { clientId: string; scope: "global" | "project" }
