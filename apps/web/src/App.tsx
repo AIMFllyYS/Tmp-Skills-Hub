@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { BatchBar } from "./features/panel/BatchBar.js";
 import { CollectionPane, type SortMode } from "./features/panel/CollectionPane.js";
 import { InspectorPane } from "./features/panel/InspectorPane.js";
 import { emptySelection, selectionReducer } from "./features/panel/selection.js";
 import { ScopeNav, scopeOptions } from "./features/panel/ScopeNav.js";
 import { buildScopeCounts, isSkillScope, scopeKey, skillsForScope, type ScopeSelection } from "./features/panel/scope.js";
-import { fetchArchive, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
+import { archiveSkill, fetchArchive, fetchClients, fetchGroups, fetchSkills, fetchStats, setSkillEnabled } from "./features/skills/api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./features/skills/async-resource.js";
 import { applyFilters, ALL_GROUP, ALL_SOURCE } from "./features/skills/filters.js";
 import type { ArchivedSkill, ClientInfo, GroupDef, SkillRecord, UsageCounters } from "./features/skills/types.js";
@@ -24,6 +25,7 @@ export default function App() {
   const [focusedHash, setFocusedHash] = useState<string | null>(null);
   const [selection, dispatchSelection] = useReducer(selectionReducer, emptySelection);
   const [pendingHash, setPendingHash] = useState<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -121,6 +123,63 @@ export default function App() {
     dispatchSelection({ type: "select-store", hashes: skills.map((s) => s.hash) });
   }, [skills]);
 
+  const handleBatchLink = useCallback(async (clientId: string, enable: boolean) => {
+    const hashes = [...selection.hashes];
+    setBatchBusy(true);
+    try {
+      for (const hash of hashes) {
+        await setSkillEnabled(hash, clientId, enable);
+      }
+      const chosen = new Set(hashes);
+      setSkills((prev) =>
+        prev.map((s) => {
+          if (!chosen.has(s.hash)) return s;
+          const visible = enable
+            ? (s.visibleIn.includes(clientId) ? s.visibleIn : [...s.visibleIn, clientId])
+            : s.visibleIn.filter((id) => id !== clientId);
+          return { ...s, visibleIn: visible };
+        }),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrors((prev) => {
+        const next = new Map(prev);
+        const first = hashes[0];
+        if (first !== undefined) next.set(first, "批量操作失败: " + msg);
+        return next;
+      });
+    } finally {
+      setBatchBusy(false);
+    }
+  }, [selection.hashes]);
+
+  const handleBatchArchive = useCallback(async () => {
+    const hashes = [...selection.hashes];
+    if (hashes.length === 0) return;
+    if (!window.confirm("将归档 " + hashes.length + " 个 skill（软删除，可从归档区恢复）。确定？")) return;
+    setBatchBusy(true);
+    try {
+      for (const hash of hashes) {
+        await archiveSkill(hash);
+      }
+      const gone = new Set(hashes);
+      setSkills((prev) => prev.filter((s) => !gone.has(s.hash)));
+      if (focusedHash !== null && gone.has(focusedHash)) setFocusedHash(null);
+      dispatchSelection({ type: "clear" });
+      setArchived(await fetchArchive());
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrors((prev) => {
+        const next = new Map(prev);
+        const first = hashes[0];
+        if (first !== undefined) next.set(first, "归档失败: " + msg);
+        return next;
+      });
+    } finally {
+      setBatchBusy(false);
+    }
+  }, [selection.hashes, focusedHash]);
+
   const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
   const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
 
@@ -205,6 +264,18 @@ export default function App() {
             />
           </aside>
         </div>
+      )}
+
+      {state === "ready" && selection.hashes.size > 0 && (
+        <BatchBar
+          count={selection.hashes.size}
+          clients={clients}
+          busy={batchBusy}
+          onClear={() => dispatchSelection({ type: "clear" })}
+          onEnableTo={(id) => void handleBatchLink(id, true)}
+          onDisableFrom={(id) => void handleBatchLink(id, false)}
+          onArchive={() => void handleBatchArchive()}
+        />
       )}
     </div>
   );

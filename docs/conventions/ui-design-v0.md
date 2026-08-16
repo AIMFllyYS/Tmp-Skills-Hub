@@ -58,6 +58,7 @@
 | 三栏列间 | 1px `border-line`,无间隙 | 作用域 / 集合 / 检查器(见 panel-ia-v1) |
 | 集合列行高 | `h-10` / 40px | 固定行高,供虚拟滚动切片(`SKILL_ROW_HEIGHT_PX`) |
 | 选中行 | `bg-surface` + 1px `outline-line-strong`(仅焦点) | 不用阴影表达选中 |
+| 浮动批量条 | `bg-white` + 1px 上边框 `border-line` + 与内容区同宽 | 禁止阴影/毛玻璃分层 |
 
 ## 5. 圆角与边框
 

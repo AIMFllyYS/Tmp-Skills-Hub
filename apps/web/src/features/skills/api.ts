@@ -98,6 +98,14 @@ export async function fetchArchive(): Promise<ArchiveResponse["archived"]> {
 }
 
 /** 开关背后就是 enable/disable(语义与 CLI 完全一致:只挂/摘链接,库存原件不动)。 */
+export async function archiveSkill(hash: string): Promise<void> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/archive", { method: "POST" });
+  const body = (await res.json().catch(() => null)) as { ok: boolean; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body?.message ?? "HTTP " + res.status);
+  }
+}
+
 export async function setSkillEnabled(hash: string, clientId: string, enable: boolean): Promise<void> {
   const res = await fetch("/api/skills/" + hash + "/" + (enable ? "enable" : "disable"), {
     method: "POST",
