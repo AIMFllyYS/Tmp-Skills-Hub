@@ -305,6 +305,9 @@ export default function App() {
               onToggleCheck={handleToggleCheck}
               onToggleAllVisible={handleToggleAllVisible}
               onSelectStore={handleSelectStore}
+              onAdopted={() => {
+                void fetchSkills().then(setSkills);
+              }}
               onFocus={setFocusedHash}
               clientView={
                 scope.kind === "client" && scope.id !== undefined

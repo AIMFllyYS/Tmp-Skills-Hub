@@ -24,7 +24,7 @@ import {
   type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
-import { POINTER_REL, resolveNames } from "./store-cmds.js";
+import { performAdopt, POINTER_REL, resolveNames } from "./store-cmds.js";
 import { applyLinkBatch, performLinkChange, previewLinkChange, type LinkChangeRequest, type LinkConflictItem, type LinkDiffItem } from "./link-actions.js";
 import { chatCompletion } from "./deepseek.js";
 
@@ -58,6 +58,8 @@ export interface UiAppOptions {
   webRoot?: string;
   /** 翻译实现注入(测试替身隔离网络;缺省 chatCompletion) */
   translateImpl?: typeof chatCompletion;
+  /** GitHub/skills.sh 拉取用的 fetch 替身(测试隔离真实网络) */
+  fetchImpl?: typeof fetch;
 }
 
 /** 默认静态根:编译后位于 packages/cli/dist/,上三级到仓库根,再进 apps/web/dist。 */
@@ -122,6 +124,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const storeRoot = opts.storeRoot === undefined ? null : opts.storeRoot;
   const home = opts.home ?? resolveHome();
   const translate = opts.translateImpl ?? chatCompletion;
+  const fetchImpl = opts.fetchImpl;
   const webRoot = opts.webRoot ?? defaultWebRoot();
 
   const err = (c: Context, command: string, code: string, message: string, status: 400 | 404 | 409 | 422 | 500 | 502 | 503) =>
@@ -450,6 +453,30 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
         action: resolved.action,
         created: result.created,
         removed: result.removed,
+      });
+    }),
+  );
+
+  app.post("/api/adopt", (c) =>
+    withStore(c, "adopt", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { source?: unknown } | null;
+      const source = typeof raw?.source === "string" ? raw.source.trim() : "";
+      if (source === "") return err(c, "adopt", "bad-usage", "body 需要 { source: string }", 400);
+      const report = await performAdopt(root, [source], fetchImpl !== undefined ? { fetchImpl } : {});
+      if (report.fetchFailed && report.outcomes.length === 0) {
+        return err(c, "adopt", "github-fetch-failed", report.fetchMessage ?? "拉取失败", 502);
+      }
+      return c.json({
+        ok: true,
+        command: "adopt",
+        dryRun: false,
+        storeRoot: root,
+        adopted: report.adopted,
+        duplicates: report.duplicates,
+        conflicts: report.conflicts,
+        invalid: report.invalid,
+        fetchFailed: report.fetchFailed,
+        outcomes: report.outcomes,
       });
     }),
   );

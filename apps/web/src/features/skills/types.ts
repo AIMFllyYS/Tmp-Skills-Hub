@@ -175,3 +175,22 @@ export interface LinksApplyResponse {
   created: string[];
   removed: string[];
 }
+
+export interface AdoptOutcome {
+  kind: string;
+  folder: string;
+  hash?: string | undefined;
+  existingHash?: string | undefined;
+  incomingHash?: string | undefined;
+  reason?: string | undefined;
+}
+
+export interface AdoptResponse {
+  ok: true;
+  command: "adopt";
+  adopted: number;
+  duplicates: number;
+  conflicts: number;
+  invalid: number;
+  outcomes: AdoptOutcome[];
+}

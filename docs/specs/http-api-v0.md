@@ -44,6 +44,7 @@
 | POST /api/links/preview | { hashes, clientIds, action: enable\|disable, scope? } | { ok, command: "links-preview", action, add, remove, conflictCount, wouldCreate, wouldRemove, conflicts }(不写盘) | 400 bad-usage;404 not-found;503 |
 | POST /api/links/apply | 同上 | { ok, command: "links-apply", action, created, removed }(按落点各一次 applyLinkSet) | 400;404;409 link-failed(含 conflicts,未写盘);503 |
 | POST /api/skills/:hash/archive | —(无 body) | { ok, command: "archive", dirName, archiveFile, sizeBytes, removedLinks } | 404 not-found;409(归档失败);503 |
+| POST /api/adopt | { source }(本地路径或 GitHub / skills.sh URL) | { ok, command: "adopt", adopted, duplicates, conflicts, invalid, outcomes } | 400 bad-usage;502 github-fetch-failed;503 |
 
 - `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
@@ -59,6 +60,7 @@
 | link-failed | 409 |
 | store-not-configured | 503 |
 | io-error(预留) | 500 |
+| github-fetch-failed | 502 |
 
 > 注:auth-required / group-exists / group-not-found / group-empty / invalid-skill 是 CLI 专属 code;HTTP 层不出现(无交互授权、分组操作暂不走 HTTP)。
 
