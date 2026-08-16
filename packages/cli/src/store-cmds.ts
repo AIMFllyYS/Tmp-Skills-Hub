@@ -1,7 +1,6 @@
 import path from "node:path";
 import {
   adoptMany,
-  applyLinkSet,
   archiveSkill,
   discoverClientRoots,
   discoverClientRootsAt,
@@ -14,7 +13,6 @@ import {
   resolveStoreRoot,
   STORE_ARCHIVE_DIR,
   STORE_SKILLS_DIR,
-  writeStoreIndex,
   type AdoptInput,
   type LinkEntry,
   type SkillRecord,
@@ -22,6 +20,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
+import { performLinkChange } from "./link-actions.js";
 
 export const POINTER_REL = path.join(".skills-hub", "config.json");
 
@@ -258,21 +257,6 @@ export function resolveNames(needle: string, skills: SkillRecord[]): string[] {
   throw new Error("库存中没有 " + needle + "(名字或哈希前缀都不匹配)。先 skills-hub list 看有哪些。");
 }
 
-/** 同步 index.json 的 visibleIn(由台账推导:某 dirName 在哪些客户端有链接)。 */
-export async function syncVisibleIn(storeRoot: string, ledger: LinkEntry[]): Promise<void> {
-  const skills = await readStoreIndex(storeRoot);
-  let changed = false;
-  for (const s of skills) {
-    const visible = [...new Set(ledger.filter((e) => e.entryName === s.dirName).map((e) => e.clientId))].sort();
-    const same = visible.length === s.visibleIn.length && visible.every((v, i) => v === s.visibleIn[i]);
-    if (!same) {
-      s.visibleIn = visible;
-      changed = true;
-    }
-  }
-  if (changed) await writeStoreIndex(storeRoot, skills);
-}
-
 /** 解析操作目标:按名或按分组(二选一,互斥校验)。返回 dirName 列表。 */
 async function resolveLinkTargets(
   args: LinkCmdArgs,
@@ -328,10 +312,7 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
 
   const ledger = await readLinksLedger(storeRoot);
   const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
-  const kind = process.platform === "win32" ? "junction" : "symlink";
-  const now = new Date().toISOString();
   const planNames = new Set(dirNames);
-  const keep = existing.filter((e) => !planNames.has(e.entryName));
   const added = dirNames.map((name) => {
     const record = skills.find((s) => s.dirName === name)!;
     const prev = existing.find((e) => e.entryName === name);
@@ -342,11 +323,11 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
       targetDir: client.skillsDir,
       entryName: name,
       skillHash: record.hash,
-      kind: prev?.kind ?? kind,
-      createdAt: prev?.createdAt ?? now,
+      kind: prev?.kind ?? (process.platform === "win32" ? "junction" : "symlink"),
+      createdAt: prev?.createdAt ?? new Date().toISOString(),
     } satisfies LinkEntry;
   });
-  const desired = [...keep, ...added];
+  const desired = [...existing.filter((e) => !planNames.has(e.entryName)), ...added];
 
   if (dryRun) {
     const wouldCreate = added.map((e) => e.entryName);
@@ -361,23 +342,13 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
     return;
   }
 
-  const result = await applyLinkSet(storeRoot, { targetDir: client.skillsDir, entries: desired });
+  const result = await performLinkChange(
+    { storeRoot, clientId: client.clientId, scope, skillsDir: client.skillsDir, dirNames },
+    "enable",
+  );
   if (!result.ok) {
-    const extra =
-      result.code === "unregistered-conflict"
-        ? "落点被用户自己的目录占据且台账未登记 — 绝不覆盖,请人工处理。"
-        : result.code === "not-link-conflict"
-          ? "台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。"
-          : "";
-    emitError(args.json === true, "enable", "link-failed", "enable 失败: " + result.message + (extra !== "" ? " " + extra : ""));
+    emitError(args.json === true, "enable", result.code, "enable 失败: " + result.message);
     return;
-  }
-  await syncVisibleIn(storeRoot, result.ledger);
-  // #27:enable 真实生效才计数(预演模式在 applyLinkSet 前已返回,不计数)
-  for (const p of result.created) {
-    const name = path.basename(p);
-    const record = skills.find((s) => s.dirName === name);
-    if (record !== undefined) await recordUsage(storeRoot, record.hash, "enable").catch(() => undefined);
   }
   if (args.json) {
     emitOk("enable", { clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed });
@@ -404,7 +375,6 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
   const ledger = await readLinksLedger(storeRoot);
   const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
   const drop = new Set(dirNames);
-  const desired = existing.filter((e) => !drop.has(e.entryName));
   const toRemove = existing.filter((e) => drop.has(e.entryName));
 
   if (dryRun) {
@@ -423,13 +393,14 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
     return;
   }
 
-  const result = await applyLinkSet(storeRoot, { targetDir: client.skillsDir, entries: desired });
+  const result = await performLinkChange(
+    { storeRoot, clientId: client.clientId, scope, skillsDir: client.skillsDir, dirNames },
+    "disable",
+  );
   if (!result.ok) {
-    const extra = result.code === "not-link-conflict" ? "台账条目落点已被用户替换为非链接 — 绝不触碰,请人工处理。" : "";
-    emitError(args.json === true, "disable", "link-failed", "disable 失败: " + result.message + (extra !== "" ? " " + extra : ""));
+    emitError(args.json === true, "disable", result.code, "disable 失败: " + result.message);
     return;
   }
-  await syncVisibleIn(storeRoot, result.ledger);
   if (args.json) {
     emitOk("disable", { clientId: client.clientId, scope, targetDir: client.skillsDir, created: result.created, removed: result.removed });
     return;
