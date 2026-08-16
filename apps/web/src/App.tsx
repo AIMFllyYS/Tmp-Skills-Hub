@@ -358,6 +358,14 @@ export default function App() {
       handleArchiveSkill(skill);
       return;
     }
+    if (id === "share" && skill !== undefined) {
+      void getAction("share").execute({ target: skill.dirName }).then((r) => {
+        setToast({ message: r.idempotent ? "已存在 " + r.url : r.url });
+      }).catch((e: unknown) => {
+        setToast({ message: e instanceof Error ? e.message : String(e) });
+      });
+      return;
+    }
     if (id === "analyze" && skill !== undefined) {
       void getAction("analyze").execute({ target: skill.dirName }).then((r) => {
         setToast({ message: "相近 " + String(r.similar.length) + " / 冲突 " + String(r.conflict.length) });

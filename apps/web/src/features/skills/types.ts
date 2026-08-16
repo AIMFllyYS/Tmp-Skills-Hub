@@ -217,6 +217,15 @@ export interface AnalyzeResponse {
   conflict: AnalyzeReportItem[];
 }
 
+export interface ShareResponse {
+  ok: true;
+  command: "share";
+  dirName: string;
+  url: string;
+  idempotent: boolean;
+  dryRun: boolean;
+}
+
 export interface AdoptResponse {
   ok: true;
   command: "adopt";

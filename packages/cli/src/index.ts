@@ -18,6 +18,7 @@ import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 import { runAnalyze } from "./analyze.js";
 import { runBootstrap } from "./bootstrap.js";
 import { runBackup } from "./backup-cmds.js";
+import { runShare } from "./share.js";
 import { loadEnvFile } from "./env.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
@@ -310,6 +311,20 @@ const ui = defineCommand({
   },
 });
 
+const share = defineCommand({
+  meta: { name: "share", description: "把库存 skill 推到授信仓库 skills/<name>/,返回可被 adopt 再拉回的链接(写操作,非交互需 --yes;需 GITHUB_TOKEN)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "只打印将要发生的变更,不写远端" },
+    json: { type: "boolean", description: "机器可读输出" },
+    repo: { type: "string", description: "覆盖授信仓库(owner/repo 或 GitHub URL;默认读库存 manifest.trustedRepo)" },
+  },
+  run({ args }) {
+    return runShare(args);
+  },
+});
+
 const backup = defineCommand({
   meta: { name: "backup", description: "备份客户端 skills:默认增量(共享 blob 池复用),--full 强制新建快照;list / verify 只读" },
   args: {
@@ -343,7 +358,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, ui, bootstrap },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, ui, bootstrap },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。

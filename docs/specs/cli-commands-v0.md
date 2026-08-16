@@ -34,6 +34,7 @@ CLI 是三种使用者的共同入口：**人**在终端用它、**Web 面板**�
 | `backup [--full]` | 建客户端 skills 基线快照（默认增量：共享 blob 池只补新内容；`--full` 强制新建快照并完整遍历） | 人 / AI |
 | `backup list` | 列已有快照与最近备份时间 | 人 / AI |
 | `backup verify [snapshotId]` | 用 manifest 重算 blob 哈希，报告损坏/缺失 | 人 / AI |
+| `share <name>` | 把库存 skill 推到授信仓库 `skills/<name>/`，返回可被 `adopt` 再拉回的 GitHub tree 链接 | 人 / 面板 |
 | `ui` | 起本地服务与面板 | 人 |
 | `bootstrap` | 一键体验：交互确认（库存位置/备份/迁移）→ 自动备份 → 收录全部本机 skills → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
 
@@ -43,7 +44,7 @@ CLI 是三种使用者的共同入口：**人**在终端用它、**Web 面板**�
 
 - **没有 `delete` 命令。** 所有删除一律是 `archive`（软删除）。需要彻底删除时，只向用户显示归档文件的路径，由用户自己动手。代码里不存在真删除 skill 内容的路径。
 - **`disable` 不等于删除。** 它只摘链接，库存原件一个字节不动。
-- **写操作默认要确认。** `adopt`、`enable`、`disable`、`archive`、`archive restore`、`backup` 在交互终端下需确认；非交互环境必须显式 `--yes`，否则拒绝执行。`backup list` / `backup verify` 只读，不需 `--yes`。
+- **写操作默认要确认。** `adopt`、`enable`、`disable`、`archive`、`archive restore`、`backup`、`share` 在交互终端下需确认；非交互环境必须显式 `--yes`，否则拒绝执行。`backup list` / `backup verify` 只读，不需 `--yes`。面板「分享」按钮算显式操作。
 
 ## 3. 全局参数
 

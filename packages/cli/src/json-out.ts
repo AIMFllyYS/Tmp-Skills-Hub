@@ -18,6 +18,8 @@ export type JsonErrorCode =
   | "github-fetch-failed"
   | "analyze-failed"
   | "verify-failed"
+  | "github-push-failed"
+  | "remote-conflict"
   | "io-error";
 
 /** 失败信封:--json 输出到 stdout,人类文本进 stderr,退出码 2。 */
