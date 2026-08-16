@@ -44,7 +44,8 @@ describe("skill-files", () => {
 
   it("路径穿越被拒绝(outside)", async () => {
     const dir = await makeSkill();
-    const res = await readSkillFile(dir, "..\\..\\secret.txt");
+    // path.join 生成平台各自的分隔符:Windows \\,POSIX /
+    const res = await readSkillFile(dir, path.join("..", "..", "secret.txt"));
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("outside");
   });
