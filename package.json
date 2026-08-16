@@ -10,8 +10,9 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "build": "pnpm -r run build",
-    "typecheck": "tsc -b --force && pnpm --filter @skills-hub/web run typecheck",
+    "typecheck": "pnpm -r run typecheck && pnpm --filter @skills-hub/web run typecheck",
     "lint": "eslint .",
+    "test": "pnpm -r run test",
     "dev:web": "pnpm --filter @skills-hub/web dev",
     "dev:cli": "pnpm --filter @skills-hub/cli dev"
   },
