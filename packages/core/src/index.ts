@@ -57,5 +57,5 @@ export {
 export type { GroupDef, GroupsFile } from "./groups.js";
 export { readUsageStats, recordUsage, usageRanking, STATS_FILE_VERSION } from "./stats.js";
 export type { StatsFile, UsageCounters, UsageKind, UsageRankEntry } from "./stats.js";
-export { listSkillFiles, readSkillFile, MAX_FILE_BYTES, MAX_TREE_ENTRIES } from "./skill-files.js";
-export type { SkillFileEntry, SkillFileReadResult, SkillTreeResult } from "./skill-files.js";
+export { listSkillFiles, readSkillFile, saveSkillFile, MAX_FILE_BYTES, MAX_TREE_ENTRIES } from "./skill-files.js";
+export type { SkillFileEntry, SkillFileReadResult, SkillSaveResult, SkillTreeResult } from "./skill-files.js";

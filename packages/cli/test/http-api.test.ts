@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, readlink, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -193,6 +193,48 @@ describe("http-api 契约", () => {
     const file = await (await app.request("/api/skills/demo/file?path=SKILL.md")).json() as { ok: boolean; content: string };
     expect(file.ok).toBe(true);
     if (file.ok) expect(file.content).toContain("demo");
+  });
+
+  it("保存:写回原件,哈希更新,链接读穿可见新内容,旧内容进版本归档", async () => {
+    const before = (await (await app.request("/api/skills/demo/tree")).json()) as { ok: boolean };
+    expect(before.ok).toBe(true);
+    // 先启用 claude 链接(验收点:通过客户端目录的链接读取能看到新内容)
+    const enable = await app.request("/api/skills/demo/enable", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: '{"clientId":"claude"}',
+    });
+    expect(enable.status).toBe(200);
+    const res = await app.request("/api/skills/demo/file?path=SKILL.md", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "# demo\n\nedited by test\n" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; hash: string };
+    expect(body.ok).toBe(true);
+    expect(body.hash).toMatch(/^[0-9a-f]{64}$/);
+    // 通过客户端链接(沙箱 home/.claude/skills/demo)读取 → 能看到新内容(验收点)
+    const viaLink = await readFile(path.join(home, ".claude", "skills", "demo", "SKILL.md"), "utf8");
+    expect(viaLink).toContain("edited by test");
+    // 版本归档存在
+    const versions = await readdir(path.join(storeRoot, "archive", "versions"));
+    expect(versions.length).toBeGreaterThan(0);
+  });
+
+  it("保存:路径穿越拒绝,body 缺 content 拒绝", async () => {
+    const res = await app.request("/api/skills/demo/file?path=..%2F..%2Fx.md", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: "hi" }),
+    });
+    expect(res.status).toBe(400);
+    const bad = await app.request("/api/skills/demo/file?path=SKILL.md", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(bad.status).toBe(400);
   });
 
   it("查看:路径穿越被拒绝(outside),未知文件 404", async () => {

@@ -10,9 +10,10 @@ interface SkillListProps {
   /** 失败原因(展示在对应卡片内) */
   errors: Map<string, string>;
   onToggle: (skill: SkillRecord, clientId: string, enable: boolean) => void;
+  onSaved: (newHash: string) => void;
 }
 
-export function SkillList({ skills, clients, usageByHash, pendingHash, errors, onToggle }: SkillListProps): React.JSX.Element {
+export function SkillList({ skills, clients, usageByHash, pendingHash, errors, onToggle, onSaved }: SkillListProps): React.JSX.Element {
   if (skills.length === 0) {
     return <p className="text-sm text-ink-mid">没有匹配的 skill。</p>;
   }
@@ -27,6 +28,7 @@ export function SkillList({ skills, clients, usageByHash, pendingHash, errors, o
           pending={pendingHash === skill.hash}
           error={errors.get(skill.hash) ?? null}
           onToggle={(clientId, enable) => onToggle(skill, clientId, enable)}
+          onSaved={onSaved}
         />
       ))}
     </ul>
