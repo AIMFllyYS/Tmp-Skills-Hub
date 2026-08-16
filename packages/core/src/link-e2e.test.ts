@@ -36,7 +36,7 @@ async function makeSkill(dir: string, name: string, content: string): Promise<st
 }
 
 /** 建链 → 读穿 → 内容一致 → 摘链 → 原件保留,全流程一轮。 */
-async function runLinkRoundtrip(linkType: "junction" | "symlink"): Promise<void> {
+async function runLinkRoundtrip(linkType: "junction" | "dir"): Promise<void> {
   const work = await tmp();
   const store = path.join(work, "store");
   await initializeStoreLayout(store);
@@ -77,7 +77,7 @@ describe("沙箱链接读穿 E2E(#24)", () => {
   });
 
   it.runIf(process.platform !== "win32")("POSIX:symlink 建链→读穿→摘链→原件保留", async () => {
-    await runLinkRoundtrip("symlink");
+    await runLinkRoundtrip("dir");
   });
 
   it("本机链接能力与调研结论一致(win32 必有 junction)", async () => {
