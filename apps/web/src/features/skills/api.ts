@@ -1,5 +1,5 @@
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
-import type { ArchiveResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, GroupsResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
+import type { ArchiveResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchSkills(): Promise<SkillRecord[]> {
@@ -122,6 +122,32 @@ export async function archiveSkill(hash: string): Promise<void> {
   if (!res.ok || body === null || !body.ok) {
     throw new Error(body?.message ?? "HTTP " + res.status);
   }
+}
+
+export async function previewLinks(params: LinksBatchParams): Promise<LinksPreviewResponse> {
+  const res = await fetch("/api/links/preview", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const body = (await res.json().catch(() => null)) as LinksPreviewResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
+}
+
+export async function applyLinks(params: LinksBatchParams): Promise<LinksApplyResponse> {
+  const res = await fetch("/api/links/apply", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const body = (await res.json().catch(() => null)) as LinksApplyResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
 }
 
 export async function setSkillEnabled(hash: string, clientId: string, enable: boolean): Promise<void> {

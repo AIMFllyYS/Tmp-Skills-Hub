@@ -25,7 +25,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { POINTER_REL, resolveNames } from "./store-cmds.js";
-import { performLinkChange } from "./link-actions.js";
+import { applyLinkBatch, performLinkChange, previewLinkChange, type LinkChangeRequest, type LinkConflictItem, type LinkDiffItem } from "./link-actions.js";
 import { chatCompletion } from "./deepseek.js";
 
 export const DEFAULT_UI_PORT = 4321;
@@ -358,6 +358,101 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   app.post("/api/skills/:hash/enable", linkEndpoint("enable"));
   app.post("/api/skills/:hash/disable", linkEndpoint("disable"));
+
+  interface LinksBatchBody {
+    hashes: string[];
+    clientIds: string[];
+    action: "enable" | "disable";
+    scope: "global" | "project";
+  }
+
+  const parseLinksBatch = async (c: Context): Promise<LinksBatchBody | { error: string }> => {
+    const raw = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (raw === null) return { error: "body 需要 JSON { hashes, clientIds, action }" };
+    const hashes = Array.isArray(raw.hashes) ? raw.hashes.filter((h): h is string => typeof h === "string" && h.trim() !== "") : [];
+    const clientIds = Array.isArray(raw.clientIds) ? raw.clientIds.filter((id): id is string => typeof id === "string" && id.trim() !== "") : [];
+    const action = raw.action === "disable" ? "disable" : raw.action === "enable" ? "enable" : null;
+    if (hashes.length === 0 || clientIds.length === 0 || action === null) {
+      return { error: "body 需要非空 hashes[]、clientIds[] 与 action: enable|disable" };
+    }
+    return { hashes, clientIds, action, scope: raw.scope === "project" ? "project" : "global" };
+  };
+
+  const resolveBatchRequests = async (
+    root: string,
+    body: LinksBatchBody,
+  ): Promise<{ ok: true; action: "enable" | "disable"; items: LinkChangeRequest[] } | { ok: false; code: "not-found"; message: string }> => {
+    const skills = await readStoreIndex(root);
+    const dirNames: string[] = [];
+    for (const needle of body.hashes) {
+      try {
+        const name = resolveNames(needle, skills)[0];
+        if (name === undefined) return { ok: false, code: "not-found", message: "未找到 skill: " + needle };
+        if (!dirNames.includes(name)) dirNames.push(name);
+      } catch {
+        return { ok: false, code: "not-found", message: "未找到 skill: " + needle };
+      }
+    }
+    const items: LinkChangeRequest[] = [];
+    for (const clientId of body.clientIds) {
+      const client = await resolveClientSkillsDirAt(home, clientId, body.scope, storeRoot);
+      if (client === null) return { ok: false, code: "not-found", message: "未找到客户端: " + clientId };
+      items.push({ storeRoot: root, clientId: client.clientId, scope: body.scope, skillsDir: client.skillsDir, dirNames });
+    }
+    return { ok: true, action: body.action, items };
+  };
+
+  app.post("/api/links/preview", (c) =>
+    withStore(c, "links-preview", async (root) => {
+      const parsed = await parseLinksBatch(c);
+      if ("error" in parsed) return err(c, "links-preview", "bad-usage", parsed.error, 400);
+      const resolved = await resolveBatchRequests(root, parsed);
+      if (!resolved.ok) return err(c, "links-preview", resolved.code, resolved.message, 404);
+      const wouldCreate: LinkDiffItem[] = [];
+      const wouldRemove: LinkDiffItem[] = [];
+      const conflicts: LinkConflictItem[] = [];
+      for (const item of resolved.items) {
+        const preview = await previewLinkChange(item, resolved.action);
+        wouldCreate.push(...preview.wouldCreate);
+        wouldRemove.push(...preview.wouldRemove);
+        conflicts.push(...preview.conflicts);
+      }
+      return c.json({
+        ok: true,
+        command: "links-preview",
+        action: resolved.action,
+        add: wouldCreate.length,
+        remove: wouldRemove.length,
+        conflictCount: conflicts.length,
+        wouldCreate,
+        wouldRemove,
+        conflicts,
+      });
+    }),
+  );
+
+  app.post("/api/links/apply", (c) =>
+    withStore(c, "links-apply", async (root) => {
+      const parsed = await parseLinksBatch(c);
+      if ("error" in parsed) return err(c, "links-apply", "bad-usage", parsed.error, 400);
+      const resolved = await resolveBatchRequests(root, parsed);
+      if (!resolved.ok) return err(c, "links-apply", resolved.code, resolved.message, 404);
+      const result = await applyLinkBatch(resolved.items, resolved.action);
+      if (!result.ok) {
+        return c.json(
+          { ok: false, command: "links-apply", code: result.code, message: result.message, conflicts: result.conflicts ?? [] },
+          409,
+        );
+      }
+      return c.json({
+        ok: true,
+        command: "links-apply",
+        action: resolved.action,
+        created: result.created,
+        removed: result.removed,
+      });
+    }),
+  );
 
   app.post("/api/skills/:hash/archive", (c) =>
     withStore(c, "archive", async (root) => {
