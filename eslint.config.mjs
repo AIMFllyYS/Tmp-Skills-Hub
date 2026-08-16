@@ -25,4 +25,20 @@ export default tseslint.config(
     files: ["packages/cli/**/*.ts"],
     rules: { "no-console": "off" },
   },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        AbortController: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        WebSocket: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        process: "readonly",
+        setTimeout: "readonly",
+      },
+    },
+    rules: { "no-console": "off" },
+  },
 );

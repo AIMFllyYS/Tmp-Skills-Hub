@@ -9,6 +9,7 @@
 | [`setup/`](./setup/) | 环境初始化、依赖安装、配置生成 |
 | [`build/`](./build/) | 构建辅助、产物检查、bundle 分析 |
 | [`dev/`](./dev/) | 开发辅助工具、mock 数据生成、调试脚本 |
+| [`smoke-panel.mjs`](./smoke-panel.mjs) | 面板真机冒烟（Chrome CDP；`pnpm smoke`） |
 
 ## 脚本规范
 

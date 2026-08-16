@@ -22,8 +22,8 @@ export const SkillCard = memo(function SkillCard({ skill, clients, usage, pendin
   const origins = skill.origins.map((o) => o.kind).join(" / ");
   const total = (usage?.show ?? 0) + (usage?.enable ?? 0);
   return (
-    <li className="rounded-xl border border-line bg-white p-4">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="block w-full text-left">
+    <li className="rounded-xl border border-line bg-white p-4" data-testid="skill-card">
+      <button type="button" data-testid="skill-card-open" onClick={() => setOpen((v) => !v)} className="block w-full text-left">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-sm font-medium text-ink-strong hover:underline">{skill.dirName}</h2>
           <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs text-ink-mid">{origins}</span>
@@ -52,6 +52,7 @@ export const SkillCard = memo(function SkillCard({ skill, clients, usage, pendin
               <span className="text-xs text-ink-mid">{client.clientId}</span>
               <button
                 type="button"
+                data-testid="client-switch"
                 aria-pressed={enabled}
                 disabled={pending}
                 onClick={() => onToggle(skill, client.clientId, !enabled)}
