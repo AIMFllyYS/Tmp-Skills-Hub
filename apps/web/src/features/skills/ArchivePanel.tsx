@@ -1,3 +1,4 @@
+import { getAction } from "../actions/registry.js";
 import type { ArchivedSkill } from "./types.js";
 
 function formatBytes(n: number): string {
@@ -7,7 +8,13 @@ function formatBytes(n: number): string {
 }
 
 /** 归档区:列出已归档内容与绝对路径(软删除铁律的可见部分)。没有真删除按钮。 */
-export function ArchivePanel({ archived }: { archived: ArchivedSkill[] }): React.JSX.Element {
+export function ArchivePanel({
+  archived,
+  onRestore,
+}: {
+  archived: ArchivedSkill[];
+  onRestore: (name: string) => void;
+}): React.JSX.Element {
   if (archived.length === 0) {
     return <p className="text-sm text-ink-mid">归档区是空的。归档 = 软删除:本工具不提供真删除。</p>;
   }
@@ -23,8 +30,15 @@ export function ArchivePanel({ archived }: { archived: ArchivedSkill[] }): React
           </div>
           <p className="mt-1 font-mono text-xs text-ink-faint break-all">{a.file}</p>
           <p className="mt-1 text-xs text-ink-mid">
-            归档于 {new Date(a.archivedAt).toLocaleString()} · 如需彻底删除,请自行处理上述文件(本工具不提供真删除)
+            归档于 {new Date(a.archivedAt).toLocaleString()} · 彻底清除请自行处理上述文件(本工具不提供删除按钮)
           </p>
+          <button
+            type="button"
+            onClick={() => onRestore(a.name)}
+            className="mt-2 rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
+          >
+            {getAction("restore").verb}到活跃区
+          </button>
         </li>
       ))}
     </ul>

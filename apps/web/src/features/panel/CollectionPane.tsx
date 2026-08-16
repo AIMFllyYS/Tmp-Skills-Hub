@@ -39,6 +39,7 @@ interface CollectionPaneProps {
   onFocus: (hash: string) => void;
   clientView: ClientViewInfo | null;
   onAdopted: () => void;
+  onRestore: (name: string) => void;
 }
 
 const inputClass =
@@ -114,12 +115,13 @@ export function CollectionPane({
   onFocus,
   clientView,
   onAdopted,
+  onRestore,
 }: CollectionPaneProps): React.JSX.Element {
   if (scope.kind === "archive") {
     return (
       <div className="p-4">
         <h2 className="mb-3 text-sm font-medium text-ink-strong">归档区</h2>
-        <ArchivePanel archived={archived} />
+        <ArchivePanel archived={archived} onRestore={onRestore} />
       </div>
     );
   }

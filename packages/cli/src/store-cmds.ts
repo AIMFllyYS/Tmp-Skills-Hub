@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   adoptMany,
   archiveSkill,
+  restoreArchivedSkill,
   discoverClientRoots,
   discoverClientRootsAt,
   hashSkillFolder,
@@ -527,6 +528,40 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
   const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
   const storeRoot = await resolveStoreRootOrFail(args, "archive");
   if (storeRoot === null) return;
+
+  if (names[0] === "restore") {
+    const targets = names.slice(1);
+    if (targets.length === 0) {
+      emitError(args.json === true, "archive", "bad-usage", "用法: skills-hub archive restore <name>");
+      return;
+    }
+    const dryRun = args.dryRun === true;
+    if (!dryRun && !requireWriteAuth(args, "archive")) return;
+    if (dryRun) {
+      if (args.json) emitOk("archive", { verb: "restore", dryRun: true, names: targets });
+      else {
+        console.log("预演(不写盘):");
+        for (const n of targets) console.log("  将恢复: " + n);
+      }
+      return;
+    }
+    let failed = 0;
+    const results: unknown[] = [];
+    for (const n of targets) {
+      const res = await restoreArchivedSkill(storeRoot, n);
+      if (res.ok) {
+        results.push({ name: n, ok: true, hash: res.hash, archiveFile: res.archiveFile });
+        console.log("✓ 已恢复: " + res.dirName + " (" + res.hash.slice(0, 12) + ")");
+      } else {
+        failed++;
+        results.push({ name: n, ok: false, code: res.code, message: res.message });
+        console.error("✗ 恢复失败: " + n + " — " + res.message);
+      }
+    }
+    if (args.json) emitOk("archive", { verb: "restore", results, failed });
+    if (failed > 0) process.exitCode = 2;
+    return;
+  }
 
   // 无参数:列出归档区(可被列出与定位)
   if (names.length === 0) {

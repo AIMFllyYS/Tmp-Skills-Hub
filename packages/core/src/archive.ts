@@ -1,10 +1,12 @@
-import { lstat, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { hashSkillFolder } from "./hash.js";
 import { applyLinkSet } from "./link-switch.js";
 import { readLinksLedger } from "./links.js";
+import { readSkillMeta } from "./skill-md.js";
 import { readStoreIndex, writeStoreIndex } from "./store.js";
 import { STORE_ARCHIVE_DIR, STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
-import { zipDirectory } from "./zip.js";
+import { unzipDirectory, zipDirectory } from "./zip.js";
 
 /**
  * 软删除与归档(#23)。产品铁律:没有真删除。
@@ -114,4 +116,63 @@ export async function listArchivedSkills(storeRoot: string): Promise<ArchivedSki
     out.push({ file: full, name: m?.[1] ?? f, sizeBytes: st.size, archivedAt: st.mtime.toISOString() });
   }
   return out;
+}
+
+export interface RestoreOk {
+  ok: true;
+  dirName: string;
+  hash: string;
+  archiveFile: string;
+}
+
+export interface RestoreFailed {
+  ok: false;
+  code: "not-found" | "conflict" | "io-error";
+  message: string;
+}
+
+export type RestoreResult = RestoreOk | RestoreFailed;
+
+/** 从归档 zip 恢复到活跃区。不恢复链接;不删除 zip(没有真删除)。 */
+export async function restoreArchivedSkill(storeRoot: string, name: string): Promise<RestoreResult> {
+  const archived = await listArchivedSkills(storeRoot);
+  const matches = archived.filter((a) => a.name === name || path.basename(a.file) === name);
+  if (matches.length === 0) {
+    return { ok: false, code: "not-found", message: "归档区没有 " + name };
+  }
+  const pick = matches[matches.length - 1]!;
+  const dest = path.join(storeRoot, STORE_SKILLS_DIR, pick.name);
+  const index = await readStoreIndex(storeRoot);
+  if (index.some((s) => s.dirName === pick.name) || (await existsDir(dest))) {
+    return { ok: false, code: "conflict", message: "活跃区已有 " + pick.name + ",未覆盖" };
+  }
+  const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "restore." + process.pid + "-" + Date.now());
+  try {
+    await mkdir(tmpDir, { recursive: true });
+    await unzipDirectory(await readFile(pick.file), tmpDir);
+    const meta = (await readSkillMeta(tmpDir)) ?? { name: pick.name, description: "" };
+    const hash = await hashSkillFolder(tmpDir);
+    await rename(tmpDir, dest);
+    index.push({
+      hash,
+      dirName: pick.name,
+      meta,
+      origins: [{ kind: "archive-restore", reference: pick.file }],
+      visibleIn: [],
+      installedAt: new Date().toISOString(),
+    });
+    await writeStoreIndex(storeRoot, index);
+    return { ok: true, dirName: pick.name, hash, archiveFile: pick.file };
+  } catch (e) {
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+    return { ok: false, code: "io-error", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function existsDir(p: string): Promise<boolean> {
+  try {
+    return (await lstat(p)).isDirectory();
+  } catch {
+    return false;
+  }
 }

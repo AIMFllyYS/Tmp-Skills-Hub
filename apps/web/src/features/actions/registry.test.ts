@@ -23,5 +23,7 @@ describe("ACTION_REGISTRY", () => {
     expect(getAction("preview-links").supportsPreview).toBe(true);
     expect(getAction("apply-links").supportsPreview).toBe(true);
     expect(getAction("adopt").verb).toBe("收录");
+    expect(getAction("restore").verb).toBe("恢复");
+    expect(getAction("restore").destructive).toBe(false);
   });
 });

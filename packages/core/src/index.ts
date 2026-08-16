@@ -43,9 +43,9 @@ export {
 export type { LinkEntry, LinkEntryCheck, LinkEntryKind, LinkEntryState, LinksLedgerFile } from "./links.js";
 export { applyLinkSet } from "./link-switch.js";
 export type { ApplyOptions, LinkSetFailed, LinkSetOk, LinkSetPlan, LinkSetResult } from "./link-switch.js";
-export { archiveSkill, listArchivedSkills } from "./archive.js";
-export type { ArchivedSkill, ArchiveFailed, ArchiveOk, ArchiveResult } from "./archive.js";
-export { crc32, zipDirectory, zipEntries } from "./zip.js";
+export { archiveSkill, listArchivedSkills, restoreArchivedSkill } from "./archive.js";
+export type { ArchivedSkill, ArchiveFailed, ArchiveOk, ArchiveResult, RestoreFailed, RestoreOk, RestoreResult } from "./archive.js";
+export { crc32, unzipDirectory, zipDirectory, zipEntries } from "./zip.js";
 export {
   addSkillToGroups,
   BUILTIN_GROUPS,

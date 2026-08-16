@@ -498,6 +498,16 @@ describe("http-api 契约", () => {
     expect(arch.archived[0]!.name).toBe("demo");
   });
 
+  it("restore:归档后恢复,活跃区回来", async () => {
+    const res = await app.request("/api/skills/demo/restore", { method: "POST" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { command: string; dirName: string; hash: string };
+    expect(body.command).toBe("restore");
+    expect(body.dirName).toBe("demo");
+    const list = (await (await app.request("/api/skills")).json()) as { total: number; skills: { dirName: string }[] };
+    expect(list.skills.some((s) => s.dirName === "demo")).toBe(true);
+  });
+
   it("adopt 本地:重复内容返回已存在", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-dup-"));
     tempRoots.push(dir);

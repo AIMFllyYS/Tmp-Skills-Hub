@@ -1,5 +1,6 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isSafeRelativePath } from "./github-files.js";
 
 /**
  * 最小 ZIP 写入器(store 模式,无压缩):归档用,零依赖。
@@ -136,5 +137,16 @@ export async function zipEntries(buf: Uint8Array): Promise<Map<string, Uint8Arra
     off += 46 + nameLen + extraLen + commentLen;
   }
   return map;
+}
+
+/** 把 store 模式 zip 解到 dest(拒绝 .. / 绝对路径)。 */
+export async function unzipDirectory(buf: Uint8Array, dest: string): Promise<void> {
+  const entries = await zipEntries(buf);
+  for (const [rel, bytes] of entries) {
+    if (!isSafeRelativePath(rel)) throw new Error("zip 含非法路径: " + rel);
+    const full = path.join(dest, ...rel.split("/"));
+    await mkdir(path.dirname(full), { recursive: true });
+    await writeFile(full, bytes);
+  }
 }
 

@@ -2,7 +2,8 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { archiveSkill, listArchivedSkills } from "./archive.js";
+import { archiveSkill, listArchivedSkills, restoreArchivedSkill } from "./archive.js";
+import { hashSkillFolder } from "./hash.js";
 import { readLinksLedger } from "./links.js";
 import { applyLinkSet } from "./link-switch.js";
 import { readStoreIndex } from "./store.js";
@@ -127,6 +128,63 @@ describe("归档(#23)", () => {
     expect(await readLinksLedger(w.store)).toEqual([]);
     // tmp 无残留
     expect(await readdir(path.join(w.store, STORE_TMP_DIR))).toEqual([]);
+  });
+
+  it("恢复后内容与归档前逐字节一致,哈希相同", async () => {
+    const w = await world();
+    const payload = "---\nname: demo\ndescription: d\n---\npayload-restore";
+    await makeSkill(w.store, "demo", payload);
+    const { writeStoreIndex } = await import("./store.js");
+    const hash = await hashSkillFolder(path.join(w.store, STORE_SKILLS_DIR, "demo"));
+    await writeStoreIndex(w.store, [{
+      dirName: "demo",
+      hash,
+      meta: { name: "demo", description: "d" },
+      origins: [{ kind: "local-scan", reference: "x" }],
+      installedAt: "2026-08-16T00:00:00.000Z",
+      visibleIn: [],
+    }]);
+    const archived = await archiveSkill(w.store, "demo");
+    expect(archived.ok).toBe(true);
+    const restored = await restoreArchivedSkill(w.store, "demo");
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    expect(restored.hash).toBe(hash);
+    expect(await readFile(path.join(w.store, STORE_SKILLS_DIR, "demo", "SKILL.md"), "utf8")).toBe(payload);
+    expect((await readStoreIndex(w.store)).map((s) => s.hash)).toEqual([hash]);
+    expect(await readdir(path.join(w.store, STORE_ARCHIVE_DIR))).toHaveLength(1);
+  });
+
+  it("活跃区已有同名则 conflict,不覆盖,zip 仍在", async () => {
+    const w = await world();
+    await makeSkill(w.store, "demo", "---\nname: demo\ndescription: d\n---\nold");
+    const { writeStoreIndex } = await import("./store.js");
+    const hash = await hashSkillFolder(path.join(w.store, STORE_SKILLS_DIR, "demo"));
+    await writeStoreIndex(w.store, [{
+      dirName: "demo",
+      hash,
+      meta: { name: "demo", description: "d" },
+      origins: [{ kind: "local-scan", reference: "x" }],
+      installedAt: "2026-08-16T00:00:00.000Z",
+      visibleIn: [],
+    }]);
+    const archived = await archiveSkill(w.store, "demo");
+    expect(archived.ok).toBe(true);
+    await makeSkill(w.store, "demo", "---\nname: demo\ndescription: d\n---\nlive");
+    await writeStoreIndex(w.store, [{
+      dirName: "demo",
+      hash: "live",
+      meta: { name: "demo", description: "d" },
+      origins: [{ kind: "local-scan", reference: "x" }],
+      installedAt: "2026-08-16T00:00:00.000Z",
+      visibleIn: [],
+    }]);
+    const restored = await restoreArchivedSkill(w.store, "demo");
+    expect(restored.ok).toBe(false);
+    if (restored.ok) return;
+    expect(restored.code).toBe("conflict");
+    expect(await readFile(path.join(w.store, STORE_SKILLS_DIR, "demo", "SKILL.md"), "utf8")).toContain("live");
+    expect(await readdir(path.join(w.store, STORE_ARCHIVE_DIR))).toHaveLength(1);
   });
 
   it("不存在记录 → not-found,不产生任何副作用", async () => {
