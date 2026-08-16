@@ -36,7 +36,7 @@ export function SkillCard({ skill, clients, usage, pending, error, onToggle, onS
           </p>
         </div>
       </button>
-      {open && <SkillViewer hash={skill.hash} onClose={() => setOpen(false)} onSaved={onSaved} />}
+      {open && <SkillViewer key={skill.hash} hash={skill.hash} onClose={() => setOpen(false)} onSaved={onSaved} />}
       <ul className="mt-3 space-y-1.5">
         {clients.map((client) => {
           const enabled = skill.visibleIn.includes(client.clientId);
