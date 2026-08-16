@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline";
 import path from "node:path";
-import { cp, mkdir, readdir, realpath, rename, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import {
   discoverClientRoots,
@@ -58,6 +58,45 @@ async function writePointerFile(home: string, storeRoot: string): Promise<void> 
   await rename(tmp, pointerFile);
 }
 
+/**
+ * 树复制:跟随符号链接复制内容,悬空链接跳过,返回计数。
+ * 客户端 skills 目录天然含链接条目(本项目 enable 挂的 junction、用户/其他工具挂的链接):
+ * - 链接指向存在 → 跟随复制内容(备份是"内容保险",不是"链接保险")
+ * - 链接悬空(目标已删除,如 .continue/skills/agent-onboarding)→ 跳过不炸
+ * 不用 fs.cp:它默认重建链接本身(Windows 创建 symlink 需管理员/开发者模式 → EPERM),
+ * dereference:true 时又对悬空链接抛 ENOENT,两种都实测踩到。
+ */
+export async function copyTree(src: string, dest: string): Promise<{ copied: number; skipped: number }> {
+  const st = await stat(src); // stat 跟随链接;悬空链接在此抛 ENOENT,由调用方跳过
+  if (st.isDirectory()) {
+    await mkdir(dest, { recursive: true });
+    const entries = await readdir(src, { withFileTypes: true });
+    let copied = 0;
+    let skipped = 0;
+    for (const e of entries) {
+      const s = path.join(src, e.name);
+      const d = path.join(dest, e.name);
+      try {
+        const r = await copyTree(s, d);
+        copied += r.copied;
+        skipped += r.skipped;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          skipped += 1; // 悬空链接:没有内容可复制
+          continue;
+        }
+        throw err;
+      }
+    }
+    return { copied, skipped };
+  }
+  if (st.isFile()) {
+    await copyFile(src, dest);
+    return { copied: 1, skipped: 0 };
+  }
+  return { copied: 0, skipped: 1 }; // 设备等特殊条目:跳过
+}
+
 /** 备份:把全部客户端 skills 目录复制到 <库存根>/backups/<时间戳>/roots/<clientId>/<rel>/。 */
 export async function backupAllClientSkills(
   baseHome: string,
@@ -78,7 +117,7 @@ export async function backupAllClientSkills(
     const rel = path.relative(realBase, root.skillsDir).split(path.sep).join("/");
     if (rel.startsWith("..") || path.isAbsolute(rel)) continue; // 防御:skillsDir 不在 baseHome 下则跳过
     const dest = path.join(destBase, root.clientId, rel);
-    await cp(root.skillsDir, dest, { recursive: true, force: true });
+    await copyTree(root.skillsDir, dest);
     skillDirs += 1;
   }
   await writeFile(

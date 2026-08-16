@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -83,5 +83,24 @@ describe("runBootstrap", () => {
     const home = await newHome();
     await runBootstrap({ home });
     expect(process.exitCode).toBe(2);
+  });
+
+  it("备份跟随链接复制内容(客户端目录含 junction 时不炸,内容完整)", async () => {
+    const home = await newHome();
+    // 真实世界形态:.claude/skills 下挂一个指向别处的链接(本项目 enable 即生产这种链接)
+    const realDir = path.join(home, ".agents", "skills", "linked-skill");
+    await mkdir(realDir, { recursive: true });
+    await writeFile(path.join(realDir, "SKILL.md"), ["---", "name: linked-skill", "description: linked test skill", "---", "", "# linked"].join("\n") + "\n", "utf8");
+    await symlink(realDir, path.join(home, ".claude", "skills", "linked-skill"), "junction");
+    // 悬空链接:目标已删除(真实机器上 .continue/skills/agent-onboarding 即此形态)
+    await symlink(path.join(home, ".agents", "skills", "ghost"), path.join(home, ".claude", "skills", "dangling-skill"), "junction");
+    const ask = answers(["", "Y", "Y"]);
+    await runBootstrap({ home }, { readLine: ask as never, ui: false });
+    // 链接内容被复制(而非尝试重建链接 → Windows EPERM)
+    const backups = await import("node:fs/promises").then((m) => m.readdir(path.join(home, "backups")));
+    const snap = path.join(home, "backups", backups[0]!);
+    await expect(
+      readFile(path.join(snap, "roots", "claude", ".claude", "skills", "linked-skill", "SKILL.md"), "utf8"),
+    ).resolves.toContain("name: linked-skill");
   });
 });
