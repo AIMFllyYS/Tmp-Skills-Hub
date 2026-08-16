@@ -306,7 +306,7 @@ const group = defineCommand({
 });
 
 const archive = defineCommand({
-  meta: { name: "archive", description: "软删除:移出活跃区归档为 zip(无真删除;无参数时列出归档区;写操作,非交互需 --yes)" },
+  meta: { name: "archive", description: "软删除:移出活跃区归档为 zip;archive restore <name> 从归档恢复(不恢复链接、不删 zip;无真删除;无参数时列出归档区;写操作,非交互需 --yes)" },
   args: {
     home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
     yes: { type: "boolean", description: "非交互环境下显式授权写操作" },

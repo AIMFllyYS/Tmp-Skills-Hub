@@ -5,6 +5,7 @@ import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import {
   archiveSkill,
+  restoreArchivedSkill,
   classifyClientLink,
   discoverClientRoots,
   discoverClientRootsAt,
@@ -496,6 +497,18 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const res = await archiveSkill(root, dirName);
       if (!res.ok) return err(c, "archive", res.code, res.message, 409);
       return c.json({ ok: true, command: "archive", dirName, archiveFile: res.archiveFile, sizeBytes: res.sizeBytes, removedLinks: res.removedLinks });
+    }),
+  );
+
+  app.post("/api/skills/:hash/restore", (c) =>
+    withStore(c, "restore", async (root) => {
+      const needle = c.req.param("hash") ?? "";
+      const res = await restoreArchivedSkill(root, needle);
+      if (!res.ok) {
+        const status = res.code === "not-found" ? 404 : res.code === "conflict" ? 409 : 500;
+        return err(c, "restore", res.code, res.message, status);
+      }
+      return c.json({ ok: true, command: "restore", dirName: res.dirName, hash: res.hash, archiveFile: res.archiveFile });
     }),
   );
 

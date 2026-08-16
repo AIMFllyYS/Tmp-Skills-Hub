@@ -44,6 +44,7 @@
 | POST /api/links/preview | { hashes, clientIds, action: enable\|disable, scope? } | { ok, command: "links-preview", action, add, remove, conflictCount, wouldCreate, wouldRemove, conflicts }(不写盘) | 400 bad-usage;404 not-found;503 |
 | POST /api/links/apply | 同上 | { ok, command: "links-apply", action, created, removed }(按落点各一次 applyLinkSet) | 400;404;409 link-failed(含 conflicts,未写盘);503 |
 | POST /api/skills/:hash/archive | —(无 body) | { ok, command: "archive", dirName, archiveFile, sizeBytes, removedLinks } | 404 not-found;409(归档失败);503 |
+| POST /api/skills/:hash/restore | —(无 body;:hash 为归档名) | { ok, command: "restore", dirName, hash, archiveFile } | 404 not-found;409 conflict;500;503 |
 | POST /api/adopt | { source }(本地路径或 GitHub / skills.sh URL) | { ok, command: "adopt", adopted, duplicates, conflicts, invalid, outcomes } | 400 bad-usage;502 github-fetch-failed;503 |
 
 - `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀

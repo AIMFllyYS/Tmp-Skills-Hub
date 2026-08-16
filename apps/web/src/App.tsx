@@ -31,6 +31,7 @@ export default function App() {
   const [pendingHash, setPendingHash] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
+  const [toast, setToast] = useState<{ message: string; undoName?: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -308,6 +309,19 @@ export default function App() {
               onAdopted={() => {
                 void fetchSkills().then(setSkills);
               }}
+              onRestore={(name) => {
+                void (async () => {
+                  try {
+                    await getAction("restore").execute({ name });
+                    setSkills(await fetchSkills());
+                    setArchived(await fetchArchive());
+                    setToast({ message: "已恢复 " + name });
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    setToast({ message: "恢复失败: " + msg });
+                  }
+                })();
+              }}
               onFocus={setFocusedHash}
               clientView={
                 scope.kind === "client" && scope.id !== undefined
@@ -351,7 +365,6 @@ export default function App() {
               onToggle={handleToggle}
               onSaved={handleSaved}
               onArchive={(s) => {
-                if (!window.confirm("将归档 " + s.dirName + "（软删除，可从归档区恢复）。确定？")) return;
                 void (async () => {
                   try {
                     await getAction("archive").execute({ hash: s.hash });
@@ -359,6 +372,7 @@ export default function App() {
                     if (focusedHash === s.hash) setFocusedHash(null);
                     dispatchSelection({ type: "toggle", hash: s.hash, next: false });
                     setArchived(await fetchArchive());
+                    setToast({ message: "已归档 " + s.dirName, undoName: s.dirName });
                   } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
                     setErrors((prev) => new Map(prev).set(s.hash, "归档失败: " + msg));
@@ -381,6 +395,41 @@ export default function App() {
           onArchive={() => void handleBatchArchive()}
           lockedClientId={scope.kind === "client" ? scope.id : undefined}
         />
+      )}
+      {toast !== null && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-line bg-white px-4 py-2">
+          <p className="text-xs text-ink-mid">{toast.message}</p>
+          {toast.undoName !== undefined && (
+            <button
+              type="button"
+              onClick={() => {
+                const name = toast.undoName;
+                if (name === undefined) return;
+                void (async () => {
+                  try {
+                    await getAction("restore").execute({ name });
+                    setSkills(await fetchSkills());
+                    setArchived(await fetchArchive());
+                    setToast({ message: "已恢复 " + name });
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    setToast({ message: "撤销失败: " + msg });
+                  }
+                })();
+              }}
+              className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
+            >
+              {getAction("restore").verb}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="ml-auto text-xs text-ink-faint hover:text-ink-mid"
+          >
+            关闭
+          </button>
+        </div>
       )}
     </div>
   );

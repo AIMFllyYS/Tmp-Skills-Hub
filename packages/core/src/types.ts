@@ -14,7 +14,7 @@ export interface SkillMeta {
 export type SkillHash = string;
 
 /** 收录来源的种类。新增来源时扩展这个联合类型。 */
-export type SkillSourceKind = "local-scan" | "github" | "skills-sh" | "manual";
+export type SkillSourceKind = "local-scan" | "github" | "skills-sh" | "manual" | "archive-restore";
 
 export interface SkillSource {
   kind: SkillSourceKind;
