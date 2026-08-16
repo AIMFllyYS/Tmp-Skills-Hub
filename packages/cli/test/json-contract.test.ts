@@ -151,6 +151,39 @@ describe("json 契约 v0(#28)", () => {
     expect(lo.skills[0]!.origins).toHaveLength(1);
   });
 
+  it("backup --json:dry-run 不写盘;create/list/verify 信封", () => {
+    const dry = runCli(["backup", "--home", home, "--dry-run", "--json"]);
+    expect(dry.code).toBe(0);
+    const d = JSON.parse(dry.stdout) as { ok: boolean; command: string; verb: string; dryRun: boolean; mode: string };
+    expect(d.ok).toBe(true);
+    expect(d.command).toBe("backup");
+    expect(d.verb).toBe("create");
+    expect(d.dryRun).toBe(true);
+    expect(d.mode).toBe("incremental");
+    expect(d).not.toHaveProperty("snapshotId");
+
+    const created = runCli(["backup", "--home", home, "--yes", "--json"]);
+    expect(created.code).toBe(0);
+    const c = JSON.parse(created.stdout) as { ok: boolean; verb: string; snapshotId: string; files: number };
+    expect(c.ok).toBe(true);
+    expect(c.verb).toBe("create");
+    expect(c.snapshotId).toEqual(expect.any(String));
+
+    const listed = runCli(["backup", "list", "--home", home, "--json"]);
+    expect(listed.code).toBe(0);
+    const l = JSON.parse(listed.stdout) as { verb: string; snapshots: unknown[]; latest: string };
+    expect(l.verb).toBe("list");
+    expect(l.snapshots.length).toBeGreaterThanOrEqual(1);
+    expect(l.latest).toBe(c.snapshotId);
+
+    const verified = runCli(["backup", "verify", "--home", home, "--json"]);
+    expect(verified.code).toBe(0);
+    const v = JSON.parse(verified.stdout) as { verb: string; passed: boolean; issues: unknown[] };
+    expect(v.verb).toBe("verify");
+    expect(v.passed).toBe(true);
+    expect(v.issues).toEqual([]);
+  });
+
   it("未配置库存:store-not-configured 信封 + exit 2(--home 是显式库存根,此例用非法 env 路径触发)", () => {
     const r = runCli(["list", "--json"], { env: { SKILLS_HUB_HOME: "relative-path" } });
     expect(r.code).toBe(2);

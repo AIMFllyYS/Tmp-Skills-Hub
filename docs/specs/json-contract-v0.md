@@ -118,6 +118,23 @@ dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed �
 
 照 §2.1 信封加 `ok`/`command`,数据字段沿用现有形状(outcomes / checked+ok+drifted+missing / archiveDir+results+failed)。
 
+### 2.8 backup
+
+- create(无动词):
+```json
+{ "ok": true, "command": "backup", "verb": "create", "mode": "incremental", "storeRoot": "...", "snapshotId": "...", "snapshotDir": "...", "files": 2, "links": 0, "blobsWritten": 1, "blobsReused": 1 }
+```
+`mode` 为 `incremental`(默认)或 `full`(`--full`)。dry-run 附加 `"dryRun": true`,并含 `clientRoots`、`latestSnapshotId`,不含 `snapshotId`。
+- list:
+```json
+{ "ok": true, "command": "backup", "verb": "list", "storeRoot": "...", "latest": "...", "snapshots": [ { "snapshotId": "...", "createdAt": "...", "files": 2, "links": 0, "blobsWritten": 1, "blobsReused": 0 } ] }
+```
+- verify 成功:
+```json
+{ "ok": true, "command": "backup", "verb": "verify", "storeRoot": "...", "snapshotId": "...", "checked": 2, "passed": true, "issues": [] }
+```
+- 无快照:`code: "not-found"`;blob 缺失或哈希不符:`code: "verify-failed"`,附加 `issues: [{ hash, rel, reason }]`。
+
 ## 3. 错误 code 枚举
 
 | code | 场景 |
@@ -132,6 +149,7 @@ dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed �
 | group-empty | 按空分组启用/停用 |
 | invalid-skill | 缺 name/description 的目录 |
 | link-failed | 链接切换失败(回滚完成) |
+| verify-failed | backup verify 发现 blob 缺失或哈希不符 |
 | io-error | 文件系统故障 |
 
 ## 4. ui-server 的 /api/skills(实时扫描视图)

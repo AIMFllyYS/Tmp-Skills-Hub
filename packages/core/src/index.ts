@@ -20,6 +20,7 @@ export {
 } from "./store-layout.js";
 export {
   createBackupSnapshot,
+  listBackupSnapshots,
   materializeBackupSnapshot,
   readBackupManifest,
   readLatestSnapshotId,
@@ -32,6 +33,7 @@ export type {
   BackupLinkEntry,
   BackupManifest,
   BackupSnapshotResult,
+  BackupSnapshotSummary,
   BackupVerifyIssue,
   BackupVerifyReport,
 } from "./backup.js";
