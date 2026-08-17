@@ -134,6 +134,11 @@ dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed �
 { "ok": true, "command": "backup", "verb": "verify", "storeRoot": "...", "snapshotId": "...", "checked": 2, "passed": true, "issues": [] }
 ```
 - 无快照:`code: "not-found"`;blob 缺失或哈希不符:`code: "verify-failed"`,附加 `issues: [{ hash, rel, reason }]`。
+- restore:
+```json
+{ "ok": true, "command": "backup", "verb": "restore", "storeRoot": "...", "snapshotId": "...", "clients": 2, "skills": 3, "files": 4, "links": 1 }
+```
+dry-run 附加 `"dryRun": true` 与 `wouldRestore`（将写入的客户端/skill 条目）,不含已写盘计数以外的副作用。校验失败:`code: "verify-failed"` 或 `restore-failed`。
 
 ### 2.9 share
 
@@ -144,6 +149,15 @@ dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed �
 远端已有且内容哈希相同:`idempotent: true`,不新建提交。dry-run 附加 `"dryRun": true`,不写远端。
 
 失败:`auth-required`(无 token / 非交互缺 --yes);`remote-conflict`(远端同名不同内容,不覆盖);`github-push-failed`(401/403/限流/分支保护);`not-found`;`bad-usage`。
+
+### 2.10 reset
+
+```json
+{ "ok": true, "command": "reset", "storeRoot": "...", "snapshotId": "...", "asideStore": "...", "asidePointer": "...", "adopted": 3 }
+```
+dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore 预览,不写盘。面板拉起新进程时 HTTP 成功信封为 `{ ok: true, command: "reset", started: true, snapshotId }`（本请求不跑完还原）。
+
+失败:`auth-required`;`not-found`(无快照);`verify-failed`;`restore-failed`;`bad-usage`(缺确认短语)。
 
 ## 3. 错误 code 枚举
 
@@ -160,6 +174,7 @@ dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed �
 | invalid-skill | 缺 name/description 的目录 |
 | link-failed | 链接切换失败(回滚完成) |
 | verify-failed | backup verify 发现 blob 缺失或哈希不符 |
+| restore-failed | backup restore / reset 写回客户端 skills 失败 |
 | github-push-failed | share 推送被 GitHub 拒绝(无权限/限流/分支保护) |
 | remote-conflict | share 远端已有同名不同内容,不覆盖 |
 | io-error | 文件系统故障 |

@@ -145,9 +145,13 @@ toast + 「撤销」。**真删除永不提供**,只显示归档路径由用户�
 | `POST /api/groups` `PATCH /api/groups/:id` `DELETE /api/groups/:id` | 分组增删改 | `group add/rm/edit` |
 | `POST /api/analyze` | 相近/冲突分析(模型只出建议) | `analyze` |
 | `GET /api/verify` `GET /api/doctor` | 四检报告 | `verify` / `doctor` |
+| `GET /api/backups` | 列备份快照 | `backup list` |
+| `POST /api/backups/preview` | 一键 reset 的 dry-run 预览(D8) | `backup restore --dry-run` / `reset --dry-run` |
+| `POST /api/reset` | 确认后 argv 拉起新控制台跑 `reset --yes` | `reset` |
 
 规则不变:信封与错误 code 复用 [json-contract-v0.md](../specs/json-contract-v0.md);
 写端点复用 CLI 同一份实现(行为不漂移);服务只绑 `127.0.0.1`。
+「恢复到初始化前」动作 id 为 `reset`(`destructive` + `supportsPreview`),放在作用域「报告」,不放浮动批量条;**不得**复用归档恢复的动作 id `restore`。二次确认 = 预览 + 输入短语 `reset`(D8),不是空吓文案。
 
 ## 8. 性能口径(带阈值,可测)
 
