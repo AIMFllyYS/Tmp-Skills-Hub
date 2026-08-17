@@ -1,8 +1,11 @@
 # 面板信息架构 v1:从「查看壳」到「主操作台」
 
-> 状态:生效,批 8/批 9 的施工依据 | 上游约束:[architecture-initial-spec.md](architecture-initial-spec.md)
-> 视觉口径不在本文重复:一律服从 [ui-design-v0.md](../conventions/ui-design-v0.md);本文只定**信息架构与交互模型**
+> 状态:**人用壳已由 [app-shell-v2.md](app-shell-v2.md) 取代**。本文只保留数据层约束:链接按行暴露、批量一次原子提交、动作注册表。
+> 上游约束:[architecture-initial-spec.md](architecture-initial-spec.md)
+> 视觉口径:[ui-design-v0.md](../conventions/ui-design-v0.md)
 > 事实依据:[panel-and-perf-audit-2026-08-17.md](../audits/panel-and-perf-audit-2026-08-17.md)
+
+> **2026-08-17 修订**:三栏(作用域 → 集合 → 检查器)是给操作员填链接矩阵的形状,人打开后找不到总览/设置。人用 IA 改为左侧三板块 + 左下角设置。§2 三栏图不再约束 `apps/web` 的页面骨架;§3–§5 的关系暴露与批量提交仍生效。
 
 ## 1. 为什么要重构,而不是继续加按钮
 

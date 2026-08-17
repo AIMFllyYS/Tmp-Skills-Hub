@@ -7,8 +7,9 @@
 
 ## 0. 为什么要先把命令名定死
 
-CLI 是三种使用者的共同入口：**人**在终端用它、**Web 面板**通过 `/api` 间接用它、**AI** 直接写命令行调用它。
-名字一改，三边同时受影响。所以命令面先定案，再分批实现。
+日常路径分开：**人只通过一键启动（`bootstrap` / `ui`）进 WebUI**；**CLI / `--json` / `--dry-run` 给 Agent 与脚本**。面板通过 `/api` 走同一套命令语义，不另起动词。
+
+名字一改，Agent 与面板同时受影响。所以命令面先定案，再分批实现。人不会在日常路径里打命令；下表「主要使用者」里的「人」只表示该命令*可以*由人在终端调用（一次性 init、排障），不是产品主路径。
 
 ## 1. 命令表
 
@@ -46,7 +47,7 @@ CLI 是三种使用者的共同入口：**人**在终端用它、**Web 面板**�
 
 - **没有 `delete` 命令。** 所有删除一律是 `archive`（软删除）。需要彻底删除时，只向用户显示归档文件的路径，由用户自己动手。代码里不存在真删除 skill 内容的路径。
 - **`disable` 不等于删除。** 它只摘链接，库存原件一个字节不动。
-- **写操作默认要确认。** `adopt`、`enable`、`disable`、`archive`、`archive restore`、`backup`、`backup restore`、`reset`、`share` 在交互终端下需确认；非交互环境必须显式 `--yes`，否则拒绝执行。`backup list` / `backup verify` 只读，不需 `--yes`。面板「分享」按钮与「恢复到初始化前」（确认短语 `reset`）算显式操作。
+- **写操作默认要确认。** `adopt`、`enable`、`disable`、`archive`、`archive restore`、`backup`、`backup restore`、`reset`、`share` 在交互终端下需确认；非交互环境必须显式 `--yes`，否则拒绝执行。`backup list` / `backup verify` 只读，不需 `--yes`。面板「分享」按钮与设置里的重置确认弹窗算显式操作（请求体仍带 `confirm: "reset"`）。
 - **`backup restore` 与 `archive restore` 不是同一条命令。** 前者按备份快照写回客户端 skills；后者把归档 zip 拉回库存活跃区。
 - **`reset --yes` 的库存路径**必须是确认前读到的 `storeRoot`，不得落到默认 `~/.skills-hub`。面板点确认后在**当前 `ui` 进程**内跑完同一套还原（与 CLI `reset --yes` 同一实现），本请求返回完成结果；不另开控制台、不 `process.exit`。CLI 直接调用 `reset` 时仍可在结束后拉起面板。
 

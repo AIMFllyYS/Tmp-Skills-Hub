@@ -2,12 +2,16 @@ import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource
 import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, BackupsListResponse, BackupsPreviewResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, ResetResponse, ShareResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse, VerifyResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
-export async function fetchSkills(): Promise<SkillRecord[]> {
+export async function fetchCatalog(): Promise<{ storeRoot: string; skills: SkillRecord[] }> {
   const res = await fetch("/api/skills");
   if (!res.ok) throw new Error("GET /api/skills → " + res.status);
   const body = (await res.json()) as SkillsResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
-  return body.skills;
+  return { storeRoot: body.storeRoot, skills: body.skills };
+}
+
+export async function fetchSkills(): Promise<SkillRecord[]> {
+  return (await fetchCatalog()).skills;
 }
 
 export async function createGroup(id: string, name: string, description = ""): Promise<void> {

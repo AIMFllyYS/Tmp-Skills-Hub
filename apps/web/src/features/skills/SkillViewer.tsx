@@ -167,14 +167,14 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-[10rem_1fr] gap-4 p-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[18rem_minmax(0,1fr)] gap-4 p-4">
         <nav className="min-h-0 overflow-y-auto">
           {treeError !== null && <Notice text={treeError} tone="error" />}
           <ul className="space-y-0.5">
             {entries.map((e) => (
               <li key={e.path}>
                 {e.kind === "dir" ? (
-                  <span className="block truncate text-xs text-ink-faint">📁 {e.path}</span>
+                  <span className="block truncate text-xs text-ink-faint">{e.path}/</span>
                 ) : (
                   <button
                     type="button"
@@ -192,7 +192,7 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
           </ul>
         </nav>
         <div className="min-h-24 overflow-y-auto">
-          {savedHash !== null && <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">已保存,新哈希 {savedHash.slice(0, 12)}…</p>}
+          {savedHash !== null && <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">已保存</p>}
           {fileError !== null && <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />}
           {fileError === null && !editing && html !== "" && (
             <div className="mb-2 flex justify-end gap-2">
