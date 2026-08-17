@@ -132,7 +132,7 @@ export function CollectionPane({
   if (scope.kind === "report") {
     return (
       <div className="h-full overflow-y-auto p-4">
-        <h2 className="mb-3 text-sm font-medium text-ink-strong">报告(四检)</h2>
+        <h2 className="mb-3 text-sm font-medium text-ink-strong">报告</h2>
         <ReportPanel />
       </div>
     );

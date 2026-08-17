@@ -399,6 +399,10 @@ export default function App() {
       });
       return;
     }
+    if (id === "reset") {
+      setScope({ kind: "report" });
+      return;
+    }
     if (id === "restore" && arg !== undefined) {
       void getAction("restore").execute({ name: arg }).then(async () => {
         setSkills(await fetchSkills());
