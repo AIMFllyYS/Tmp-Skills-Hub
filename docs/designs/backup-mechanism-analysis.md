@@ -95,8 +95,22 @@ store-and-paths-v0.md §5：所有写操作必须能被 --home / SKILLS_HUB_HOME
 | backup [--full] | 建/更新基线快照（默认增量，--full 强制全量） | 是（写 backups/，需 --yes，--home 可重定向） |
 | backup list | 列快照与最近备份时间 | 否 |
 | backup verify | 用 manifest 哈希重算比对，报告损坏/缺失 | 否 |
+| backup restore [snapshotId] | 按快照把客户端 skills 逐条拼回（库存与指针不动） | 是（写客户端 skill 落点，需 --yes；`--dry-run` 只预览） |
+| reset [--snapshot id] | 还原客户端 → 旁路指针与旧库存 → 用确认前读到的 storeRoot 再收录并拉起面板 | 是（编排 restore + bootstrap，需 --yes；面板确认短语即授权） |
 
-restore 不在 v1 范围（分析稿只到备份）；恢复先靠 backup verify 保证快照可信 + 手工按 manifest 拼回。
+> **2026-08-17 修订**：原文写 restore 不在 v1、靠手工拼回。真机已用过一轮备份（#97 整树快照与 #116 内核并存），「等用过再做」的条件已满足。restore 纳入命令表；`reset` 是编排（另开进程跑完再 bootstrap），不是第二套备份内核。
+
+### 6.1 restore 写盘口径
+
+- 先 verify，失败不写盘。
+- 跳过本项目目录（`skills-hub*`，与 #98 发现规则一致）。
+- **禁止**对客户端 `skills` 目录整目录 rename/删除（core-patterns §2）。逐条 skill：链接 `unlink`/`rmdir` 且不跟随；普通目录 aside 到 `<storeRoot>/tmp/restore-aside-<id>/`，再写入快照内容。
+- 新格式按 `files[]` + `links[]`；旧格式（#97 `roots/<client>/.<client>/skills`）必须能还原——本机第一份真机基线即此形态。
+- 兼容 `latest` 为空：调用方可显式传 snapshotId。
+
+### 6.2 reset 为何另开进程
+
+`reset` 会改名指针与库存根。若在当前 `ui` 进程的 HTTP 请求里做，服务会失去 storeRoot，面板当场死亡。正确口径：面板二次确认（dry-run 预览 + 输入 `reset`）后，HTTP **只负责**用 argv 拉起新控制台跑 `reset --yes`，然后让出 4321；新进程还原、旁路、再 bootstrap（库存路径用确认前读到的 storeRoot，不得落到默认 `~/.skills-hub`）、再开面板。
 
 ## 7. 边界与安全
 
@@ -117,6 +131,6 @@ restore 不在 v1 范围（分析稿只到备份）；恢复先靠 backup verify
 
 ## 9. 拆 issue 建议
 
-1. **core：备份内核**——blob 库写入、manifest 读写、verify 重算（复用 hashSkillFolder / 原子写）
-2. **cli：backup 命令**——命令表登记、增量策略、--full/list/verify 子命令
-3. **恢复（restore）**——优先级低，单独 issue，只在备份被实际使用过一轮后做
+1. **core：备份内核**——blob 库写入、manifest 读写、verify 重算（复用 hashSkillFolder / 原子写）——批 10 已完成
+2. **cli：backup 命令**——命令表登记、增量策略、--full/list/verify 子命令——批 10 已完成
+3. **恢复与一键 reset（批 12）**——规范回写 → core 逐条还原（含旧格式）→ CLI `backup restore` → CLI `reset` + 新控制台 → HTTP + 报告页。面板按钮只启动 `reset`，不与归档 `restore` 混用动作 id。

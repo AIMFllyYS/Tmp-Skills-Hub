@@ -26,6 +26,7 @@
 | GET /api/clients/:clientId/skill-states | { ok, command: "client-skill-states", clientId, skillsDir, enabled, total, rows: { hash, state, detail }[] }(客户端视角全集行状态) | 404 not-found;503 |
 | GET /api/verify | { ok, command: "verify", storeRoot, checked, passed, drifted, missing }(只读;CLI --json 的 ok 数组在此改名为 passed,避开信封 ok) | 503 |
 | GET /api/doctor | { ok, command: "doctor", store, roots, linkTypes, danglingLinks }(与 CLI --json 同形) | 503 store-not-configured |
+| GET /api/backups | { ok, command: "backup", verb: "list", storeRoot, latest, snapshots }(与 CLI backup list --json 同形) | 503 |
 
 ### SkillRecord(与 json-contract §2 同定义)
 
@@ -54,6 +55,8 @@
 | POST /api/groups/:id/members | { hashes, action: add\|remove } | { ok, command: "group", verb: "add"\|"remove", id, hashes, changed } | 400;404 group-not-found\|not-found;503 |
 | POST /api/analyze | { target }(hash 前缀或 dirName) | { ok, command: "analyze", target, similar, conflict }(只建议,不写盘) | 400 bad-usage;404 not-found;503 not-configured;502 analyze-failed |
 | POST /api/share | { target, repo? }(hash 前缀或 dirName;repo 覆盖 manifest.trustedRepo) | { ok, command: "share", dirName, url, idempotent, dryRun } | 400 bad-usage;404 not-found;409 remote-conflict;503 auth-required(无 GITHUB_TOKEN);502 github-push-failed |
+| POST /api/backups/preview | { snapshotId? } | { ok, command: "backups-preview", snapshotId, dryRun: true, clients, skills, files, links, wouldRestore, skippedOwnDirs, asideStore, asidePointer }(不写盘) | 400;404 not-found;409 verify-failed;503 |
+| POST /api/reset | { snapshotId?, confirm: "reset" } | { ok, command: "reset", started: true, snapshotId }(argv 拉起新控制台后返回;本请求不搬家库存) | 400 bad-usage(缺确认短语);404;409 verify-failed\|restore-failed;503 |
 
 - `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
@@ -77,6 +80,8 @@
 | github-push-failed | 502 |
 | remote-conflict | 409 |
 | auth-required | 503 |
+| verify-failed | 409 |
+| restore-failed | 409 |
 
 > 注:auth-required / group-empty / invalid-skill 是 CLI 专属 code(交互授权、按空组 enable)。分组写操作走 HTTP,code 与 CLI 同口径。
 

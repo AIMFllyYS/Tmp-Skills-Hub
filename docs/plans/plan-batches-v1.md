@@ -27,6 +27,7 @@
 | 9 | 面板管理动作补齐 | 打开面板就能管完 | 8 |
 | 10 | 备份机制施工 | #83 分析稿落地 | 7-3（去重口径对齐） |
 | 11 | 分享闭环 | 社团共享：拉已有、补推 | 9-3 |
+| 12 | 一键恢复到初始化前 | 备份被用过一轮后的 restore + 面板 reset | 10 |
 
 一批 = 一个父 issue + 一群 sub-issue = 一个分支族。按 [issue-to-pr](../../AGENTS.md) 规范，**每个 sub-issue 单独出一个 PR**，PR 打向 `dev`，正文末尾唯一一条 `Closes #N`。
 
@@ -105,6 +106,12 @@ HTTP 补 adopt / links.apply / group / analyze / verify / restore；面板按钮
 把库存 skill 推到授信仓库（先调研再施工）。不做账号。完成后「推出去再 adopt 回来」闭环。
 
 验收：CLI + HTTP + 面板「分享」；测试只用 fetch 替身，不打真实仓库。
+
+### 批 12 一键恢复到初始化前
+
+按快照把客户端 skills 逐条拼回，并提供面板一键 `reset`：确认后新开控制台还原 → 旁路指针与旧库存 → 用原 storeRoot 再 bootstrap → 自动打开新面板。
+
+验收：沙箱 restore 后文件/链接与快照一致（含 #97 旧格式）；reset 后指针指向同一 storeRoot、旧库存以旁路目录存在；预览不写盘；缺确认短语不 spawn；不整目录 rename 客户端 skills。
 
 ## 不做（本计划）
 
