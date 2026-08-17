@@ -17,7 +17,6 @@ export function filterActions(actions: readonly ActionMeta[], query: string): Ac
 /** 缺目标时给出原因;null 表示可执行。 */
 export function actionUnavailableReason(id: ActionId, ctx: PaletteContext): string | null {
   if (id === "save" || id === "translate") return "在检查器内容页使用";
-  if (id === "reset") return "在报告页使用";
   if (id === "enable" || id === "disable" || id === "archive" || id === "analyze" || id === "share") {
     if (!ctx.hasFocused) return "先选一个 skill";
     if ((id === "enable" || id === "disable") && ctx.clientCount === 0) return "未发现客户端";

@@ -95,7 +95,7 @@ export function ScopeNav({
         onClick={() => onSelect({ kind: "archive" })}
       />
       <Item
-        label="报告(四检)"
+        label="报告 · 一键恢复"
         active={sameScope(selected, { kind: "report" })}
         onClick={() => onSelect({ kind: "report" })}
       />
@@ -129,6 +129,6 @@ export function scopeOptions(counts: ScopeCounts): ScopeOption[] {
       scope: { kind: "source" as const, id: s.id },
     })),
     { key: "archive", label: "归档区 " + counts.archive, scope: { kind: "archive" } },
-    { key: "report", label: "报告(四检)", scope: { kind: "report" } },
+    { key: "report", label: "报告 · 一键恢复", scope: { kind: "report" } },
   ];
 }
