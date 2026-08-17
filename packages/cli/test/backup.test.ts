@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -129,6 +129,23 @@ describe("runBackup", () => {
     expect(issues.length).toBeGreaterThan(0);
     expect(issues[0]!.rel).toContain("SKILL.md");
     expect(issues[0]!.reason).toBe("mismatch");
+  });
+
+  it("restore dry-run 不写盘;restore --yes 写回客户端", async () => {
+    const home = await primedHome();
+    await captureJson(() => runBackup(args(home, { yes: true })));
+    const skill = path.join(home, ".claude", "skills", "alpha", "SKILL.md");
+    await writeFile(skill, "---\nname: alpha\ndescription: a\n---\nmutated\n");
+    const dry = await captureJson(() => runBackup(args(home, { dryRun: true, _: ["restore"] })));
+    expect(dry.code).toBe(0);
+    expect(dry.out.verb).toBe("restore");
+    expect(dry.out.dryRun).toBe(true);
+    expect(await readFile(skill, "utf8")).toContain("mutated");
+    const done = await captureJson(() => runBackup(args(home, { yes: true, _: ["restore"] })));
+    expect(done.code).toBe(0);
+    expect(done.out.verb).toBe("restore");
+    expect(await readFile(skill, "utf8")).toContain("name: alpha");
+    expect(await readFile(skill, "utf8")).not.toContain("mutated");
   });
 
   it("verify 无快照报 not-found", async () => {

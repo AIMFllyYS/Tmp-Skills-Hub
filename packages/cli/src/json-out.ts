@@ -18,6 +18,7 @@ export type JsonErrorCode =
   | "github-fetch-failed"
   | "analyze-failed"
   | "verify-failed"
+  | "restore-failed"
   | "github-push-failed"
   | "remote-conflict"
   | "io-error";
