@@ -9,6 +9,7 @@ import {
   STORE_BACKUPS_DIR,
   verifyBackupSnapshot,
 } from "./backup.js";
+import { previewRestoreClientSkills, restoreClientSkills } from "./backup-restore.js";
 import { initializeStoreLayout, STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
 
 const temps: string[] = [];
@@ -113,3 +114,94 @@ describe("createBackupSnapshot", () => {
     expect(st1.mtimeMs).toBe(st0.mtimeMs);
   });
 });
+
+describe("restoreClientSkills", () => {
+  it("新格式:改坏客户端后按快照拼回,不整目录改名 skills", async () => {
+    const w = await world();
+    const snap = await createBackupSnapshot(w.store, w.home);
+    await writeFile(path.join(w.skillA, "SKILL.md"), "---\nname: shared\ndescription: d\n---\nmutated\n");
+    const preview = await previewRestoreClientSkills(w.store, w.home, snap.snapshotId);
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(preview.format).toBe("blobs");
+    expect(preview.skills).toBeGreaterThan(0);
+    const skillsDir = path.join(w.home, ".claude", "skills");
+    const beforeName = (await readdir(path.dirname(skillsDir))).includes("skills");
+    const result = await restoreClientSkills(w.store, w.home, snap.snapshotId);
+    expect(result.ok).toBe(true);
+    expect(await readFile(path.join(w.skillA, "SKILL.md"), "utf8")).toContain("same-bytes");
+    expect((await readdir(path.dirname(skillsDir))).includes("skills")).toBe(beforeName);
+    expect((await readdir(skillsDir)).some((n) => n.includes("pre-restore"))).toBe(false);
+  });
+
+  it("verify 失败不写盘", async () => {
+    const w = await world();
+    const snap = await createBackupSnapshot(w.store, w.home);
+    const hash = snap.manifest.files[0]!.hash;
+    await writeFile(path.join(snap.blobsDir, hash), "corrupted");
+    await writeFile(path.join(w.skillA, "SKILL.md"), "---\nname: shared\ndescription: d\n---\nkeep-me\n");
+    const result = await restoreClientSkills(w.store, w.home, snap.snapshotId);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("verify-failed");
+    expect(await readFile(path.join(w.skillA, "SKILL.md"), "utf8")).toContain("keep-me");
+  });
+
+  it("快照里的库存链接还原为 junction/symlink,不跟随、不整目录改名", async () => {
+    const w = await world();
+    const owned = path.join(w.store, STORE_SKILLS_DIR, "owned");
+    await mkdir(owned, { recursive: true });
+    await writeFile(path.join(owned, "SKILL.md"), "---\nname: owned\ndescription: d\n---\nstore\n");
+    const linkIn = path.join(w.home, ".claude", "skills", "from-store");
+    try {
+      await symlink(owned, linkIn, process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      return;
+    }
+    const snap = await createBackupSnapshot(w.store, w.home);
+    const link = snap.manifest.links.find((l) => l.rel === "from-store");
+    if (link === undefined) return;
+    await writeFile(path.join(w.skillA, "SKILL.md"), "---\nname: shared\ndescription: d\n---\nmutated\n");
+    const result = await restoreClientSkills(w.store, w.home, snap.snapshotId);
+    expect(result.ok).toBe(true);
+    const st = await lstat(linkIn);
+    expect(st.isSymbolicLink() || st.isDirectory()).toBe(true);
+    expect(await readFile(path.join(owned, "SKILL.md"), "utf8")).toContain("store");
+    expect((await readdir(path.join(w.home, ".claude", "skills"))).some((n) => n.includes("pre-restore"))).toBe(false);
+  });
+
+  it("旧 roots/ 快照能还原,并跳过 skills-hub 目录", async () => {
+    const w = await world();
+    const id = "2026-08-16T19-40-41.796Z-old";
+    const snapDir = path.join(w.store, STORE_BACKUPS_DIR, id);
+    const src = path.join(snapDir, "roots", "claude", ".claude", "skills", "gamma");
+    await mkdir(src, { recursive: true });
+    await writeFile(path.join(src, "SKILL.md"), "---\nname: gamma\ndescription: g\n---\nold-roots\n");
+    const junk = path.join(snapDir, "roots", "skills-hub.pre-bootstrap-x", ".skills-hub.pre-bootstrap-x", "skills", "nope");
+    await mkdir(junk, { recursive: true });
+    await writeFile(path.join(junk, "SKILL.md"), "---\nname: nope\ndescription: n\n---\nskip\n");
+    await writeFile(path.join(snapDir, "manifest.json"), JSON.stringify({
+      snapshotId: id,
+      createdAt: "2026-08-16T19:41:03.754Z",
+      clientRoots: 2,
+      skillDirs: 2,
+    }) + "\n");
+    const destGamma = path.join(w.home, ".claude", "skills", "gamma", "SKILL.md");
+    const result = await restoreClientSkills(w.store, w.home, id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.format).toBe("roots");
+    expect(result.skippedOwnDirs.some((s) => s.startsWith("skills-hub"))).toBe(true);
+    expect(await readFile(destGamma, "utf8")).toContain("old-roots");
+    expect(await existsSafe(path.join(w.home, ".skills-hub.pre-bootstrap-x"))).toBe(false);
+  });
+});
+
+async function existsSafe(p: string): Promise<boolean> {
+  try {
+    await lstat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -28,6 +28,12 @@ export {
   BACKUP_MANIFEST_VERSION,
   STORE_BACKUPS_DIR,
 } from "./backup.js";
+export {
+  isBlobBackupManifest,
+  previewRestoreClientSkills,
+  restoreClientSkills,
+  unlinkNoFollow,
+} from "./backup-restore.js";
 export type {
   BackupFileEntry,
   BackupLinkEntry,
@@ -37,6 +43,13 @@ export type {
   BackupVerifyIssue,
   BackupVerifyReport,
 } from "./backup.js";
+export type {
+  RestoreFailed as ClientRestoreFailed,
+  RestoreOk as ClientRestoreOk,
+  RestorePreview,
+  RestoreResult as ClientRestoreResult,
+  RestoreSkillItem,
+} from "./backup-restore.js";
 export type { InitLayoutResult, StoreManifest } from "./store-layout.js";
 export {
   adoptMany,

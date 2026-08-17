@@ -209,15 +209,27 @@ export async function listBackupSnapshots(storeRoot: string): Promise<BackupSnap
     try {
       const st = await lstat(dir);
       if (!st.isDirectory()) continue;
-      const m = await readBackupManifest(dir);
-      out.push({
-        snapshotId: m.snapshotId,
-        createdAt: m.createdAt,
-        files: m.files.length,
-        links: m.links.length,
-        blobsWritten: m.blobsWritten,
-        blobsReused: m.blobsReused,
-      });
+      const raw = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as Record<string, unknown>;
+      if (Array.isArray(raw.files) && Array.isArray(raw.links) && typeof raw.snapshotId === "string") {
+        const m = raw as unknown as BackupManifest;
+        out.push({
+          snapshotId: m.snapshotId,
+          createdAt: m.createdAt,
+          files: m.files.length,
+          links: m.links.length,
+          blobsWritten: m.blobsWritten,
+          blobsReused: m.blobsReused,
+        });
+      } else {
+        out.push({
+          snapshotId: typeof raw.snapshotId === "string" ? raw.snapshotId : name,
+          createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+          files: typeof raw.skillDirs === "number" ? raw.skillDirs : 0,
+          links: 0,
+          blobsWritten: 0,
+          blobsReused: 0,
+        });
+      }
     } catch {
       /* 残缺目录跳过 */
     }
@@ -236,7 +248,17 @@ export async function verifyBackupSnapshot(storeRoot: string, snapshotId?: strin
   const id = snapshotId ?? (await readLatestSnapshotId(storeRoot));
   if (id === null) return { ok: false, snapshotId: "", checked: 0, issues: [{ hash: "", rel: "latest", reason: "missing" }] };
   const snapshotDir = path.join(storeRoot, STORE_BACKUPS_DIR, id);
-  const manifest = await readBackupManifest(snapshotDir);
+  const raw = JSON.parse(await readFile(path.join(snapshotDir, "manifest.json"), "utf8")) as unknown;
+  if (typeof raw !== "object" || raw === null || !Array.isArray((raw as BackupManifest).files)) {
+    try {
+      const st = await lstat(path.join(snapshotDir, "roots"));
+      if (st.isDirectory()) return { ok: true, snapshotId: id, checked: 0, issues: [] };
+    } catch {
+      /* 旧格式缺 roots */
+    }
+    return { ok: false, snapshotId: id, checked: 0, issues: [{ hash: "", rel: "roots", reason: "missing" }] };
+  }
+  const manifest = raw as BackupManifest;
   const blobsDir = path.join(storeRoot, STORE_BACKUPS_DIR, "blobs");
   const issues: BackupVerifyIssue[] = [];
   for (const f of manifest.files) {
