@@ -13,6 +13,9 @@ import {
   discoverClientRoots,
   discoverClientRootsAt,
   listArchivedSkills,
+  listBackupSnapshots,
+  previewRestoreClientSkills,
+  readLatestSnapshotId,
   listSkillFiles,
   readGroups,
   readLinksLedger,
@@ -34,6 +37,7 @@ import { performAdopt, performVerify, POINTER_REL, resolveNames } from "./store-
 import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze } from "./analyze.js";
 import { performShare } from "./share.js";
+import { openConsole } from "./open-console.js";
 import { applyLinkBatch, performLinkChange, previewLinkChange, type LinkChangeRequest, type LinkConflictItem, type LinkDiffItem } from "./link-actions.js";
 import { chatCompletion } from "./deepseek.js";
 
@@ -71,6 +75,10 @@ export interface UiAppOptions {
   analyzeChat?: typeof chatCompletion;
   /** GitHub/skills.sh 拉取用的 fetch 替身(测试隔离真实网络) */
   fetchImpl?: typeof fetch;
+  /** reset 拉起新进程(测试注入,缺省 openConsole) */
+  spawnReset?: (argv: string[]) => void;
+  /** 测试时不要 process.exit */
+  skipExitAfterReset?: boolean;
 }
 
 /** 默认静态根:编译后位于 packages/cli/dist/,上三级到仓库根,再进 apps/web/dist。 */
@@ -299,6 +307,14 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }),
   );
 
+  app.get("/api/backups", (c) =>
+    withStore(c, "backup", async (root) => {
+      const latest = await readLatestSnapshotId(root);
+      const snapshots = await listBackupSnapshots(root);
+      return c.json({ ok: true, command: "backup", verb: "list", storeRoot: root, latest, snapshots });
+    }),
+  );
+
   app.get("/api/archive", (c) =>
     withStore(c, "archive", async (root) => {
       const archived = await listArchivedSkills(root);
@@ -355,6 +371,67 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       return c.json({ ok: true, command: "share", dirName: res.dirName, url: res.url, idempotent: res.idempotent, dryRun: res.dryRun });
     }),
   );
+
+  app.post("/api/backups/preview", (c) =>
+    withStore(c, "backups-preview", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { snapshotId?: unknown } | null;
+      const snapshotId = typeof raw?.snapshotId === "string" && raw.snapshotId.trim() !== "" ? raw.snapshotId.trim() : undefined;
+      const preview = snapshotId === undefined
+        ? await previewRestoreClientSkills(root, home)
+        : await previewRestoreClientSkills(root, home, snapshotId);
+      if (!preview.ok) {
+        const status = preview.code === "not-found" ? 404 : 409;
+        return err(c, "backups-preview", preview.code, preview.message, status);
+      }
+      const pointerDir = path.dirname(path.join(home, POINTER_REL));
+      const asideStore = root + ".pre-reinit";
+      const pointerRel = path.relative(root, pointerDir);
+      const pointerMovesWithStore =
+        path.resolve(root) === path.resolve(home) ||
+        pointerRel === "" ||
+        (!pointerRel.startsWith("..") && !path.isAbsolute(pointerRel));
+      return c.json({
+        ok: true,
+        command: "backups-preview",
+        snapshotId: preview.snapshotId,
+        dryRun: true,
+        clients: preview.clients,
+        skills: preview.skills,
+        files: preview.files,
+        links: preview.links,
+        wouldRestore: preview.wouldRestore,
+        skippedOwnDirs: preview.skippedOwnDirs,
+        asideStore,
+        asidePointer: pointerMovesWithStore ? asideStore : pointerDir + ".pre-reinit",
+      });
+    }),
+  );
+
+  app.post("/api/reset", (c) =>
+    withStore(c, "reset", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { snapshotId?: unknown; confirm?: unknown } | null;
+      if (raw?.confirm !== "reset") return err(c, "reset", "bad-usage", "body 需要 { confirm: \"reset\" }", 400);
+      const snapshotId = typeof raw.snapshotId === "string" && raw.snapshotId.trim() !== "" ? raw.snapshotId.trim() : undefined;
+      const preview = snapshotId === undefined
+        ? await previewRestoreClientSkills(root, home)
+        : await previewRestoreClientSkills(root, home, snapshotId);
+      if (!preview.ok) {
+        const status = preview.code === "not-found" ? 404 : 409;
+        return err(c, "reset", preview.code, preview.message, status);
+      }
+      const cliEntry = process.argv[1] ?? "";
+      const argv = [process.execPath, cliEntry, "reset", "--yes", "--snapshot", preview.snapshotId, "--home", home];
+      const spawn = opts.spawnReset ?? openConsole;
+      spawn(argv);
+      if (opts.skipExitAfterReset !== true) {
+        setTimeout(() => {
+          process.exit(0);
+        }, 400);
+      }
+      return c.json({ ok: true, command: "reset", started: true, snapshotId: preview.snapshotId });
+    }),
+  );
+
   app.get("/api/clients", (c) =>
     discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined).then((roots) =>
       c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),

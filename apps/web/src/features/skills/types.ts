@@ -226,6 +226,55 @@ export interface ShareResponse {
   dryRun: boolean;
 }
 
+export interface BackupSnapshotSummary {
+  snapshotId: string;
+  createdAt: string;
+  files: number;
+  links: number;
+  blobsWritten: number;
+  blobsReused: number;
+}
+
+export interface BackupsListResponse {
+  ok: true;
+  command: "backup";
+  verb: "list";
+  storeRoot: string;
+  latest: string | null;
+  snapshots: BackupSnapshotSummary[];
+}
+
+export interface RestoreSkillItem {
+  clientId: string;
+  skill: string;
+  dest: string;
+  kind: "files" | "link";
+  fileCount: number;
+  linkTarget?: string;
+}
+
+export interface BackupsPreviewResponse {
+  ok: true;
+  command: "backups-preview";
+  snapshotId: string;
+  dryRun: true;
+  clients: number;
+  skills: number;
+  files: number;
+  links: number;
+  wouldRestore: RestoreSkillItem[];
+  skippedOwnDirs: string[];
+  asideStore: string;
+  asidePointer: string;
+}
+
+export interface ResetStartedResponse {
+  ok: true;
+  command: "reset";
+  started: true;
+  snapshotId: string;
+}
+
 export interface AdoptResponse {
   ok: true;
   command: "adopt";

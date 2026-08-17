@@ -32,5 +32,9 @@ describe("ACTION_REGISTRY", () => {
     expect(getAction("analyze").destructive).toBe(false);
     expect(getAction("share").verb).toBe("分享");
     expect(getAction("share").destructive).toBe(false);
+    expect(getAction("reset").verb).toBe("恢复到初始化前");
+    expect(getAction("reset").destructive).toBe(true);
+    expect(getAction("reset").supportsPreview).toBe(true);
+    expect(getAction("restore").id).not.toBe("reset");
   });
 });

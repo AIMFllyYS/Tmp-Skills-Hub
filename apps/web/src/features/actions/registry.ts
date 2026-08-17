@@ -1,4 +1,4 @@
-import { adoptSource, analyzeSkill, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, shareSkill, translateText } from "../skills/api.js";
+import { adoptSource, analyzeSkill, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, previewReset, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, shareSkill, startReset, translateText } from "../skills/api.js";
 import type { LinksBatchParams } from "../skills/types.js";
 
 export type ActionId =
@@ -17,7 +17,8 @@ export type ActionId =
   | "add-to-group"
   | "remove-from-group"
   | "analyze"
-  | "share";
+  | "share"
+  | "reset";
 
 export interface ActionMeta {
   id: ActionId;
@@ -165,6 +166,14 @@ export const ACTION_REGISTRY = {
     destructive: false,
     supportsPreview: false,
     execute: (p: { target: string }) => shareSkill(p.target),
+  },
+  reset: {
+    id: "reset",
+    verb: "恢复到初始化前",
+    destructive: true,
+    supportsPreview: true,
+    execute: (p: { snapshotId: string; confirm: string }) => startReset(p.snapshotId, p.confirm),
+    preview: (p: { snapshotId?: string }) => previewReset(p.snapshotId),
   },
 } as const;
 
