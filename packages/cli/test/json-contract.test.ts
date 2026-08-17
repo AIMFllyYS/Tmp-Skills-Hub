@@ -190,6 +190,14 @@ describe("json 契约 v0(#28)", () => {
     expect(rr.verb).toBe("restore");
     expect(rr.dryRun).toBe(true);
     expect(rr.snapshotId).toEqual(expect.any(String));
+
+    const resetDry = runCli(["reset", "--home", home, "--dry-run", "--json"]);
+    expect(resetDry.code).toBe(0);
+    const rd = JSON.parse(resetDry.stdout) as { command: string; dryRun: boolean; storeRoot: string; snapshotId: string };
+    expect(rd.command).toBe("reset");
+    expect(rd.dryRun).toBe(true);
+    expect(rd.storeRoot).toBe(home);
+    expect(rd.snapshotId).toEqual(expect.any(String));
   });
 
   it("share --json:无 token 报 auth-required", () => {

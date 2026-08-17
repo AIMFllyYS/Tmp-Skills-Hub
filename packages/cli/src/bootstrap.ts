@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import path from "node:path";
 import { mkdir, readdir, rename, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { openBrowser } from "./open-console.js";
 import {
   createBackupSnapshot,
   discoverClientRoots,
@@ -89,17 +89,6 @@ export async function migrateAllSkills(
   return { discovered, adopted: dirs.length, dryRun: false };
 }
 
-/** 打开默认浏览器(Windows start;失败静默,不阻塞)。 */
-function openBrowser(url: string): void {
-  try {
-    const child = spawn("cmd", ["/c", "start", "", url], { stdio: "ignore", detached: true });
-    child.on("error", () => undefined);
-    child.unref();
-  } catch {
-    // 打不开浏览器不影响面板服务本身
-  }
-}
-
 export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions = {}): Promise<void> {
   const port = args.port ?? DEFAULT_UI_PORT;
   const base = resolveHome(args.home);
@@ -137,7 +126,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
     warn(
       "✓ 已备份快照 " + bak.snapshotId +
         " (" + bak.manifest.files.length + " 个文件, " + bak.manifest.links.length + " 条链接, 新增 blob " +
-        bak.manifest.blobsWritten + ")\n  校验: skills-hub backup verify。还原: skills-hub backup restore。",
+        bak.manifest.blobsWritten + ")\n  校验: skills-hub backup verify。还原: skills-hub backup restore 或 skills-hub reset。",
     );
   } else {
     console.log("已跳过备份。");
