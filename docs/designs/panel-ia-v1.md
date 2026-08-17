@@ -147,7 +147,7 @@ toast + 「撤销」。**真删除永不提供**,只显示归档路径由用户�
 | `GET /api/verify` `GET /api/doctor` | 四检报告 | `verify` / `doctor` |
 | `GET /api/backups` | 列备份快照 | `backup list` |
 | `POST /api/backups/preview` | 一键 reset 的 dry-run 预览(D8) | `backup restore --dry-run` / `reset --dry-run` |
-| `POST /api/reset` | 确认后 argv 拉起新控制台跑 `reset --yes` | `reset` |
+| `POST /api/reset` | 确认后在当前 ui 进程跑完 `reset`（还原 + 旁路 + 再收录） | `reset` |
 
 规则不变:信封与错误 code 复用 [json-contract-v0.md](../specs/json-contract-v0.md);
 写端点复用 CLI 同一份实现(行为不漂移);服务只绑 `127.0.0.1`。

@@ -133,7 +133,7 @@ export function ReportPanel(): React.JSX.Element {
               onClick={() => {
                 setBusy(true);
                 startReset(snapshotId, confirm)
-                  .then(() => setNotice("已在新窗口执行，本页将关闭。"))
+                  .then((r) => setNotice("已恢复。重新收录 " + String(r.adopted) + " 份，旧库存已旁路。"))
                   .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
                   .finally(() => setBusy(false));
               }}

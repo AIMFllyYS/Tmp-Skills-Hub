@@ -848,15 +848,19 @@ describe("http-api 契约", () => {
     if (prev !== undefined) process.env.GITHUB_TOKEN = prev;
   });
 
-  it("GET /api/backups 与 preview/reset:缺确认短语不 spawn,确认后只拉起 argv", async () => {
-    const skill = path.join(home, ".claude", "skills", "demo", "SKILL.md");
+  it("GET /api/backups 与 preview/reset:缺确认短语不写盘,确认后本进程还原", async () => {
+    const isolated = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-reset-"));
+    tempRoots.push(isolated);
+    const skill = path.join(isolated, ".claude", "skills", "demo", "SKILL.md");
     await mkdir(path.dirname(skill), { recursive: true });
     await writeFile(skill, "---\nname: demo\ndescription: sandbox e2e demo skill\n---\noriginal\n");
-    const created = runCli(["backup", "--home", home, "--yes", "--json"]);
-    expect(created.code).toBe(0);
+    expect(runCli(["init", "--home", isolated, "--yes", "--json"]).code).toBe(0);
+    expect(runCli(["backup", "--home", isolated, "--yes", "--json"]).code).toBe(0);
     await writeFile(skill, "---\nname: demo\ndescription: sandbox e2e demo skill\n---\nmutated\n");
+    const isolatedRoot = (JSON.parse(await readFile(path.join(isolated, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string }).storeRoot;
+    const rapp = createUiApp({ storeRoot: isolatedRoot, home: isolated });
 
-    const listed = await app.request("/api/backups");
+    const listed = await rapp.request("/api/backups");
     expect(listed.status).toBe(200);
     const lb = (await listed.json()) as { command: string; verb: string; snapshots: Array<{ snapshotId: string }> };
     expect(lb.command).toBe("backup");
@@ -864,7 +868,7 @@ describe("http-api 契约", () => {
     expect(lb.snapshots.length).toBeGreaterThanOrEqual(1);
     const snapshotId = lb.snapshots[0]!.snapshotId;
 
-    const preview = await app.request("/api/backups/preview", {
+    const preview = await rapp.request("/api/backups/preview", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ snapshotId }),
@@ -876,13 +880,6 @@ describe("http-api 契约", () => {
     expect(pb.snapshotId).toBe(snapshotId);
     expect(await readFile(skill, "utf8")).toContain("mutated");
 
-    const spawned: string[][] = [];
-    const rapp = createUiApp({
-      storeRoot,
-      home,
-      skipExitAfterReset: true,
-      spawnReset: (argv) => { spawned.push(argv); },
-    });
     const missing = await rapp.request("/api/reset", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -890,22 +887,31 @@ describe("http-api 契约", () => {
     });
     expect(missing.status).toBe(400);
     expect(((await missing.json()) as { code: string }).code).toBe("bad-usage");
-    expect(spawned).toHaveLength(0);
+    expect(await readFile(skill, "utf8")).toContain("mutated");
 
-    const started = await rapp.request("/api/reset", {
+    const done = await rapp.request("/api/reset", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ snapshotId, confirm: "reset" }),
     });
-    expect(started.status).toBe(200);
-    const sb = (await started.json()) as { command: string; started: boolean; snapshotId: string };
+    expect(done.status).toBe(200);
+    const sb = (await done.json()) as {
+      command: string;
+      started?: boolean;
+      snapshotId: string;
+      storeRoot: string;
+      asideStore: string;
+      adopted: number;
+    };
     expect(sb.command).toBe("reset");
-    expect(sb.started).toBe(true);
+    expect(sb.started).toBeUndefined();
     expect(sb.snapshotId).toBe(snapshotId);
-    expect(spawned).toHaveLength(1);
-    expect(spawned[0]).toEqual(expect.arrayContaining(["reset", "--yes", "--snapshot", snapshotId, "--home", home]));
-    expect(await readFile(skill, "utf8")).toContain("mutated");
-  });
+    expect(sb.storeRoot).toBe(isolatedRoot);
+    expect(sb.asideStore).toContain(".pre-reinit-");
+    expect(await readFile(skill, "utf8")).toContain("original");
+    const pointer = JSON.parse(await readFile(path.join(isolated, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string };
+    expect(pointer.storeRoot).toBe(isolatedRoot);
+  }, 30_000);
 
   it("未配置库存:store-not-configured 503", async () => {
     const bare = createUiApp({ storeRoot: null, home });

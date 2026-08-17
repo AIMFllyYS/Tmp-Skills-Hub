@@ -14,7 +14,7 @@ description: 何时调用我:你需要管理本机 Agent Skill 的库存时—�
 - **软删除**:确定不要了 → archive(打包进归档区,不真删除)
 - **分析**:想知道库存里哪个 skill 与某个 skill 相近或冲突 → analyze(模型判断,只建议不写盘)
 - **按快照还原客户端**:用户说「按备份把客户端 skills 拼回去」(不动库存)→ backup restore
-- **回到初始化前再自动初始化**:用户说「一键恢复到 bootstrap 之前再重新收录」→ reset(面板确认短语 reset 后新开控制台跑完,不要让用户再打命令)
+- **回到初始化前再自动初始化**:用户说「一键恢复到 bootstrap 之前再重新收录」→ reset(面板确认短语 reset 后由 /api/reset 在当前 ui 进程跑完,不要让用户再打命令)
 
 不需要调用我的场景:只是修改 skill 内容(那是 skill 自身的事,改完可 verify 校验哈希)。
 
@@ -121,7 +121,7 @@ verify 重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改
     skills-hub reset --home <SANDBOX_HOME> --yes
     skills-hub reset --snapshot <snapshotId> --home <SANDBOX_HOME> --yes
 
-还原客户端 → 旁路指针与旧库存(只改名) → 用确认前读到的 storeRoot 再 bootstrap → 拉起面板。--yes 不得落到默认 ~/.skills-hub。面板「恢复到初始化前」确认短语 reset 后用 argv 拉起本命令,用户不用再打字。
+还原客户端 → 旁路指针与旧库存(只改名) → 用确认前读到的 storeRoot 再收录。--yes 不得落到默认 ~/.skills-hub。面板「恢复到初始化前」确认短语 reset 后由 POST /api/reset 在当前 ui 进程跑完同一套逻辑,用户不用再打字。
 
 ## 禁止事项(红线)
 

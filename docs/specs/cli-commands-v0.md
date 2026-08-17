@@ -48,7 +48,7 @@ CLI 是三种使用者的共同入口：**人**在终端用它、**Web 面板**�
 - **`disable` 不等于删除。** 它只摘链接，库存原件一个字节不动。
 - **写操作默认要确认。** `adopt`、`enable`、`disable`、`archive`、`archive restore`、`backup`、`backup restore`、`reset`、`share` 在交互终端下需确认；非交互环境必须显式 `--yes`，否则拒绝执行。`backup list` / `backup verify` 只读，不需 `--yes`。面板「分享」按钮与「恢复到初始化前」（确认短语 `reset`）算显式操作。
 - **`backup restore` 与 `archive restore` 不是同一条命令。** 前者按备份快照写回客户端 skills；后者把归档 zip 拉回库存活跃区。
-- **`reset --yes` 的库存路径**必须是确认前读到的 `storeRoot`，不得落到默认 `~/.skills-hub`。面板点确认后用 argv 拉起新控制台跑 `reset`，不在当前 `ui` 进程里搬家库存。
+- **`reset --yes` 的库存路径**必须是确认前读到的 `storeRoot`，不得落到默认 `~/.skills-hub`。面板点确认后在**当前 `ui` 进程**内跑完同一套还原（与 CLI `reset --yes` 同一实现），本请求返回完成结果；不另开控制台、不 `process.exit`。CLI 直接调用 `reset` 时仍可在结束后拉起面板。
 
 ## 3. 全局参数
 

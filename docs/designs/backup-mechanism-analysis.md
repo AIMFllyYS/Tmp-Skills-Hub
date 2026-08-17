@@ -98,7 +98,9 @@ store-and-paths-v0.md §5：所有写操作必须能被 --home / SKILLS_HUB_HOME
 | backup restore [snapshotId] | 按快照把客户端 skills 逐条拼回（库存与指针不动） | 是（写客户端 skill 落点，需 --yes；`--dry-run` 只预览） |
 | reset [--snapshot id] | 还原客户端 → 旁路指针与旧库存 → 用确认前读到的 storeRoot 再收录并拉起面板 | 是（编排 restore + bootstrap，需 --yes；面板确认短语即授权） |
 
-> **2026-08-17 修订**：原文写 restore 不在 v1、靠手工拼回。真机已用过一轮备份（#97 整树快照与 #116 内核并存），「等用过再做」的条件已满足。restore 纳入命令表；`reset` 是编排（另开进程跑完再 bootstrap），不是第二套备份内核。
+> **2026-08-17 修订**：原文写 restore 不在 v1、靠手工拼回。真机已用过一轮备份（#97 整树快照与 #116 内核并存），「等用过再做」的条件已满足。restore 纳入命令表；`reset` 是编排（restore + 旁路旧库 + 再收录），不是第二套备份内核。
+>
+> **2026-08-17 再修订（#157）**：批 12 曾规定面板「另开进程 + 让出 4321」。真机上 Windows `detached` 子进程没有可见控制台、失败被 `stdio: ignore` 吞掉、HTTP 却返回 `started: true`，用户看到成功提示但磁盘不变。且 reset 会在同一 `storeRoot` 路径重建库存，当前 ui 进程并不失去绑定。故改为：**面板在当前请求内跑完 reset**，成功信封与 CLI `--json` 同形。
 
 ### 6.1 restore 写盘口径
 
@@ -108,9 +110,11 @@ store-and-paths-v0.md §5：所有写操作必须能被 --home / SKILLS_HUB_HOME
 - 新格式按 `files[]` + `links[]`；旧格式（#97 `roots/<client>/.<client>/skills`）必须能还原——本机第一份真机基线即此形态。
 - 兼容 `latest` 为空：调用方可显式传 snapshotId。
 
-### 6.2 reset 为何另开进程
+### 6.2 reset 在哪个进程跑
 
-`reset` 会改名指针与库存根。若在当前 `ui` 进程的 HTTP 请求里做，服务会失去 storeRoot，面板当场死亡。正确口径：面板二次确认（dry-run 预览 + 输入 `reset`）后，HTTP **只负责**用 argv 拉起新控制台跑 `reset --yes`，然后让出 4321；新进程还原、旁路、再 bootstrap（库存路径用确认前读到的 storeRoot，不得落到默认 `~/.skills-hub`）、再开面板。
+`reset` 旁路旧库存后，用确认前读到的 `storeRoot` 再收录（不得落到默认 `~/.skills-hub`）。库存路径不变，当前 `ui` 进程的绑定仍然有效，下一发读请求读到的是重建后的库存。
+
+面板二次确认后，`POST /api/reset` **在本请求内**跑完还原 → 旁路 → 再收录，返回完成信封。失败走错误信封。不另开控制台、不退出 ui 进程。CLI 直接调用 `reset --yes` 时，结束后仍可拉起面板（人不用 CLI 的日常路径不受影响）。
 
 ## 7. 边界与安全
 
@@ -133,4 +137,4 @@ store-and-paths-v0.md §5：所有写操作必须能被 --home / SKILLS_HUB_HOME
 
 1. **core：备份内核**——blob 库写入、manifest 读写、verify 重算（复用 hashSkillFolder / 原子写）——批 10 已完成
 2. **cli：backup 命令**——命令表登记、增量策略、--full/list/verify 子命令——批 10 已完成
-3. **恢复与一键 reset（批 12）**——规范回写 → core 逐条还原（含旧格式）→ CLI `backup restore` → CLI `reset` + 新控制台 → HTTP + 报告页。面板按钮只启动 `reset`，不与归档 `restore` 混用动作 id。
+3. **恢复与一键 reset（批 12）**——规范回写 → core 逐条还原（含旧格式）→ CLI `backup restore` → CLI `reset` → HTTP + 报告页。面板按钮走同一套 `reset`，不与归档 `restore` 混用动作 id。#157：面板必须在本请求内跑完，不得只 spawn。

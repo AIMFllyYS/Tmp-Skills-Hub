@@ -30,6 +30,28 @@ export interface ResetOptions {
   ui?: boolean | ((opts: StartUiServerOptions) => Promise<void>);
 }
 
+export type ResetFailureCode =
+  | "store-not-configured"
+  | "not-found"
+  | "verify-failed"
+  | "restore-failed"
+  | "io-error";
+
+export type ResetFailure = {
+  ok: false;
+  code: ResetFailureCode;
+  message: string;
+};
+
+export type ResetSuccess = {
+  ok: true;
+  storeRoot: string;
+  snapshotId: string;
+  asideStore: string;
+  asidePointer: string;
+  adopted: number;
+};
+
 function stamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
@@ -77,6 +99,54 @@ async function asideInventory(
   return asideStore;
 }
 
+function planAside(storeRoot: string, home: string): { asideStore: string; asidePointer: string } {
+  const pointerDir = path.dirname(path.join(home, POINTER_REL));
+  const mark = stamp();
+  const asideStore = storeRoot + ".pre-reinit-" + mark;
+  const pointerMovesWithStore =
+    path.resolve(storeRoot) === path.resolve(home) || isInside(pointerDir, storeRoot);
+  const asidePointer = pointerMovesWithStore ? asideStore : pointerDir + ".pre-reinit-" + mark;
+  return { asideStore, asidePointer };
+}
+
+/**
+ * 还原客户端 → 旁路指针与旧库存 → 用确认前 storeRoot 再收录。
+ * CLI 与 POST /api/reset 共用;不拉起面板、不 process.exit。
+ */
+export async function performReset(input: {
+  home: string;
+  snapshotId?: string;
+}): Promise<ResetSuccess | ResetFailure> {
+  const home = resolveHome(input.home);
+  const pointerFile = path.join(home, POINTER_REL);
+  const storeRoot = await readPointerStoreRoot(pointerFile);
+  if (storeRoot === null) {
+    return { ok: false, code: "store-not-configured", message: "库存未配置。先运行 skills-hub bootstrap 或 init。" };
+  }
+  const snapshotId = input.snapshotId === undefined || input.snapshotId === "" ? undefined : input.snapshotId;
+  const restored = snapshotId === undefined
+    ? await restoreClientSkills(storeRoot, home)
+    : await restoreClientSkills(storeRoot, home, snapshotId);
+  if (!restored.ok) {
+    return { ok: false, code: restored.code, message: restored.message };
+  }
+  const { asideStore, asidePointer } = planAside(storeRoot, home);
+  try {
+    await asideInventory(storeRoot, home, asideStore, asidePointer);
+    const migrated = await migrateAllSkills(home, storeRoot);
+    return {
+      ok: true,
+      storeRoot,
+      snapshotId: restored.snapshotId,
+      asideStore,
+      asidePointer,
+      adopted: migrated.adopted,
+    };
+  } catch (e) {
+    return { ok: false, code: "io-error", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** reset:还原客户端 → 旁路指针与旧库存 → 用确认前 storeRoot 再收录。 */
 export async function runReset(args: ResetArgs, opts: ResetOptions = {}): Promise<void> {
   const home = resolveHome(args.home);
@@ -94,12 +164,7 @@ export async function runReset(args: ResetArgs, opts: ResetOptions = {}): Promis
     emitError(args.json === true, "reset", preview.code, preview.message);
     return;
   }
-  const pointerDir = path.dirname(pointerFile);
-  const mark = stamp();
-  const asideStore = storeRoot + ".pre-reinit-" + mark;
-  const pointerMovesWithStore =
-    path.resolve(storeRoot) === path.resolve(home) || isInside(pointerDir, storeRoot);
-  const asidePointer = pointerMovesWithStore ? asideStore : pointerDir + ".pre-reinit-" + mark;
+  const { asideStore, asidePointer } = planAside(storeRoot, home);
 
   if (args.dryRun === true) {
     if (args.json === true) {
@@ -123,27 +188,21 @@ export async function runReset(args: ResetArgs, opts: ResetOptions = {}): Promis
 
   if (!requireWriteAuth(args, "reset")) return;
 
-  const restored = snapshotId === undefined
-    ? await restoreClientSkills(storeRoot, home)
-    : await restoreClientSkills(storeRoot, home, snapshotId);
-  if (!restored.ok) {
-    emitError(args.json === true, "reset", restored.code, restored.message);
+  const result = await performReset(snapshotId === undefined ? { home } : { home, snapshotId });
+  if (!result.ok) {
+    emitError(args.json === true, "reset", result.code, result.message);
     return;
   }
-
-  await asideInventory(storeRoot, home, asideStore, asidePointer);
-
-  const migrated = await migrateAllSkills(home, storeRoot);
   if (args.json === true) {
     emitOk("reset", {
-      storeRoot,
-      snapshotId: restored.snapshotId,
-      asideStore,
-      asidePointer,
-      adopted: migrated.adopted,
+      storeRoot: result.storeRoot,
+      snapshotId: result.snapshotId,
+      asideStore: result.asideStore,
+      asidePointer: result.asidePointer,
+      adopted: result.adopted,
     });
   } else {
-    console.log("✓ reset 完成:库存 " + storeRoot + ",收录 " + migrated.adopted + " 份。旧库存: " + asideStore);
+    console.log("✓ reset 完成:库存 " + result.storeRoot + ",收录 " + result.adopted + " 份。旧库存: " + result.asideStore);
   }
 
   if (opts.ui === false) return;

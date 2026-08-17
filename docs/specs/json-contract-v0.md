@@ -155,7 +155,7 @@ dry-run 附加 `"dryRun": true` 与 `wouldRestore`（将写入的客户端/skill
 ```json
 { "ok": true, "command": "reset", "storeRoot": "...", "snapshotId": "...", "asideStore": "...", "asidePointer": "...", "adopted": 3 }
 ```
-dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore 预览,不写盘。面板拉起新进程时 HTTP 成功信封为 `{ ok: true, command: "reset", started: true, snapshotId }`（本请求不跑完还原）。
+dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore 预览,不写盘。面板 `POST /api/reset` 成功信封与上表同形（本请求内跑完还原,不再返回 `{ started: true }`）。
 
 失败:`auth-required`;`not-found`(无快照);`verify-failed`;`restore-failed`;`bad-usage`(缺确认短语)。
 
