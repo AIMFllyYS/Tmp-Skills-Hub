@@ -37,7 +37,6 @@ import { performAdopt, performVerify, POINTER_REL, resolveNames } from "./store-
 import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze } from "./analyze.js";
 import { performShare } from "./share.js";
-import { openConsole } from "./open-console.js";
 import { applyLinkBatch, performLinkChange, previewLinkChange, type LinkChangeRequest, type LinkConflictItem, type LinkDiffItem } from "./link-actions.js";
 import { chatCompletion } from "./deepseek.js";
 
@@ -75,10 +74,6 @@ export interface UiAppOptions {
   analyzeChat?: typeof chatCompletion;
   /** GitHub/skills.sh 拉取用的 fetch 替身(测试隔离真实网络) */
   fetchImpl?: typeof fetch;
-  /** reset 拉起新进程(测试注入,缺省 openConsole) */
-  spawnReset?: (argv: string[]) => void;
-  /** 测试时不要 process.exit */
-  skipExitAfterReset?: boolean;
 }
 
 /** 默认静态根:编译后位于 packages/cli/dist/,上三级到仓库根,再进 apps/web/dist。 */
@@ -408,27 +403,30 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   );
 
   app.post("/api/reset", (c) =>
-    withStore(c, "reset", async (root) => {
+    withStore(c, "reset", async () => {
       const raw = (await c.req.json().catch(() => null)) as { snapshotId?: unknown; confirm?: unknown } | null;
       if (raw?.confirm !== "reset") return err(c, "reset", "bad-usage", "body 需要 { confirm: \"reset\" }", 400);
       const snapshotId = typeof raw.snapshotId === "string" && raw.snapshotId.trim() !== "" ? raw.snapshotId.trim() : undefined;
-      const preview = snapshotId === undefined
-        ? await previewRestoreClientSkills(root, home)
-        : await previewRestoreClientSkills(root, home, snapshotId);
-      if (!preview.ok) {
-        const status = preview.code === "not-found" ? 404 : 409;
-        return err(c, "reset", preview.code, preview.message, status);
+      // 动态 import,避免与 reset-cmds → ui-server 形成静态环。
+      const { performReset } = await import("./reset-cmds.js");
+      const result = await performReset(snapshotId === undefined ? { home } : { home, snapshotId });
+      if (!result.ok) {
+        const status =
+          result.code === "store-not-configured" ? 503
+          : result.code === "not-found" ? 404
+          : result.code === "io-error" ? 500
+          : 409;
+        return err(c, "reset", result.code, result.message, status);
       }
-      const cliEntry = process.argv[1] ?? "";
-      const argv = [process.execPath, cliEntry, "reset", "--yes", "--snapshot", preview.snapshotId, "--home", home];
-      const spawn = opts.spawnReset ?? openConsole;
-      spawn(argv);
-      if (opts.skipExitAfterReset !== true) {
-        setTimeout(() => {
-          process.exit(0);
-        }, 400);
-      }
-      return c.json({ ok: true, command: "reset", started: true, snapshotId: preview.snapshotId });
+      return c.json({
+        ok: true,
+        command: "reset",
+        storeRoot: result.storeRoot,
+        snapshotId: result.snapshotId,
+        asideStore: result.asideStore,
+        asidePointer: result.asidePointer,
+        adopted: result.adopted,
+      });
     }),
   );
 

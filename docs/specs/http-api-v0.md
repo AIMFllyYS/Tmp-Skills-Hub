@@ -56,7 +56,7 @@
 | POST /api/analyze | { target }(hash 前缀或 dirName) | { ok, command: "analyze", target, similar, conflict }(只建议,不写盘) | 400 bad-usage;404 not-found;503 not-configured;502 analyze-failed |
 | POST /api/share | { target, repo? }(hash 前缀或 dirName;repo 覆盖 manifest.trustedRepo) | { ok, command: "share", dirName, url, idempotent, dryRun } | 400 bad-usage;404 not-found;409 remote-conflict;503 auth-required(无 GITHUB_TOKEN);502 github-push-failed |
 | POST /api/backups/preview | { snapshotId? } | { ok, command: "backups-preview", snapshotId, dryRun: true, clients, skills, files, links, wouldRestore, skippedOwnDirs, asideStore, asidePointer }(不写盘) | 400;404 not-found;409 verify-failed;503 |
-| POST /api/reset | { snapshotId?, confirm: "reset" } | { ok, command: "reset", started: true, snapshotId }(argv 拉起新控制台后返回;本请求不搬家库存) | 400 bad-usage(缺确认短语);404;409 verify-failed\|restore-failed;503 |
+| POST /api/reset | { snapshotId?, confirm: "reset" } | { ok, command: "reset", storeRoot, snapshotId, asideStore, asidePointer, adopted }(本请求内跑完还原,与 CLI `reset --json` 同形) | 400 bad-usage(缺确认短语);404;409 verify-failed\|restore-failed;500 io-error;503 |
 
 - `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致

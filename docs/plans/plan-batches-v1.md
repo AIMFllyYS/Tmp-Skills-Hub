@@ -109,9 +109,9 @@ HTTP 补 adopt / links.apply / group / analyze / verify / restore；面板按钮
 
 ### 批 12 一键恢复到初始化前
 
-按快照把客户端 skills 逐条拼回，并提供面板一键 `reset`：确认后新开控制台还原 → 旁路指针与旧库存 → 用原 storeRoot 再 bootstrap → 自动打开新面板。
+按快照把客户端 skills 逐条拼回，并提供面板一键 `reset`：确认后在当前 ui 进程还原 → 旁路指针与旧库存 → 用原 storeRoot 再收录。页面继续可用，不另开控制台。
 
-验收：沙箱 restore 后文件/链接与快照一致（含 #97 旧格式）；reset 后指针指向同一 storeRoot、旧库存以旁路目录存在；预览不写盘；缺确认短语不 spawn；不整目录 rename 客户端 skills。
+验收：沙箱 restore 后文件/链接与快照一致（含 #97 旧格式）；reset 后指针指向同一 storeRoot、旧库存以旁路目录存在；预览不写盘；缺确认短语不写盘；`POST /api/reset` 成功后磁盘已还原（不是只返回 `started`）；不整目录 rename 客户端 skills。
 
 ## 不做（本计划）
 

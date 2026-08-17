@@ -268,11 +268,14 @@ export interface BackupsPreviewResponse {
   asidePointer: string;
 }
 
-export interface ResetStartedResponse {
+export interface ResetResponse {
   ok: true;
   command: "reset";
-  started: true;
+  storeRoot: string;
   snapshotId: string;
+  asideStore: string;
+  asidePointer: string;
+  adopted: number;
 }
 
 export interface AdoptResponse {
