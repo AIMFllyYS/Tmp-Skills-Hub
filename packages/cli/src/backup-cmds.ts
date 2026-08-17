@@ -2,7 +2,9 @@ import {
   createBackupSnapshot,
   discoverClientRoots,
   listBackupSnapshots,
+  previewRestoreClientSkills,
   readLatestSnapshotId,
+  restoreClientSkills,
   verifyBackupSnapshot,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
@@ -33,8 +35,12 @@ export async function runBackup(args: BackupArgs): Promise<void> {
     await runBackupVerify(args);
     return;
   }
+  if (verb === "restore") {
+    await runBackupRestore(args);
+    return;
+  }
   if (verb !== "") {
-    emitError(args.json === true, "backup", "bad-usage", "用法: skills-hub backup [--full] | backup list | backup verify [snapshotId]");
+    emitError(args.json === true, "backup", "bad-usage", "用法: skills-hub backup [--full] | backup list | backup verify [snapshotId] | backup restore [snapshotId]");
     return;
   }
   await runBackupCreate(args);
@@ -161,4 +167,58 @@ async function runBackupVerify(args: BackupArgs): Promise<void> {
     return;
   }
   console.log("✓ 快照 " + report.snapshotId + " 校验通过,核对 " + report.checked + " 个 blob。");
+}
+
+async function runBackupRestore(args: BackupArgs): Promise<void> {
+  const storeRoot = await resolveStoreRootOrFail(args, "backup");
+  if (storeRoot === null) return;
+  const home = resolveHome(args.home);
+  const snapshotId = args._[1] === undefined ? undefined : String(args._[1]);
+  const preview = snapshotId === undefined
+    ? await previewRestoreClientSkills(storeRoot, home)
+    : await previewRestoreClientSkills(storeRoot, home, snapshotId);
+  if (!preview.ok) {
+    emitError(args.json === true, "backup", preview.code, preview.message);
+    return;
+  }
+  if (args.dryRun === true) {
+    if (args.json === true) {
+      emitOk("backup", {
+        dryRun: true,
+        verb: "restore",
+        storeRoot,
+        snapshotId: preview.snapshotId,
+        clients: preview.clients,
+        skills: preview.skills,
+        files: preview.files,
+        links: preview.links,
+        wouldRestore: preview.wouldRestore,
+        skippedOwnDirs: preview.skippedOwnDirs,
+      });
+      return;
+    }
+    console.log("预演:将按快照 " + preview.snapshotId + " 还原 " + preview.skills + " 个 skill,不写盘。");
+    return;
+  }
+  if (!requireWriteAuth(args, "backup")) return;
+  const result = snapshotId === undefined
+    ? await restoreClientSkills(storeRoot, home)
+    : await restoreClientSkills(storeRoot, home, snapshotId);
+  if (!result.ok) {
+    emitError(args.json === true, "backup", result.code, result.message);
+    return;
+  }
+  if (args.json === true) {
+    emitOk("backup", {
+      verb: "restore",
+      storeRoot,
+      snapshotId: result.snapshotId,
+      clients: result.clients,
+      skills: result.skills,
+      files: result.files,
+      links: result.links,
+    });
+    return;
+  }
+  console.log("✓ 已按快照 " + result.snapshotId + " 还原 " + result.skills + " 个 skill。");
 }
