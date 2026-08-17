@@ -11,6 +11,7 @@ describe("filterActions", () => {
     expect(ids("enable")).toContain("enable");
     expect(ids("分析")).toContain("analyze");
     expect(ids("分享")).toContain("share");
+    expect(ids("reset")).toContain("reset");
   });
 });
 
@@ -22,5 +23,6 @@ describe("actionUnavailableReason", () => {
     expect(actionUnavailableReason("analyze", empty)).toBe("先选一个 skill");
     expect(actionUnavailableReason("share", empty)).toBe("先选一个 skill");
     expect(actionUnavailableReason("adopt", empty)).toBeNull();
+    expect(actionUnavailableReason("reset", empty)).toBe("在报告页使用");
   });
 });

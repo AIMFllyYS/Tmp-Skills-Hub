@@ -126,7 +126,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
     warn(
       "✓ 已备份快照 " + bak.snapshotId +
         " (" + bak.manifest.files.length + " 个文件, " + bak.manifest.links.length + " 条链接, 新增 blob " +
-        bak.manifest.blobsWritten + ")\n  校验: skills-hub backup verify。还原: skills-hub backup restore 或 skills-hub reset。",
+        bak.manifest.blobsWritten + ")\n  校验: skills-hub backup verify。还原: skills-hub backup restore，或面板「恢复到初始化前」。",
     );
   } else {
     console.log("已跳过备份。");

@@ -1,5 +1,5 @@
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
-import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, ShareResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse, VerifyResponse } from "./types.js";
+import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, BackupsListResponse, BackupsPreviewResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, ResetStartedResponse, ShareResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse, VerifyResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchSkills(): Promise<SkillRecord[]> {
@@ -81,6 +81,41 @@ export async function fetchClients(): Promise<ClientsResponse["clients"]> {
 export async function fetchVerify(): Promise<VerifyResponse> {
   const res = await fetch("/api/verify");
   const body = (await res.json().catch(() => null)) as VerifyResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
+}
+
+export async function fetchBackups(): Promise<BackupsListResponse> {
+  const res = await fetch("/api/backups");
+  const body = (await res.json().catch(() => null)) as BackupsListResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
+}
+
+export async function previewReset(snapshotId?: string): Promise<BackupsPreviewResponse> {
+  const res = await fetch("/api/backups/preview", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(snapshotId === undefined ? {} : { snapshotId }),
+  });
+  const body = (await res.json().catch(() => null)) as BackupsPreviewResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
+}
+
+export async function startReset(snapshotId: string, confirm: string): Promise<ResetStartedResponse> {
+  const res = await fetch("/api/reset", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ snapshotId, confirm }),
+  });
+  const body = (await res.json().catch(() => null)) as ResetStartedResponse | { ok: false; message?: string } | null;
   if (!res.ok || body === null || !body.ok) {
     throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
   }
