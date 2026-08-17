@@ -38,6 +38,12 @@
 - `installedAt`:入库时间(ISO)
 - **不存在 `source` 字段**(历史遗留的 clientId 别名已废除)
 
+### UsageRankEntry(与 core 同名类型;GET /api/stats 的 ranking 项)
+
+- `skillHash`:skill 内容哈希(hex)。**没有 `hash` 字段**(与 SkillRecord.hash 同值、不同键名)
+- `show` / `enable`:分别计数
+- `total`:`show + enable`
+
 ## 3. 写端点
 
 | 端点 | body | 成功响应 | 失败 |

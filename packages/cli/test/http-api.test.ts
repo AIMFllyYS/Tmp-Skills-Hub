@@ -526,9 +526,14 @@ describe("http-api 契约", () => {
     expect(after.skills[0]!.visibleIn).toEqual(["claude"]);
     const stats = (await (await app.request("/api/stats")).json()) as {
       stats: { counters: Record<string, { enable: number }> };
+      ranking: { skillHash?: string; hash?: string }[];
     };
-    const counter = Object.values(stats.stats.counters)[0];
-    expect(counter?.enable).toBe(1);
+    expect(stats.stats.counters[hash]?.enable).toBe(1);
+    expect(stats.ranking.some((r) => r.skillHash === hash)).toBe(true);
+    for (const row of stats.ranking) {
+      expect(typeof row.skillHash).toBe("string");
+      expect(row).not.toHaveProperty("hash");
+    }
   });
 
   it("enable 失败:缺 clientId → 400 bad-usage;未知客户端/hash → 404 not-found", async () => {

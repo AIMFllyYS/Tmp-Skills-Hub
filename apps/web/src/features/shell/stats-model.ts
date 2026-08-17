@@ -1,4 +1,4 @@
-import type { ClientInfo, SkillRecord, UsageCounters } from "../skills/types.js";
+import type { ClientInfo, SkillRecord, UsageCounters, UsageRankEntry } from "../skills/types.js";
 
 export function coverageOf(skills: SkillRecord[]): { linked: number; total: number } {
   return { linked: skills.filter((s) => s.visibleIn.length > 0).length, total: skills.length };
@@ -12,13 +12,13 @@ export function recentSkills(skills: SkillRecord[], limit: number): SkillRecord[
 
 export function usageRows(
   skills: SkillRecord[],
-  ranking: { hash: string; total: number; show: number; enable: number }[],
+  ranking: UsageRankEntry[],
   counters: Map<string, UsageCounters>,
 ): { name: string; total: number; show: number; enable: number }[] {
   const byHash = new Map(skills.map((s) => [s.hash, s.dirName]));
   if (ranking.length > 0) {
     return ranking.map((r) => ({
-      name: byHash.get(r.hash) ?? r.hash.slice(0, 12),
+      name: byHash.get(r.skillHash) ?? r.skillHash.slice(0, 12),
       total: r.total,
       show: r.show,
       enable: r.enable,

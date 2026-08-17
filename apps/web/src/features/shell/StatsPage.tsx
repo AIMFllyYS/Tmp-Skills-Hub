@@ -1,12 +1,12 @@
 import { useState } from "react";
-import type { ClientInfo, SkillRecord, UsageCounters } from "../skills/types.js";
+import type { ClientInfo, SkillRecord, UsageCounters, UsageRankEntry } from "../skills/types.js";
 import type { StatsTab } from "./page.js";
 import { appDistribution, sourceDistribution, usageRows } from "./stats-model.js";
 
 interface StatsPageProps {
   skills: SkillRecord[];
   clients: ClientInfo[];
-  ranking: { hash: string; total: number; show: number; enable: number }[];
+  ranking: UsageRankEntry[];
   counters: Map<string, UsageCounters>;
 }
 

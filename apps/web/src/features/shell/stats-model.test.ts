@@ -41,7 +41,21 @@ describe("stats-model", () => {
 
   it("usageRows 优先用 ranking", () => {
     const skills = [skill("alpha", [])];
-    const rows = usageRows(skills, [{ hash: skills[0]!.hash, total: 9, show: 4, enable: 5 }], new Map());
+    const rows = usageRows(skills, [{ skillHash: skills[0]!.hash, total: 9, show: 4, enable: 5 }], new Map());
     expect(rows[0]).toEqual({ name: "alpha", total: 9, show: 4, enable: 5 });
+  });
+
+  it("usageRows 按 GET /api/stats 的 skillHash 解析,不读 hash", () => {
+    const skills = [skill("alpha", [])];
+    const wire = { skillHash: skills[0]!.hash, show: 0, enable: 2, total: 2 };
+    expect("hash" in wire).toBe(false);
+    const rows = usageRows(skills, [wire], new Map());
+    expect(rows[0]).toEqual({ name: "alpha", total: 2, show: 0, enable: 2 });
+  });
+
+  it("usageRows 库存对不上时用 skillHash 前 12 位,不抛", () => {
+    const orphan = "5b715426f4c8be86bc50b65171c4c43435cec6bc02d1025f2e40988551f304a5";
+    const rows = usageRows([], [{ skillHash: orphan, show: 0, enable: 2, total: 2 }], new Map());
+    expect(rows[0]).toEqual({ name: orphan.slice(0, 12), total: 2, show: 0, enable: 2 });
   });
 });
