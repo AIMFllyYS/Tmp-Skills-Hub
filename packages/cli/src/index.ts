@@ -18,6 +18,7 @@ import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 import { runAnalyze } from "./analyze.js";
 import { runBootstrap } from "./bootstrap.js";
 import { runBackup } from "./backup-cmds.js";
+import { runReset } from "./reset-cmds.js";
 import { runShare } from "./share.js";
 import { loadEnvFile } from "./env.js";
 
@@ -339,6 +340,28 @@ const backup = defineCommand({
   },
 });
 
+const reset = defineCommand({
+  meta: { name: "reset", description: "按快照还原客户端 skills,旁路旧库存,用原路径再收录并拉起面板" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
+    dryRun: { type: "boolean", description: "只打印将要发生的变更,不写盘" },
+    json: { type: "boolean", description: "机器可读输出" },
+    snapshot: { type: "string", description: "快照 ID(缺省 latest)" },
+    port: { type: "string", description: "完成后面板端口", default: String(DEFAULT_UI_PORT) },
+  },
+  async run({ args }) {
+    await runReset({
+      home: args.home,
+      yes: args.yes === true,
+      dryRun: args.dryRun === true,
+      json: args.json === true,
+      snapshot: args.snapshot === undefined || args.snapshot === "" ? undefined : args.snapshot,
+      port: Number(args.port),
+    });
+  },
+});
+
 const bootstrap = defineCommand({
   meta: { name: "bootstrap", description: "一键初始化:备份 → 收录全部本机 skills → 自动启动面板(交互式;库存已就绪时直接启动面板)" },
   args: {
@@ -358,7 +381,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, ui, bootstrap },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, ui, bootstrap },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。
