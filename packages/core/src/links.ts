@@ -65,8 +65,8 @@ export async function readLinksLedger(storeRoot: string): Promise<LinkEntry[]> {
     if (obj.version === undefined) return [];
     throw new Error("links.json 损坏(缺 entries 字段): " + file);
   }
-  if (obj.version !== LINKS_LEDGER_VERSION) {
-    throw new Error("links.json 版本不支持: " + String(obj.version) + " (期望 " + LINKS_LEDGER_VERSION + ")");
+  if (typeof obj.version !== "number" || obj.version > LINKS_LEDGER_VERSION) {
+    throw new Error("links.json 版本不支持: " + String(obj.version) + " (当前支持 " + LINKS_LEDGER_VERSION + ")");
   }
   if (!Array.isArray(obj.entries)) {
     throw new Error("links.json 损坏(entries 不是数组): " + file);

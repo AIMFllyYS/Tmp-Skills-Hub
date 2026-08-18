@@ -1,9 +1,10 @@
 import { cp, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { hashSkillFolder } from "./hash.js";
+import { migrateVersionedData, type MigrationStep } from "./migrate.js";
 import { readSkillMeta } from "./skill-md.js";
 import { STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
-import type { SkillRecord, SkillSource } from "./types.js";
+import type { SkillMeta, SkillRecord, SkillSource } from "./types.js";
 
 /**
  * 库存读写与收录(去重入库)内核,spec §2.2/§2.3/§3。
@@ -15,12 +16,28 @@ import type { SkillRecord, SkillSource } from "./types.js";
  */
 
 /** index.json 文件格式版本。契约演进时递增,读取端按版本迁移。 */
-export const STORE_INDEX_VERSION = 1;
+export const STORE_INDEX_VERSION = 2;
+
+export interface DraftRecord {
+  dirName: string;
+  meta: SkillMeta;
+  origin: SkillSource;
+  createdAt: string;
+}
 
 export interface StoreIndexFile {
   version: number;
   skills: SkillRecord[];
+  drafts: DraftRecord[];
 }
+
+const INDEX_MIGRATIONS: MigrationStep<StoreIndexFile>[] = [
+  {
+    from: 1,
+    to: 2,
+    up: (data) => ({ ...data, drafts: [] }),
+  },
+];
 
 /** 一次收录的输入:源文件夹 + 来源(溯源展示用)。 */
 export interface AdoptInput {
@@ -44,12 +61,17 @@ export interface AdoptionReport {
 
 /** 读取库存清单;文件缺失或为空占位({})视为空库,JSON 损坏抛错(不静默重置)。 */
 export async function readStoreIndex(storeRoot: string): Promise<SkillRecord[]> {
+  return (await readStoreIndexFile(storeRoot)).skills;
+}
+
+/** 读取完整 index 文件(含 drafts)。 */
+export async function readStoreIndexFile(storeRoot: string): Promise<StoreIndexFile> {
   const indexPath = path.join(storeRoot, "index.json");
   let raw: string;
   try {
     raw = await readFile(indexPath, "utf8");
   } catch {
-    return [];
+    return { version: STORE_INDEX_VERSION, skills: [], drafts: [] };
   }
   let data: unknown;
   try {
@@ -58,23 +80,43 @@ export async function readStoreIndex(storeRoot: string): Promise<SkillRecord[]> 
     throw new Error("index.json 无法解析: " + indexPath);
   }
   const file = data as Partial<StoreIndexFile>;
-  if (file.version === undefined && file.skills === undefined) return []; // init 占位 {}
-  if (file.version !== STORE_INDEX_VERSION || !Array.isArray(file.skills)) {
+  if (file.version === undefined && file.skills === undefined) {
+    return { version: STORE_INDEX_VERSION, skills: [], drafts: [] };
+  }
+  if (typeof file.version !== "number" || !Array.isArray(file.skills)) {
     throw new Error("index.json 版本或结构不支持: " + indexPath);
   }
-  return file.skills;
+  const asFile: StoreIndexFile = {
+    version: file.version,
+    skills: file.skills,
+    drafts: Array.isArray(file.drafts) ? file.drafts : [],
+  };
+  return migrateVersionedData(asFile, {
+    current: STORE_INDEX_VERSION,
+    chain: INDEX_MIGRATIONS,
+    label: "index.json",
+  });
 }
 
-/** 原子写库存清单:先写 tmp 再 rename。 */
-export async function writeStoreIndex(storeRoot: string, skills: SkillRecord[]): Promise<void> {
+/** 原子写库存清单:先写 tmp 再 rename。保留 drafts。 */
+export async function writeStoreIndex(
+  storeRoot: string,
+  skills: SkillRecord[],
+  drafts?: DraftRecord[],
+): Promise<void> {
   const indexPath = path.join(storeRoot, "index.json");
-  const content = JSON.stringify({ version: STORE_INDEX_VERSION, skills }, null, 2) + "\n";
+  const existingDrafts = drafts ?? (await readStoreIndexFile(storeRoot)).drafts;
+  const content = JSON.stringify(
+    { version: STORE_INDEX_VERSION, skills, drafts: existingDrafts },
+    null,
+    2,
+  ) + "\n";
   const tmpPath = path.join(
     storeRoot,
     STORE_TMP_DIR,
     "index." + process.pid + "-" + Date.now() + ".tmp",
   );
-  await mkdir(path.dirname(tmpPath), { recursive: true }); // tmp 可能被清理,自愈重建
+  await mkdir(path.dirname(tmpPath), { recursive: true });
   await writeFile(tmpPath, content, "utf8");
   await rename(tmpPath, indexPath);
 }

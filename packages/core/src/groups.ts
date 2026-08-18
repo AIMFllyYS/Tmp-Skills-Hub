@@ -50,10 +50,13 @@ function parse(raw: string, p: string): GroupsFile {
   if (obj.version === undefined && obj.groups === undefined) {
     return { version: GROUPS_FILE_VERSION, groups: [] };
   }
-  if (obj.version !== GROUPS_FILE_VERSION || !Array.isArray(obj.groups)) {
+  if (typeof obj.version !== "number" || !Array.isArray(obj.groups)) {
     throw new Error("groups.json 版本或结构不支持: " + p);
   }
-  return { version: obj.version, groups: obj.groups as GroupDef[] };
+  if (obj.version > GROUPS_FILE_VERSION) {
+    throw new Error("groups.json 版本过高: " + obj.version + " (当前支持 " + GROUPS_FILE_VERSION + ")，请升级 skills-hub");
+  }
+  return { version: GROUPS_FILE_VERSION, groups: obj.groups as GroupDef[] };
 }
 
 /** 读分组定义;缺失或占位 {} → 空分组;损坏抛错(绝不静默重置)。 */
