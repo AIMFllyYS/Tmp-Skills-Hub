@@ -3,6 +3,7 @@ interface ConfirmDialogProps {
   body: string;
   confirmLabel: string;
   busy?: boolean;
+  tone?: "default" | "danger";
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -13,6 +14,7 @@ export function ConfirmDialog({
   body,
   confirmLabel,
   busy = false,
+  tone = "danger",
   onCancel,
   onConfirm,
 }: ConfirmDialogProps): React.JSX.Element {
@@ -34,7 +36,11 @@ export function ConfirmDialog({
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-700 hover:border-red-300 disabled:text-ink-faint"
+            className={
+              tone === "danger"
+                ? "rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-700 hover:border-red-300 disabled:text-ink-faint"
+                : "rounded-lg bg-ink-strong px-3 py-2 text-sm text-white disabled:opacity-50"
+            }
           >
             {busy ? "处理中…" : confirmLabel}
           </button>

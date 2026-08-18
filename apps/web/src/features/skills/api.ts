@@ -1,4 +1,5 @@
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
+import { hashesByClient, hashesForApply } from "./batch-links.js";
 import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, BackupsListResponse, BackupsPreviewResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, ResetResponse, ShareResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse, VerifyResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
@@ -293,6 +294,35 @@ export async function applyLinks(params: LinksBatchParams): Promise<LinksApplyRe
     throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
   }
   return body;
+}
+
+/**
+ * 预览后只提交无冲突的 hash。多客户端时按落点各打一次 apply,
+ * 避免笛卡尔积把「这边可挂、那边占用」整单打回。
+ */
+export async function applyCleanLinkBatch(params: LinksBatchParams): Promise<{
+  created: string[];
+  removed: string[];
+  skipped: number;
+}> {
+  const preview = await previewLinks(params);
+  if (params.clientIds.length === 1) {
+    const { hashes, skipped } = hashesForApply(preview, params.action);
+    if (hashes.length === 0) return { created: [], removed: [], skipped };
+    const result = await applyLinks({ ...params, hashes });
+    return { created: result.created, removed: result.removed, skipped };
+  }
+  const byClient = hashesByClient(preview, params.action);
+  const created: string[] = [];
+  const removed: string[] = [];
+  for (const clientId of params.clientIds) {
+    const hashes = byClient.get(clientId);
+    if (hashes === undefined || hashes.length === 0) continue;
+    const result = await applyLinks({ hashes, clientIds: [clientId], action: params.action });
+    created.push(...result.created);
+    removed.push(...result.removed);
+  }
+  return { created, removed, skipped: preview.conflictCount };
 }
 
 export async function setSkillEnabled(hash: string, clientId: string, enable: boolean): Promise<void> {

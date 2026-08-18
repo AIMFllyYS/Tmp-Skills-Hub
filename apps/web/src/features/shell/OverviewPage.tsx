@@ -32,9 +32,11 @@ function Card({
 export function OverviewPage({ skills, clients, doctor, snapshotCount, onGo }: OverviewPageProps): React.JSX.Element {
   const cover = coverageOf(skills);
   const dangling = doctor?.danglingLinks.length ?? 0;
+  const unlinked = skills.filter((s) => s.visibleIn.length === 0).length;
   const issues: string[] = [];
   if (doctor !== null && (!doctor.store.resolved || !doctor.store.reachable)) issues.push("库存不可达");
   if (dangling > 0) issues.push("悬空链接 " + String(dangling) + " 条");
+  if (unlinked > 0) issues.push(String(unlinked) + " 个 skill 还没挂到任何应用，可在 Skills 管理里一键启用");
   if (snapshotCount === 0) issues.push("还没有备份快照");
   const recent = recentSkills(skills, 5);
 
@@ -57,7 +59,7 @@ export function OverviewPage({ skills, clients, doctor, snapshotCount, onGo }: O
           onClick={() => onGo("skills", "apps")}
           className="rounded-lg bg-ink-strong px-3 py-2 text-sm text-white"
         >
-          去管应用
+          {unlinked > 0 ? "去一键启用" : "去管应用"}
         </button>
         <button
           type="button"

@@ -1,10 +1,14 @@
 import { useMemo, useState } from "react";
+import { getAction } from "../actions/registry.js";
 import { AdoptForm } from "../panel/AdoptForm.js";
 import { fallbackClientState } from "../panel/client-view.js";
 import { VirtualSkillList } from "../panel/VirtualSkillList.js";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
+import { formatBatchResult } from "../skills/batch-links.js";
 import { SkillViewer } from "../skills/SkillViewer.js";
 import type { ArchivedSkill, ClientInfo, ClientSkillStatesResponse, SkillRecord } from "../skills/types.js";
+import { appsCoverageHint, enabledCountForClient, filterSkillsByQuery, sortClientsForApps } from "./apps-layout.js";
+import { ConfirmDialog } from "./ConfirmDialog.js";
 import type { SkillsTab } from "./page.js";
 
 interface SkillsPageProps {
@@ -23,6 +27,8 @@ interface SkillsPageProps {
   onSaved: (oldHash: string, newHash: string) => void;
   onAdopted: () => void;
   onRestore: (name: string) => void;
+  onNotice: (text: string) => void;
+  onBulkDone: () => void;
 }
 
 function tabClass(active: boolean): string {
@@ -49,18 +55,78 @@ export function SkillsPage({
   onSaved,
   onAdopted,
   onRestore,
+  onNotice,
+  onBulkDone,
 }: SkillsPageProps): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [showArchive, setShowArchive] = useState(false);
-  const listed = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const rows = q === ""
-      ? skills
-      : skills.filter((s) => s.dirName.toLowerCase().includes(q) || s.meta.description.toLowerCase().includes(q));
-    return [...rows].sort((a, b) => a.dirName.localeCompare(b.dirName));
-  }, [skills, query]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirm, setConfirm] = useState<{
+    action: "enable" | "disable";
+    clientIds: string[];
+    add: number;
+    remove: number;
+    conflicts: number;
+  } | null>(null);
+  const listed = useMemo(() => filterSkillsByQuery(skills, query), [skills, query]);
+  const orderedClients = useMemo(() => sortClientsForApps(clients, skills), [clients, skills]);
   const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
-  const clientId = selectedClientId ?? clients[0]?.clientId ?? null;
+  const clientId = selectedClientId ?? orderedClients[0]?.clientId ?? null;
+  const allClientIds = orderedClients.map((c) => c.clientId);
+  const allHashes = skills.map((s) => s.hash);
+  const enabledHere = clientId === null
+    ? 0
+    : (clientStates?.clientId === clientId ? clientStates.enabled : enabledCountForClient(skills, clientId));
+
+  const startBulk = async (action: "enable" | "disable", clientIds: string[]): Promise<void> => {
+    if (allHashes.length === 0 || clientIds.length === 0) {
+      onNotice("没有可操作的 skill 或应用。");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const preview = await getAction("preview-links").execute({ hashes: allHashes, clientIds, action });
+      const n = action === "enable" ? preview.add : preview.remove;
+      if (n === 0) {
+        onNotice(
+          preview.conflictCount > 0
+            ? "没有可变更的项（" + String(preview.conflictCount) + " 处被本地目录占用）"
+            : "没有需要变更的项",
+        );
+        return;
+      }
+      setConfirm({
+        action,
+        clientIds,
+        add: preview.add,
+        remove: preview.remove,
+        conflicts: preview.conflictCount,
+      });
+    } catch (e) {
+      onNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const runConfirmedBulk = async (): Promise<void> => {
+    if (confirm === null) return;
+    setBulkBusy(true);
+    try {
+      const result = await getAction("apply-clean-links").execute({
+        hashes: allHashes,
+        clientIds: confirm.clientIds,
+        action: confirm.action,
+      });
+      setConfirm(null);
+      onNotice(formatBatchResult(confirm.action, result.created.length, result.removed.length, result.skipped));
+      onBulkDone();
+    } catch (e) {
+      onNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -79,8 +145,8 @@ export function SkillsPage({
       {tab === "apps" && (
         <div className="flex min-h-0 flex-1">
           <div className="w-48 shrink-0 overflow-y-auto border-r border-line py-2">
-            {clients.length === 0 && <p className="px-4 py-3 text-sm text-ink-mid">未发现应用</p>}
-            {clients.map((c) => (
+            {orderedClients.length === 0 && <p className="px-4 py-3 text-sm text-ink-mid">未发现应用</p>}
+            {orderedClients.map((c) => (
               <button
                 key={c.clientId}
                 type="button"
@@ -101,11 +167,43 @@ export function SkillsPage({
               <>
                 <div className="shrink-0 border-b border-line px-4 py-3">
                   <p className="text-sm font-medium text-ink-strong">{clientId}</p>
-                  <p className="mt-1 text-xs text-ink-mid">
-                    已启用 {clientStates?.clientId === clientId ? clientStates.enabled : skills.filter((s) => s.visibleIn.includes(clientId)).length}
-                    {" / "}
-                    {skills.length}
-                  </p>
+                  <p className="mt-1 text-xs text-ink-mid">{appsCoverageHint(enabledHere, skills.length)}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      data-testid="bulk-enable-client"
+                      disabled={bulkBusy}
+                      onClick={() => void startBulk("enable", [clientId])}
+                      className="rounded-full bg-ink-strong px-3 py-1 text-xs text-white disabled:opacity-50"
+                    >
+                      全部启用
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="bulk-disable-client"
+                      disabled={bulkBusy || enabledHere === 0}
+                      onClick={() => void startBulk("disable", [clientId])}
+                      className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong disabled:opacity-50"
+                    >
+                      全部停用
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="bulk-enable-all"
+                      disabled={bulkBusy || allClientIds.length === 0}
+                      onClick={() => void startBulk("enable", allClientIds)}
+                      className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong disabled:opacity-50"
+                    >
+                      启用到全部应用
+                    </button>
+                  </div>
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="搜索名称 / 描述…"
+                    data-testid="apps-skill-search"
+                    className="mt-3 w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
+                  />
                 </div>
                 <VirtualSkillList
                   skills={listed}
@@ -144,7 +242,7 @@ export function SkillsPage({
               className="w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
             />
           </div>
-          <AdoptForm onDone={onAdopted} />
+          <AdoptForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
           <div className="flex min-h-0 flex-1">
             <div className="flex w-64 shrink-0 flex-col border-r border-line">
               <VirtualSkillList
@@ -180,6 +278,24 @@ export function SkillsPage({
             )}
           </div>
         </div>
+      )}
+      {confirm !== null && (
+        <ConfirmDialog
+          title={confirm.action === "enable" ? "全部启用" : "全部停用"}
+          body={
+            confirm.action === "enable"
+              ? "将新增 " + String(confirm.add) + " 条链接到 " + (confirm.clientIds.length === 1 ? confirm.clientIds[0]! : String(confirm.clientIds.length) + " 个应用") +
+                (confirm.conflicts > 0 ? "。" + String(confirm.conflicts) + " 处已被本地目录占用，不会覆盖。" : "。") +
+                "磁盘会立刻改掉；正在运行的应用可能仍要新开对话。"
+              : "将从 " + (confirm.clientIds.length === 1 ? confirm.clientIds[0]! : String(confirm.clientIds.length) + " 个应用") +
+                " 摘掉 " + String(confirm.remove) + " 条受管链接。库存原件保留。"
+          }
+          confirmLabel={confirm.action === "enable" ? "启用" : "停用"}
+          tone={confirm.action === "disable" ? "danger" : "default"}
+          busy={bulkBusy}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => void runConfirmedBulk()}
+        />
       )}
     </div>
   );

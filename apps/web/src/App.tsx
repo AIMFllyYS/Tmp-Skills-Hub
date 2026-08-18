@@ -6,6 +6,7 @@ import { Sidebar } from "./features/shell/Sidebar.js";
 import { SkillsPage } from "./features/shell/SkillsPage.js";
 import { StatsPage } from "./features/shell/StatsPage.js";
 import type { AppPage, SkillsTab } from "./features/shell/page.js";
+import { sortClientsForApps } from "./features/shell/apps-layout.js";
 import {
   fetchArchive,
   fetchBackups,
@@ -58,14 +59,15 @@ export default function App() {
   ): void => {
     setStoreRoot(catalog.storeRoot);
     setSkills(catalog.skills);
-    setClients(nextClients);
+    const ordered = sortClientsForApps(nextClients, catalog.skills);
+    setClients(ordered);
     setUsageByHash(new Map(Object.entries(st.stats.counters)));
     setRanking(st.ranking);
     setArchived(ar);
     setDoctor(doc);
     setLatestSnapshotId(backups?.latest ?? null);
     setSnapshotCount(backups?.snapshots.length ?? 0);
-    setSelectedClientId((prev) => prev ?? nextClients[0]?.clientId ?? null);
+    setSelectedClientId((prev) => prev ?? ordered[0]?.clientId ?? null);
   }, []);
 
   useEffect(() => {
@@ -142,6 +144,15 @@ export default function App() {
     setFocusedHash(newHash);
   }, []);
 
+  const refreshCatalog = useCallback((): void => {
+    void Promise.all([fetchCatalog(), selectedClientId === null ? Promise.resolve(null) : fetchClientSkillStates(selectedClientId)])
+      .then(([c, states]) => {
+        setStoreRoot(c.storeRoot);
+        setSkills(c.skills);
+        if (states !== null) setClientStates(states);
+      });
+  }, [selectedClientId]);
+
   const handleRestore = useCallback((name: string) => {
     void (async () => {
       try {
@@ -197,13 +208,10 @@ export default function App() {
             onSelectClient={setSelectedClientId}
             onToggle={(skill, clientId, enable) => void handleToggle(skill, clientId, enable)}
             onSaved={handleSaved}
-            onAdopted={() => {
-              void fetchCatalog().then((c) => {
-                setStoreRoot(c.storeRoot);
-                setSkills(c.skills);
-              });
-            }}
+            onAdopted={refreshCatalog}
             onRestore={handleRestore}
+            onNotice={setToast}
+            onBulkDone={refreshCatalog}
           />
         )}
         {state === "ready" && page === "settings" && (

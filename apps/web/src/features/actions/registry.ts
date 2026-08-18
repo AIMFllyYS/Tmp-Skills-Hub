@@ -1,4 +1,4 @@
-import { adoptSource, analyzeSkill, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, previewReset, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, shareSkill, startReset, translateText } from "../skills/api.js";
+import { adoptSource, analyzeSkill, applyCleanLinkBatch, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, previewReset, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, shareSkill, startReset, translateText } from "../skills/api.js";
 import type { LinksBatchParams } from "../skills/types.js";
 
 export type ActionId =
@@ -9,6 +9,7 @@ export type ActionId =
   | "translate"
   | "preview-links"
   | "apply-links"
+  | "apply-clean-links"
   | "adopt"
   | "restore"
   | "create-group"
@@ -110,6 +111,13 @@ export const ACTION_REGISTRY = {
     destructive: false,
     supportsPreview: true,
     execute: (p: LinksBatchParams) => applyLinks(p),
+  },
+  "apply-clean-links": {
+    id: "apply-clean-links",
+    verb: "批量挂链",
+    destructive: false,
+    supportsPreview: true,
+    execute: (p: LinksBatchParams) => applyCleanLinkBatch(p),
   },
   adopt: {
     id: "adopt",
