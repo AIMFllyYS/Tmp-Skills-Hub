@@ -73,7 +73,7 @@ describe("runBootstrap", () => {
     const backupsDir = path.join(home, STORE_BACKUPS_DIR);
     await expect(import("node:fs/promises").then((m) => m.readdir(backupsDir))).rejects.toThrow();
     const skills = await import("node:fs/promises").then((m) => m.readdir(path.join(home, "skills")));
-    expect(skills.length).toBe(2);
+    expect(skills.length).toBeGreaterThanOrEqual(2);
   });
 
   it("迁移确认 N:取消,不做任何改动", async () => {

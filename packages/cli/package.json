@@ -8,7 +8,8 @@
     "skills-hub": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "self-skill"
   ],
   "scripts": {
     "build": "tsc -b",

@@ -1,16 +1,21 @@
 import { createInterface } from "node:readline";
+import { statSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { mkdir, readdir, rename, writeFile } from "node:fs/promises";
 import { openBrowser } from "./open-console.js";
 import {
+  adoptSkillFolder,
   createBackupSnapshot,
   discoverClientRoots,
   ensureBuiltinGroups,
   initializeStoreLayout,
   readPointerStoreRoot,
   readSkillMeta,
+  readStoreIndex,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
+import { performLinkChange } from "./link-actions.js";
 import { POINTER_REL, runAdopt } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
 
@@ -145,11 +150,62 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
   warn(`✓ 全部完成:库存位于 ${storeRoot},收录 ${result.adopted} 份(新增/重复/冲突见上方统计)。`);
   if (result.discovered === 0) console.log("未发现任何达标 skill(缺 name/description 的目录不计入)。");
 
+  // 4b. 收录并启用自身 skill(#169)
+  await adoptAndEnableSelfSkill(base, storeRoot);
+
   // 5. 自动启动面板——必须传 home 基座,不能传 storeRoot(#95)
   if (opts.ui !== false) {
     console.log("启动面板:http://127.0.0.1:" + port);
   }
   await launchUi(port, base, opts);
+}
+
+/**
+ * Adopt the skills-hub self-skill and enable it to all discovered clients.
+ * Idempotent: skips if already in the store.
+ */
+async function adoptAndEnableSelfSkill(home: string, storeRoot: string): Promise<void> {
+  const selfSkillDir = findSelfSkillDir();
+  if (selfSkillDir === null) return;
+  try {
+    const outcome = await adoptSkillFolder(storeRoot, selfSkillDir, { kind: "authored", reference: "bootstrap" });
+    if (outcome.kind !== "adopted" && outcome.kind !== "duplicate") return;
+    const record = outcome.record;
+    const roots = await discoverClientRoots(home, { storeRoot });
+    for (const root of roots) {
+      try {
+        await performLinkChange(
+          { storeRoot, clientId: root.clientId, scope: "global", skillsDir: root.skillsDir, dirNames: [record.dirName] },
+          "enable",
+        );
+      } catch {
+        // best-effort: skip clients where linking fails
+      }
+    }
+  } catch {
+    // self-skill adoption is best-effort
+  }
+}
+
+function findSelfSkillDir(): string | null {
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    const cliSrc = path.dirname(thisFile);
+    const candidates = [
+      path.resolve(cliSrc, "..", "self-skill", "SKILL.md"),
+      path.resolve(cliSrc, "self-skill", "SKILL.md"),
+    ];
+    for (const c of candidates) {
+      try {
+        if (statSync(c).isFile()) return path.dirname(c);
+      } catch {
+        // continue
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return null;
 }
 
 /** 启动面板:home 永远是客户端发现基座。测试可注入函数替身。 */
