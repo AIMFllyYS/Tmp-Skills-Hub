@@ -257,6 +257,28 @@ export async function archiveSkill(hash: string): Promise<void> {
   }
 }
 
+export interface CreateResponse {
+  ok: true;
+  command: "new";
+  verb: string;
+  dirName: string;
+  hash?: string;
+  storeDir?: string;
+}
+
+export async function createSkill(dirName: string, description: string): Promise<CreateResponse> {
+  const res = await fetch("/api/drafts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ dirName, description }),
+  });
+  const body = (await res.json().catch(() => null)) as CreateResponse | { ok: false; message?: string } | null;
+  if (!res.ok || body === null || !body.ok) {
+    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
+  }
+  return body;
+}
+
 export async function adoptSource(source: string): Promise<AdoptResponse> {
   const res = await fetch("/api/adopt", {
     method: "POST",

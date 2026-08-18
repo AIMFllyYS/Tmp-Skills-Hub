@@ -38,5 +38,8 @@ describe("ACTION_REGISTRY", () => {
     expect(getAction("reset").destructive).toBe(true);
     expect(getAction("reset").supportsPreview).toBe(true);
     expect(getAction("restore").id).not.toBe("reset");
+    expect(getAction("create").verb).toBe("新建");
+    expect(getAction("create").destructive).toBe(false);
+    expect(getAction("create").supportsPreview).toBe(false);
   });
 });

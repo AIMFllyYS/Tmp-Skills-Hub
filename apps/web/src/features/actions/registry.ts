@@ -1,4 +1,4 @@
-import { adoptSource, analyzeSkill, applyCleanLinkBatch, applyLinks, archiveSkill, changeGroupMembers, createGroup, deleteGroup, previewLinks, previewReset, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, shareSkill, startReset, translateText } from "../skills/api.js";
+import { adoptSource, analyzeSkill, applyCleanLinkBatch, applyLinks, archiveSkill, changeGroupMembers, createGroup, createSkill, deleteGroup, previewLinks, previewReset, renameGroup, restoreSkill, saveSkillFile, setSkillEnabled, shareSkill, startReset, translateText } from "../skills/api.js";
 import type { LinksBatchParams } from "../skills/types.js";
 
 export type ActionId =
@@ -11,6 +11,7 @@ export type ActionId =
   | "apply-links"
   | "apply-clean-links"
   | "adopt"
+  | "create"
   | "restore"
   | "create-group"
   | "rename-group"
@@ -125,6 +126,13 @@ export const ACTION_REGISTRY = {
     destructive: false,
     supportsPreview: false,
     execute: (p: { source: string }) => adoptSource(p.source),
+  },
+  create: {
+    id: "create",
+    verb: "新建",
+    destructive: false,
+    supportsPreview: false,
+    execute: (p: { dirName: string; description: string }) => createSkill(p.dirName, p.description),
   },
   "create-group": {
     id: "create-group",
