@@ -38,7 +38,7 @@ describe("allocateDraft", () => {
 
     const index = await readStoreIndexFile(store);
     expect(index.drafts).toHaveLength(1);
-    expect(index.drafts[0].dirName).toBe("my-skill");
+    expect(index.drafts[0]!.dirName).toBe("my-skill");
     expect(index.skills).toHaveLength(0);
   });
 
@@ -85,7 +85,7 @@ describe("commitDraft", () => {
 
     expect(result.record.dirName).toBe("my-skill");
     expect(result.record.meta.name).toBe("my-skill");
-    expect(result.record.origins[0].kind).toBe("authored");
+    expect(result.record.origins[0]!.kind).toBe("authored");
 
     const expectedHash = await hashSkillFolder(path.join(store, STORE_SKILLS_DIR, "my-skill"));
     expect(result.record.hash).toBe(expectedHash);

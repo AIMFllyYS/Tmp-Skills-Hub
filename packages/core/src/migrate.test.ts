@@ -45,7 +45,7 @@ describe("migrateVersionedData", () => {
   test("throws when migration step is missing", () => {
     const input: TestFile = { version: 1, data: "hello" };
     expect(() =>
-      migrateVersionedData(input, { current: 3, chain: [chain[1]], label: "test.json" }),
+      migrateVersionedData(input, { current: 3, chain: [chain[1]!], label: "test.json" }),
     ).toThrow(/缺少.*v1/);
   });
 });

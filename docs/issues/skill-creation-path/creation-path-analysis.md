@@ -271,20 +271,20 @@ schema 迁移机制（8.5）
 
 ## 11. 决策点（待人勾选）
 
-- [ ] 在架构 §4 补第六个操作「创建」，并写明它与「存」的区别
-- [ ] 主路径取 E（创建即落库存）还是 B（建完再同步）
-- [ ] 是否接受 C（写客户端 hook 配置）；若接受，是否限定为「只提醒不阻断」
-- [ ] 是否做 D（watcher），还是只靠面板上的手动重扫
-- [ ] 自身 skill 常驻怎么落地（谁装、装到哪些客户端、用户如何撤销）
-- [ ] 创建期要采集哪些 provenance 字段（与 #168 分类口径对齐后才能定）
+- [x] 在架构 §4 补第六个操作「创建」，并写明它与「存」的区别 — **已落地** `feat/169-create-operation` `6c41207`
+- [x] 主路径取 E（创建即落库存）还是 B（建完再同步） — **取 E**，`core/src/create.ts` 实现 `allocateDraft` / `commitDraft`
+- [x] 是否接受 C（写客户端 hook 配置）；若接受，是否限定为「只提醒不阻断」 — **不做 C**，理由见 §3.3
+- [x] 是否做 D（watcher），还是只靠面板上的手动重扫 — **不做 D**，本分支只留主路径 + 事后兜底
+- [x] 自身 skill 常驻怎么落地（谁装、装到哪些客户端、用户如何撤销） — **bootstrap 自动 adopt + enable**，用户用 `disable` 撤销，不做特例
+- [ ] 创建期要采集哪些 provenance 字段（与 #168 分类口径对齐后才能定） — 暂只记 `kind: "authored"`，#168 定稿后追加
 
 架构层（§8）新增：
 
-- [ ] 资产模型是否补 draft / committed 这根轴；draft 是否进 `index.json`，还是只在 commit 时入账
-- [ ] allocate / commit 补在 `StorageProvider` 上，还是新开第五个接口（本文倾向前者，理由见 §8.4）
-- [ ] `index.json` schema 迁移机制是否作为 #168 与本文的**共同前置**先行落地（§8.5）
-- [ ] 授权是否拆成「库存内开目录」与「挂链回客户端」两段（§8.6）
-- [ ] 空壳 draft 的清理是否豁免软删除铁律
+- [x] 资产模型是否补 draft / committed 这根轴；draft 是否进 `index.json`，还是只在 commit 时入账 — **draft 单独存在 `index.json` 的 `drafts[]` 中**，不混进 `skills[]`
+- [x] allocate / commit 补在 `StorageProvider` 上，还是新开第五个接口（本文倾向前者，理由见 §8.4） — **补在 `StorageProvider` 上**
+- [x] `index.json` schema 迁移机制是否作为 #168 与本文的**共同前置**先行落地（§8.5） — **已落地** `core/src/migrate.ts`，index.json v1→v2
+- [x] 授权是否拆成「库存内开目录」与「挂链回客户端」两段（§8.6） — **已拆**，`cli-commands-v0.md` §2.1
+- [x] 空壳 draft 的清理是否豁免软删除铁律 — **豁免**，`discard` 移入 `archive/drafts/` 不引入真删除
 
 ## 12. 不做（本分析）
 
