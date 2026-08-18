@@ -5,7 +5,12 @@ import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import {
   addSkillToGroups,
+  allocateDraft,
   archiveSkill,
+  commitDraft,
+  createAndCommit,
+  discardDraft,
+  listDrafts,
   restoreArchivedSkill,
   classifyClientLink,
   createGroup,
@@ -695,6 +700,58 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
         fetchFailed: report.fetchFailed,
         outcomes: report.outcomes,
       });
+    }),
+  );
+
+  // ============ drafts (#169) ============
+
+  app.get("/api/drafts", (c) =>
+    withStore(c, "drafts", async (root) => {
+      const drafts = await listDrafts(root);
+      return c.json({ ok: true, command: "drafts", drafts });
+    }),
+  );
+
+  app.post("/api/drafts", (c) =>
+    withStore(c, "new", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { dirName?: unknown; description?: unknown } | null;
+      const dirName = typeof raw?.dirName === "string" ? raw.dirName.trim() : "";
+      if (dirName === "") return err(c, "new", "bad-usage", "body 需要 { dirName: string }", 400);
+      const description = typeof raw?.description === "string" ? raw.description.trim() : "";
+      if (description !== "") {
+        const result = await createAndCommit(root, dirName, description, { kind: "authored", reference: "web" });
+        if (result.kind === "conflict") return err(c, "new", "draft-exists", result.reason, 409);
+        if (result.kind === "incomplete" || result.kind === "draft-not-found") {
+          return err(c, "new", "draft-incomplete", "kind" in result && "reason" in result ? (result as { reason: string }).reason : "SKILL.md 未达标", 400);
+        }
+        if (result.kind === "duplicate") return err(c, "new", "draft-exists", "内容与已有记录重复: " + result.record.dirName, 409);
+        if (result.kind !== "committed") return err(c, "new", "io-error", "未知结果", 500);
+        return c.json({ ok: true, command: "new", verb: "create", dirName, hash: result.record.hash, storeDir: path.join(root, "skills", dirName) });
+      }
+      const result = await allocateDraft(root, dirName, { origin: { kind: "authored", reference: "web" } });
+      if (result.kind === "conflict") return err(c, "new", "draft-exists", result.reason, 409);
+      return c.json({ ok: true, command: "new", verb: "allocate", dirName: result.draft.dirName, storeDir: result.storeDir });
+    }),
+  );
+
+  app.post("/api/drafts/:dirName/commit", (c) =>
+    withStore(c, "new", async (root) => {
+      const dirName = c.req.param("dirName");
+      const result = await commitDraft(root, dirName);
+      if (result.kind === "draft-not-found") return err(c, "new", "not-found", "草稿不存在: " + dirName, 404);
+      if (result.kind === "incomplete") return err(c, "new", "bad-usage", result.reason, 400);
+      if (result.kind === "duplicate") return err(c, "new", "draft-exists", "内容与已有记录重复: " + result.record.dirName, 409);
+      if (result.kind === "conflict") return err(c, "new", "draft-exists", result.reason, 409);
+      return c.json({ ok: true, command: "new", verb: "commit", dirName, hash: result.record.hash });
+    }),
+  );
+
+  app.post("/api/drafts/:dirName/discard", (c) =>
+    withStore(c, "new", async (root) => {
+      const dirName = c.req.param("dirName");
+      const result = await discardDraft(root, dirName);
+      if (result.kind === "draft-not-found") return err(c, "new", "not-found", "草稿不存在: " + dirName, 404);
+      return c.json({ ok: true, command: "new", verb: "discard", dirName, archivePath: result.archivePath });
     }),
   );
 
