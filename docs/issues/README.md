@@ -14,6 +14,7 @@
 ## 现有文档
 
 - [backlog-from-first-sync.md](./backlog-from-first-sync.md) — 第一次同步会后置项
+- [skill-creation-path/](./skill-creation-path/) — 用户在客户端里**新建** skill 这条路径的分析与追踪（对应 [#169](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/169)）
 
 ## 与 GitHub Issues 的关系
 

@@ -158,6 +158,7 @@ scripts/        辅助脚本（setup/build/dev）
 ### docs/issues/ — 内部问题与后置项
 
 - [backlog-from-first-sync.md](docs/issues/backlog-from-first-sync.md) — 会上明确后置、但第一天就要躺在列表里的项
+- [skill-creation-path/](docs/issues/skill-creation-path/) — **「创建」操作未定义**：用户在客户端里新建 skill 的路径分析（#169 的决策依据；#162 与 #168 的上游根因）
 
 ### docs/conventions/ — 项目规范
 
