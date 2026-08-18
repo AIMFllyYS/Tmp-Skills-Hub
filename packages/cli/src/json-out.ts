@@ -21,6 +21,9 @@ export type JsonErrorCode =
   | "restore-failed"
   | "github-push-failed"
   | "remote-conflict"
+  | "draft-exists"
+  | "draft-not-found"
+  | "draft-incomplete"
   | "io-error";
 
 /** 失败信封:--json 输出到 stdout,人类文本进 stderr,退出码 2。 */

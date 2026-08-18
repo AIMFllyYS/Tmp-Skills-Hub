@@ -112,7 +112,7 @@ export async function commitDraft(storeRoot: string, dirName: string): Promise<C
     };
   }
 
-  const draft = indexFile.drafts[draftIdx];
+  const draft = indexFile.drafts[draftIdx]!;
   const record: SkillRecord = {
     hash,
     dirName,
@@ -169,7 +169,9 @@ export async function createAndCommit(
   description: string,
   origin?: SkillSource,
 ): Promise<CommitOutcome | AllocateOutcome> {
-  const allocResult = await allocateDraft(storeRoot, dirName, { description, origin });
+  const seed: { description: string; origin?: SkillSource } = { description };
+  if (origin) seed.origin = origin;
+  const allocResult = await allocateDraft(storeRoot, dirName, seed);
   if (allocResult.kind !== "allocated") return allocResult;
   return commitDraft(storeRoot, dirName);
 }

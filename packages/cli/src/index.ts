@@ -20,6 +20,7 @@ import { runBootstrap } from "./bootstrap.js";
 import { runBackup } from "./backup-cmds.js";
 import { runReset } from "./reset-cmds.js";
 import { runShare } from "./share.js";
+import { runNew } from "./create-cmds.js";
 import { loadEnvFile } from "./env.js";
 
 /** 写入指针文件(home 下),先建目录再原子写。 */
@@ -362,6 +363,18 @@ const reset = defineCommand({
   },
 });
 
+const newCmd = defineCommand({
+  meta: { name: "new", description: "创建新 skill:在库存内分配目录(new <name>)、定稿(new commit <name>)、丢弃(new discard <name>)、列草稿(new list)" },
+  args: {
+    home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    json: { type: "boolean", description: "机器可读输出" },
+    description: { type: "string", description: "skill 描述(allocate 时写入模板)" },
+  },
+  run({ args }) {
+    return runNew(args);
+  },
+});
+
 const bootstrap = defineCommand({
   meta: { name: "bootstrap", description: "一键初始化:备份 → 收录全部本机 skills → 自动启动面板(交互式;库存已就绪时直接启动面板)" },
   args: {
@@ -381,7 +394,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, ui, bootstrap },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, new: newCmd, ui, bootstrap },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。
