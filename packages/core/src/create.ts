@@ -1,10 +1,9 @@
-import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { hashSkillFolder } from "./hash.js";
 import { readSkillMeta } from "./skill-md.js";
 import {
   type DraftRecord,
-  readStoreIndex,
   readStoreIndexFile,
   writeStoreIndex,
 } from "./store.js";

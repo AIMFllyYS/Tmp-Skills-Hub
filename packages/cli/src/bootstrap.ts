@@ -12,7 +12,6 @@ import {
   initializeStoreLayout,
   readPointerStoreRoot,
   readSkillMeta,
-  readStoreIndex,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { performLinkChange } from "./link-actions.js";

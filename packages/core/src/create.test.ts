@@ -1,10 +1,9 @@
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { allocateDraft, commitDraft, createAndCommit, discardDraft, listDrafts } from "./create.js";
 import { readStoreIndexFile } from "./store.js";
-import { adoptSkillFolder } from "./store.js";
 import { initializeStoreLayout, STORE_SKILLS_DIR, STORE_ARCHIVE_DIR } from "./store-layout.js";
 import { hashSkillFolder } from "./hash.js";
 

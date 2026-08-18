@@ -4,9 +4,7 @@ import {
   createAndCommit,
   discardDraft,
   listDrafts,
-  STORE_SKILLS_DIR,
 } from "@skills-hub/core";
-import path from "node:path";
 import { resolveStoreRootOrFail } from "./store-cmds.js";
 import { emitError, emitOk } from "./json-out.js";
 
