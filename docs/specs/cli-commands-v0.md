@@ -39,7 +39,11 @@
 | `reset [--snapshot <id>]` | 还原客户端 → 旁路指针与旧库存（只改名不真删）→ 用确认前读到的 storeRoot 再收录并拉起面板 | 人 / 面板 |
 | `share <name>` | 把库存 skill 推到授信仓库 `skills/<name>/`，返回可被 `adopt` 再拉回的 GitHub tree 链接 | 人 / 面板 |
 | `ui` | 起本地服务与面板 | 人 |
-| `bootstrap` | 一键体验：交互确认（库存位置/备份/迁移）→ 自动备份 → 收录全部本机 skills → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
+| `new <name>` | 在库存内分配目录、写模板（`drafts[]` 占名）。内容留给 AI 或人后续填写。**库存内写操作，不要求 `--yes`**（见 §2.1 授权分级） | AI |
+| `new commit <name>` | 校验 `SKILL.md` 达标后定稿：算哈希、从 `drafts[]` 移入 `skills[]`。同样不要求 `--yes`，除非带 `--enable` 挂链 | AI / 面板 |
+| `new discard <name>` | 放弃草稿：目录移入 `archive/drafts/`，从 `drafts[]` 清除。不引入真删除——半成品原样保留 | AI |
+| `new list` | 列出当前草稿（`drafts[]`），只读 | AI / 面板 |
+| `bootstrap` | 一键体验：交互确认（库存位置/备份/迁移）→ 自动备份 → 收录全部本机 skills → 收录并启用自身 skill → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
 
 > **bootstrap 的流程与铁律**：每一步确认都是显式授权（写操作铁律不变）；备份 = 调用与 `backup` 同一套内核（`<库存根>/backups/blobs` 共享池 + 快照 manifest；源目录只读；库存内链接只记引用）；库存已就绪的幂等启动不重新备份；迁移 = 与 `init`+`adopt` 同一套布局与去重/冲突判定；非 TTY 环境需 `--yes`（跳过全部确认，库存位置取默认）。
 
@@ -48,6 +52,19 @@
 - **没有 `delete` 命令。** 所有删除一律是 `archive`（软删除）。需要彻底删除时，只向用户显示归档文件的路径，由用户自己动手。代码里不存在真删除 skill 内容的路径。
 - **`disable` 不等于删除。** 它只摘链接，库存原件一个字节不动。
 - **写操作默认要确认。** `adopt`、`enable`、`disable`、`archive`、`archive restore`、`backup`、`backup restore`、`reset`、`share` 在交互终端下需确认；非交互环境必须显式 `--yes`，否则拒绝执行。`backup list` / `backup verify` 只读，不需 `--yes`。面板「分享」按钮与设置里的重置确认弹窗算显式操作（请求体仍带 `confirm: "reset"`）。
+
+### 2.1 授权分级（#169 新增）
+
+创建操作的两个动作风险等级不同，授权强度分开：
+
+| 动作 | 碰谁 | 是否要 `--yes` |
+|---|---|---|
+| `new`（库存内开目录、写模板） | 只碰库存 `skills/` 与 `index.json`，不碰用户任何客户端目录 | **否** |
+| `new commit`（定稿入清单） | 同上 | **否** |
+| `new commit --enable <client>`（定稿后挂链回客户端） | 碰用户客户端目录 | **是**，沿用 `requireWriteAuth` |
+| `new discard`（移入归档区） | 只碰库存 | **否** |
+
+分级只对 `new` 系列生效，不回头改 `adopt` 等既有命令的授权强度，避免行为回归。面板调用 HTTP 端点时无需额外确认（面板按钮即用户显式操作，与现有写端点一致）。
 - **`backup restore` 与 `archive restore` 不是同一条命令。** 前者按备份快照写回客户端 skills；后者把归档 zip 拉回库存活跃区。
 - **`reset --yes` 的库存路径**必须是确认前读到的 `storeRoot`，不得落到默认 `~/.skills-hub`。面板点确认后在**当前 `ui` 进程**内跑完同一套还原（与 CLI `reset --yes` 同一实现），本请求返回完成结果；不另开控制台、不 `process.exit`。CLI 直接调用 `reset` 时仍可在结束后拉起面板。
 
@@ -77,7 +94,7 @@
 ### 4.1 skills-hub 自己也是一个 Skill
 
 上面这套流程要成立，AI 必须先知道 CLI 怎么用。所以 skills-hub 自带一份 `SKILL.md`，内容就是「什么时机该调用我、怎么调用」。
-这份 skill 是唯一需要常驻在客户端目录里的，其余全部按需 `enable`。
+这份 skill 随 `bootstrap` 收录并默认启用到全部已发现客户端，其余全部按需 `enable`。用户可通过 `disable` 撤销。
 
 ### 4.2 调用计数的落点
 

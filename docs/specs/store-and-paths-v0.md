@@ -36,7 +36,8 @@
 ├── stats.json        # 调用计数
 ├── skills/<name>/    # 活跃 skill 真身，符号链接指向这里
 ├── archive/          # 软删除归档，<name>-<ISO时间戳>.zip
-│   └── versions/      # 编辑写回前的旧内容快照（<name>-<ISO>/<relPath>，版本历史）
+│   ├── versions/      # 编辑写回前的旧内容快照（<name>-<ISO>/<relPath>，版本历史）
+│   └── drafts/        # 被 discard 的草稿（<name>-<ISO时间戳>/，原样保留不 zip，不算真删除）
 └── tmp/              # 原子操作暂存，操作结束即清空
 ```
 

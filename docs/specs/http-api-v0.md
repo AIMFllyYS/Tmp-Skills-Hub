@@ -27,6 +27,9 @@
 | GET /api/verify | { ok, command: "verify", storeRoot, checked, passed, drifted, missing }(只读;CLI --json 的 ok 数组在此改名为 passed,避开信封 ok) | 503 |
 | GET /api/doctor | { ok, command: "doctor", store, roots, linkTypes, danglingLinks }(与 CLI --json 同形) | 503 store-not-configured |
 | GET /api/backups | { ok, command: "backup", verb: "list", storeRoot, latest, snapshots }(与 CLI backup list --json 同形) | 503 |
+| GET /api/drafts | { ok, command: "drafts", drafts: DraftRecord[] }(当前草稿列表) | 503 |
+| GET /api/skills/:hash/tree | { ok, command: "skill-tree", hash, files: SkillFileEntry[] }(文件树) | 404 not-found;503 |
+| GET /api/skills/:hash/file?path= | { ok, command: "skill-file", hash, path, content, binary }(单文件内容) | 400 bad-usage;404;413;503 |
 
 ### SkillRecord(与 json-contract §2 同定义)
 
@@ -55,6 +58,11 @@
 | POST /api/skills/:hash/archive | —(无 body) | { ok, command: "archive", dirName, archiveFile, sizeBytes, removedLinks } | 404 not-found;409(归档失败);503 |
 | POST /api/skills/:hash/restore | —(无 body;:hash 为归档名) | { ok, command: "restore", dirName, hash, archiveFile } | 404 not-found;409 conflict;500;503 |
 | POST /api/adopt | { source }(本地路径或 GitHub / skills.sh URL) | { ok, command: "adopt", adopted, duplicates, conflicts, invalid, outcomes } | 400 bad-usage;502 github-fetch-failed;503 |
+| POST /api/drafts | { dirName, description? }(面板一步到位:allocate + commit) | { ok, command: "new", verb: "create", dirName, hash, storeDir } | 400 bad-usage;409 draft-exists;503 |
+| POST /api/drafts/:dirName/commit | —(无 body) | { ok, command: "new", verb: "commit", dirName, hash } | 404 draft-not-found;400 draft-incomplete;409 conflict;503 |
+| POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 404 draft-not-found;503 |
+| PUT /api/skills/:hash/file?path= | raw body(文件内容) | { ok, command: "skill-save", hash, path, newHash } | 400 bad-usage;404;413;503 |
+| POST /api/translate | { text, from?, to? } | { ok, command: "translate", translated } | 400;502 |
 | POST /api/groups | { id, name?, description? } | { ok, command: "group", verb: "create", id, name, description } | 400 bad-usage;409 group-exists;503 |
 | PATCH /api/groups/:id | { name?, description? }(至少一项) | { ok, command: "group", verb: "rename", id, name, description } | 400;404 group-not-found;503 |
 | DELETE /api/groups/:id | — | { ok, command: "group", verb: "delete", id, memberCount }(只删分组定义,不删 skill) | 404 group-not-found;503 |
@@ -88,6 +96,9 @@
 | auth-required | 503 |
 | verify-failed | 409 |
 | restore-failed | 409 |
+| draft-exists | 409 |
+| draft-not-found | 404 |
+| draft-incomplete | 400 |
 
 > 注:auth-required / group-empty / invalid-skill 是 CLI 专属 code(交互授权、按空组 enable)。分组写操作走 HTTP,code 与 CLI 同口径。
 
