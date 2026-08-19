@@ -816,15 +816,23 @@ export interface StartUiServerOptions {
   home?: string;
 }
 
-export async function startUiServer(opts: StartUiServerOptions = {}): Promise<void> {
-  const port = opts.port ?? DEFAULT_UI_PORT;
-  const h = opts.home ?? resolveHome();
-  const storeOpts: StoreRootOptions = { pointerFilePath: path.join(h, POINTER_REL) };
-  if (opts.home !== undefined && opts.home !== "") storeOpts.cliHome = opts.home;
+/**
+ * 面板库存定位:home 只作指针基座,不当 storeRoot。
+ * `resolveStoreRoot` 的 cliHome 会直通成库存根;bootstrap / `ui --home` 传入的是用户目录,
+ * 库存与 home 分离时(本机默认形态)会把主目录当成空库存。
+ */
+export async function resolveUiStoreRoot(home: string): Promise<string | null> {
+  const storeOpts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
   const envHome = process.env.SKILLS_HUB_HOME;
   if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
   const resolved = await resolveStoreRoot(storeOpts);
-  const storeRoot = resolved.ok ? resolved.storeRoot : null;
+  return resolved.ok ? resolved.storeRoot : null;
+}
+
+export async function startUiServer(opts: StartUiServerOptions = {}): Promise<void> {
+  const port = opts.port ?? DEFAULT_UI_PORT;
+  const h = opts.home ?? resolveHome();
+  const storeRoot = await resolveUiStoreRoot(h);
   serve({ fetch: createUiApp({ storeRoot, home: h }).fetch, port, hostname: "127.0.0.1" }, (info) => {
     console.log("skill-hub ui: http://127.0.0.1:" + info.port + "/api/skills" + (storeRoot === null ? " (库存未配置)" : ""));
   });

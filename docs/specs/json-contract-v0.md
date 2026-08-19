@@ -43,7 +43,7 @@ v0 不分页。list 返回全部命中;`total` 恒等于 `skills.length`。将�
 
 ## 2. 命令结构
 
-> 库存根解析:--home 是**显式库存根**(同时作沙箱 home 重定向);其次 SKILLS_HUB_HOME;最后指针文件。解析失败 → store-not-configured。
+> 库存根解析(`list` / `adopt` 等):--home 是**显式库存根**(同时作沙箱 home 重定向);其次 SKILLS_HUB_HOME;最后指针文件。解析失败 → store-not-configured。`ui` / `bootstrap` 拉起的面板进程例外:传入的 home 只作指针基座,库存读指针(或 SKILLS_HUB_HOME),见 [store-and-paths-v0.md](store-and-paths-v0.md) §1。
 
 ### 2.1 list
 

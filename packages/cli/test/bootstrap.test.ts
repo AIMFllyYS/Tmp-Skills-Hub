@@ -9,6 +9,7 @@ import {
   STORE_BACKUPS_DIR,
 } from "@skills-hub/core";
 import { runBootstrap } from "../src/bootstrap.js";
+import { resolveUiStoreRoot } from "../src/ui-server.js";
 
 const tempRoots: string[] = [];
 
@@ -116,6 +117,19 @@ describe("runBootstrap", () => {
     const pointer = JSON.parse(await readFile(path.join(home, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string };
     expect(pointer.storeRoot).toBe(path.resolve(storeRoot));
     expect(captured[0]!.home).not.toBe(pointer.storeRoot);
+    expect(await resolveUiStoreRoot(captured[0]!.home!)).toBe(pointer.storeRoot);
+  });
+
+  it("面板库存读指针,不把 home 基座当成空库存", async () => {
+    const home = await newHome();
+    const storeRoot = path.join(home, "hub-store");
+    await mkdir(path.join(home, ".skills-hub"), { recursive: true });
+    await writeFile(
+      path.join(home, ".skills-hub", "config.json"),
+      JSON.stringify({ storeRoot }) + "\n",
+      "utf8",
+    );
+    expect(await resolveUiStoreRoot(home)).toBe(storeRoot);
   });
 
   it("库存内链接只记引用;悬空链接不炸", async () => {
