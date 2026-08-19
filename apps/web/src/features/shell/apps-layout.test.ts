@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ClientInfo, SkillRecord } from "../skills/types.js";
-import { appsCoverageHint, enabledCountForClient, filterSkillsByQuery, sortClientsForApps } from "./apps-layout.js";
+import { appsCoverageHint, enabledCountForClient, filterSkillsByQuery, groupClientIds, sortClientsForApps } from "./apps-layout.js";
 
 function client(id: string): ClientInfo {
   return { clientId: id, skillsDir: "/x/" + id };
@@ -58,5 +58,15 @@ describe("filterSkillsByQuery", () => {
 describe("enabledCountForClient", () => {
   it("只计 visibleIn 含该客户端的", () => {
     expect(enabledCountForClient([skill("a", ["cursor"]), skill("b", [])], "cursor")).toBe(1);
+  });
+});
+
+describe("groupClientIds", () => {
+  it("按 cursor / claude / 其他分组且保持原 id", () => {
+    expect(groupClientIds(["trae", "cursor", "claude-code", "agents"])).toEqual([
+      { key: "cursor", label: "Cursor", ids: ["cursor"] },
+      { key: "claude", label: "Claude", ids: ["claude-code"] },
+      { key: "other", label: "其他", ids: ["trae", "agents"] },
+    ]);
   });
 });

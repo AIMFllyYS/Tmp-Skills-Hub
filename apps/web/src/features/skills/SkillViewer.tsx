@@ -225,7 +225,12 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
             </div>
           )}
           {saveError !== null && <Notice text={saveError} tone="error" />}
-          {fileLoading && <p className="text-xs text-ink-mid" data-testid="skill-loading">加载中…</p>}
+          {fileLoading && (
+            <div data-testid="skill-loading">
+              <span className="sr-only">加载中…</span>
+              <div className="h-24 rounded-lg bg-surface motion-safe:animate-pulse" />
+            </div>
+          )}
           {!fileLoading && selected === "" && fileError === null && treeError === null && (
             <p className="text-xs text-ink-mid">此 skill 没有可显示的文件</p>
           )}

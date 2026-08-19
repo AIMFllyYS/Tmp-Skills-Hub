@@ -24,7 +24,7 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 │           ├── scan.ts             # 命令实现(编排 core 的能力)
 │           └── ui-server.ts        # Hono 本地查看服务(App 壳的数据源)
 ├── apps/
-│   └── web/                        # 人用壳(Vite + React SPA:总览/统计/Skills/设置)
+│   └── web/                        # 人用壳(Vite + React SPA:总览/统计/Skills；设置走 Dialog)
 │       └── src/
 │           ├── main.tsx
 │           ├── App.tsx

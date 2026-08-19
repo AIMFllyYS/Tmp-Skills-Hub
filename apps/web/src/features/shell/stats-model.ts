@@ -14,10 +14,11 @@ export function usageRows(
   skills: SkillRecord[],
   ranking: UsageRankEntry[],
   counters: Map<string, UsageCounters>,
-): { name: string; total: number; show: number; enable: number }[] {
+): { hash: string; name: string; total: number; show: number; enable: number }[] {
   const byHash = new Map(skills.map((s) => [s.hash, s.dirName]));
   if (ranking.length > 0) {
     return ranking.map((r) => ({
+      hash: r.skillHash,
       name: byHash.get(r.skillHash) ?? r.skillHash.slice(0, 12),
       total: r.total,
       show: r.show,
@@ -27,7 +28,7 @@ export function usageRows(
   return skills
     .map((s) => {
       const u = counters.get(s.hash) ?? { show: 0, enable: 0 };
-      return { name: s.dirName, total: u.show + u.enable, show: u.show, enable: u.enable };
+      return { hash: s.hash, name: s.dirName, total: u.show + u.enable, show: u.show, enable: u.enable };
     })
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 }
