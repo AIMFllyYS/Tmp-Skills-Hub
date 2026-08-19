@@ -8,7 +8,7 @@ skill-hub 服务社团自己的成员，而不是公开市场上的所有人。�
 
 ### 核心能力
 
-- **统一查看技能目录**（本地页面：列表、搜索、来源分类、tag）
+- **本机面板管理人用路径**（总览 / 统计 / Skills 管理 / 设置）
 - **收录本地与 GitHub 上的技能**
 - **按文件夹内容哈希去重**
 - **符号链接回各 Agent 技能目录**（改 = 全局改，不漂移）
@@ -22,13 +22,13 @@ skill-hub 服务社团自己的成员，而不是公开市场上的所有人。�
 
 ## 技术栈
 
-产品本体是一个本地 CLI 工具，Web 只是它的查看壳。完整论证见 [docs/designs/tech-stack-decision.md](./docs/designs/tech-stack-decision.md)。
+人用 Web 面板（`bootstrap` / `ui` 一键打开）；CLI 给 Agent 与脚本。完整论证见 [docs/designs/tech-stack-decision.md](./docs/designs/tech-stack-decision.md)。
 
 | 部分 | 技术 | 说明 |
 |---|---|---|
 | `packages/core` | 纯 TypeScript 库 | 确定性内核：库存、哈希、symlink、接口抽象 |
 | `packages/cli` | citty + Hono | 终端入口 + 本地查看服务 |
-| `apps/web` | Vite + React 19 + Tailwind CSS 4 | 统一查看的 App 壳（纯静态 SPA） |
+| `apps/web` | Vite + React 19 + Tailwind CSS 4 | 人用壳（纯静态 SPA） |
 | 共享层 | Git 仓库 | 授信成员直接写，链接分发，零服务器 |
 | 工程 | pnpm workspace + TypeScript strict | Node ≥22 |
 

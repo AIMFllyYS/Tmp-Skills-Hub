@@ -20,12 +20,13 @@
 
 1. `AGENTS.md` —— 操作索引与硬规则，特别是「目标模式」一节（你的权限与禁区）
 2. `docs/audits/panel-and-perf-audit-2026-08-17.md` —— **本轮事实依据**。卡顿不是点击造成的，四个 P0 都有实测数据。不要重新发明原因。
-3. `docs/designs/panel-ia-v1.md` —— 面板信息架构（三栏、行级关系、一次原子提交、动作注册表）
-4. `docs/plans/plan-batches-v1.md` —— 执行依据；当前从批 7 起
-5. `docs/specs/store-and-paths-v0.md` —— 库存位置、沙箱边界
-6. `docs/specs/cli-commands-v0.md` —— 命令名唯一口径，新命令先改本文
-7. `docs/conventions/ui-design-v0.md` —— 视觉铁律：无阴影、无毛玻璃、无渐变
-8. `docs/conventions/core-patterns.md` —— 确定性内核（注意 2026-08-16 修订）
+3. `docs/designs/app-shell-v2.md` —— 人用壳（总览 / 统计 / Skills 管理 / 设置）
+4. `docs/designs/panel-ia-v1.md` —— 数据层约束（行级关系、一次原子提交、动作注册表；三栏不再是人用 IA）
+5. `docs/plans/plan-batches-v1.md` —— 执行依据；当前从批 7 起
+6. `docs/specs/store-and-paths-v0.md` —— 库存位置、沙箱边界
+7. `docs/specs/cli-commands-v0.md` —— 命令名唯一口径，新命令先改本文
+8. `docs/conventions/ui-design-v0.md` —— 视觉铁律：无阴影、无毛玻璃、无渐变
+9. `docs/conventions/core-patterns.md` —— 确定性内核（注意 2026-08-16 修订）
 
 方向有疑问时，回去看 `docs/updates/meeting-2026-08-15-first-sync.md` 的录音稿原文。
 

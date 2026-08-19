@@ -321,6 +321,36 @@ async function main() {
     console.log("");
 
     await send("Page.navigate", { url: panelUrl }, sessionId);
+    const navReady = await (async () => {
+      for (let i = 0; i < 80; i++) {
+        const found = await evalJs(`(() => {
+          const ids = ["nav-overview", "nav-stats", "nav-skills", "nav-settings"];
+          return ids.every((id) => document.querySelector("[data-testid=" + id + "]"));
+        })()`);
+        if (found === true) return true;
+        await sleep(250);
+      }
+      return false;
+    })();
+    if (navReady !== true) {
+      console.error("找不到左侧三板块 + 设置导航。");
+      return 1;
+    }
+    const openedSkills = await evalJs(`(() => {
+      const nav = document.querySelector("[data-testid=nav-skills]");
+      if (!nav) return false;
+      nav.click();
+      return true;
+    })()`);
+    if (openedSkills !== true) {
+      console.error("点不开 Skills 管理。");
+      return 1;
+    }
+    await evalJs(`(() => {
+      const tab = document.querySelector("[data-testid=skills-tab-content]");
+      if (tab) tab.click();
+      return true;
+    })()`);
     let cards = 0;
     for (let i = 0; i < 80; i++) {
       cards = await evalJs("document.querySelectorAll('[data-testid=skill-card]').length");
@@ -364,11 +394,22 @@ async function main() {
 
     const probe = JSON.parse(await evalJs("JSON.stringify(window.__smoke)"));
     const clickLongMax = probe.longTasks.length > 0 ? Math.max(...probe.longTasks) : 0;
-    await evalJs(`(() => { const t = document.querySelector('[data-testid=inspector-tab-clients]'); if (t) t.click(); return true; })()`);
+    await evalJs(`(() => { const t = document.querySelector("[data-testid=skills-tab-apps]"); if (t) t.click(); return true; })()`);
     let switches = 0;
     for (let i = 0; i < 20; i++) {
       switches = await evalJs("document.querySelectorAll('[data-testid=client-switch]').length");
       if (switches > 0) break;
+      await sleep(100);
+    }
+    await evalJs(`(() => {
+      const nav = document.querySelector("[data-testid=nav-settings]");
+      if (nav) nav.click();
+      return true;
+    })()`);
+    let resetEntry = false;
+    for (let i = 0; i < 20; i++) {
+      resetEntry = await evalJs("!!document.querySelector('[data-testid=reset-button]')");
+      if (resetEntry === true) break;
       await sleep(100);
     }
 
@@ -406,6 +447,13 @@ async function main() {
       "> 0",
       switches > 0,
       "开关数为 0(B7-1 类回归:/api/clients 空或未渲染)",
+    );
+    const rNav = line(
+      "设置重置入口",
+      resetEntry === true ? "有按钮" : "无",
+      "设置页有重置按钮",
+      resetEntry === true,
+      "左下角设置里没有重置入口",
     );
 
     console.log("--- 性能 ---");
@@ -453,6 +501,18 @@ async function main() {
     }
     await writeStoreIndex(storeRoot, scaleRecords);
     await send("Page.reload", { ignoreCache: true }, sessionId);
+    for (let i = 0; i < 80; i++) {
+      const ready = await evalJs("!!document.querySelector('[data-testid=nav-skills]')");
+      if (ready === true) break;
+      await sleep(250);
+    }
+    await evalJs(`(() => {
+      const nav = document.querySelector("[data-testid=nav-skills]");
+      if (nav) nav.click();
+      const tab = document.querySelector("[data-testid=skills-tab-content]");
+      if (tab) tab.click();
+      return true;
+    })()`);
     let scaleCards = 0;
     for (let i = 0; i < 80; i++) {
       scaleCards = await evalJs("document.querySelectorAll('[data-testid=skill-card]').length");
@@ -489,7 +549,7 @@ async function main() {
       "1000 个 skill 时 DOM 超过 3000",
     );
 
-    const checks = [r1, r2, r3, r4, r5, r6, r7, r8, r9];
+    const checks = [r1, r2, r3, rNav, r4, r5, r6, r7, r8, r9];
     const passed = checks.filter(Boolean).length;
     console.log("");
     console.log("结果: " + passed + "/" + checks.length + " " + (passed === checks.length ? "通过" : "未通过"));

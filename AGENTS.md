@@ -6,11 +6,11 @@
 
 ## Tech Stack
 
-- **形态**: pnpm monorepo —— 核心库 + CLI 是产品本体，Web 只是查看壳
+- **形态**: pnpm monorepo —— 核心库 + CLI 是确定性本体与 Agent 入口；**Web 是人用主界面**
 - **语言**: TypeScript strict mode（全仓统一） | **Node**: ≥22 | **包管理**: pnpm workspace
 - **packages/core**: 纯 TS 库，零框架依赖（确定性内核：库存、哈希、symlink、接口抽象）
-- **packages/cli**: citty 命令行 + Hono 本地查看服务（`skills-hub scan` / `skills-hub ui`）
-- **apps/web**: Vite + React 19 + Tailwind CSS 4（纯静态 SPA，数据来自 CLI 本地服务）
+- **packages/cli**: citty 命令行 + Hono 本地服务（`skills-hub scan` / `skills-hub ui`）；人日常不打命令
+- **apps/web**: Vite + React 19 + Tailwind CSS 4（人用壳：总览 / 统计 / Skills 管理 / 设置；数据来自 CLI 本地服务）
 - 技术选型的完整论证见 [docs/designs/tech-stack-decision.md](docs/designs/tech-stack-decision.md)
 
 ## Key Commands
@@ -59,7 +59,7 @@
 ```
 packages/core/  确定性内核（纯 TS 库）：类型、四接口抽象、哈希、SKILL.md 解析、客户端目录约定
 packages/cli/   终端入口：scan / ui 等命令 + Hono 本地查看服务（App 壳的数据源）
-apps/web/       App 壳（Vite SPA）：列表、搜索、来源分类、tag；只消费 CLI 的 /api
+apps/web/       人用壳（Vite SPA）：总览 / 统计 / Skills 管理 / 设置；只消费 CLI 的 /api
 docs/           项目内部文档（规范/设计/计划/会议/后置项）
 scripts/        辅助脚本（setup/build/dev）
 ```
@@ -137,7 +137,8 @@ scripts/        辅助脚本（setup/build/dev）
 
 - [architecture-initial-spec.md](docs/designs/architecture-initial-spec.md) — **架构初始规范（宏观最高约束）**：新模块/需求立项前必须按其第 1 章方法论走；issue 拆解须引用其 DAG 与 block 规则
 - [tech-stack-decision.md](docs/designs/tech-stack-decision.md) — 技术选型决策记录（为什么是 core+CLI 而不是 Next.js）
-- [panel-ia-v1.md](docs/designs/panel-ia-v1.md) — **面板信息架构**：三栏骨架、行级关系、批量一次原子提交、动作注册表
+- [app-shell-v2.md](docs/designs/app-shell-v2.md) — **人用壳信息架构**：左侧三板块 + 左下角设置
+- [panel-ia-v1.md](docs/designs/panel-ia-v1.md) — 数据层约束：行级关系、批量一次原子提交、动作注册表（三栏不再是人用 IA）
 - [backup-mechanism-analysis.md](docs/designs/backup-mechanism-analysis.md) — 备份机制分析稿（批 10 / #83 施工依据）
 
 ### docs/specs/ — 实现口径（分批施工前必读）
@@ -157,6 +158,7 @@ scripts/        辅助脚本（setup/build/dev）
 ### docs/issues/ — 内部问题与后置项
 
 - [backlog-from-first-sync.md](docs/issues/backlog-from-first-sync.md) — 会上明确后置、但第一天就要躺在列表里的项
+- [skill-creation-path/](docs/issues/skill-creation-path/) — **「创建」操作未定义**：用户在客户端里新建 skill 的路径分析（#169 的决策依据；#162 与 #168 的上游根因）
 
 ### docs/conventions/ — 项目规范
 
@@ -165,4 +167,4 @@ scripts/        辅助脚本（setup/build/dev）
 - [code-style.md](docs/conventions/code-style.md) — 代码风格（TypeScript、core 纯净性、CLI、React/Tailwind）
 - [code-size-and-organization.md](docs/conventions/code-size-and-organization.md) — 代码长度与文件组织（colocation 原则、拆分判断方法）
 - [code-review.md](docs/conventions/code-review.md) — Code review 检查清单
-- [ui-design-v0.md](docs/conventions/ui-design-v0.md) — UI 设计规范（克制的高端风格）：颜色灰阶层级、字号字重档位、间距节奏、三栏骨架与批量条、动效上限、禁用清单、Tailwind 4 token 表达、深色模式结论
+- [ui-design-v0.md](docs/conventions/ui-design-v0.md) — UI 设计规范：灰阶、字号、间距、人用壳侧栏、隐藏滚动条、禁用清单

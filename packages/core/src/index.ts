@@ -55,10 +55,15 @@ export {
   adoptMany,
   adoptSkillFolder,
   readStoreIndex,
+  readStoreIndexFile,
   writeStoreIndex,
   STORE_INDEX_VERSION,
 } from "./store.js";
-export type { AdoptionOutcome, AdoptionReport, AdoptInput, AdoptOptions, StoreIndexFile } from "./store.js";
+export type { AdoptionOutcome, AdoptionReport, AdoptInput, AdoptOptions, DraftRecord, StoreIndexFile } from "./store.js";
+export { migrateVersionedData } from "./migrate.js";
+export type { MigrationStep, MigrateOptions } from "./migrate.js";
+export { allocateDraft, commitDraft, discardDraft, listDrafts, createAndCommit } from "./create.js";
+export type { AllocateOutcome, CommitOutcome, DiscardOutcome } from "./create.js";
 export { findDanglingLinks, probeLinkTypes, readLinkTarget } from "./link-probe.js";
 export { classifyClientLink } from "./link-status.js";
 export type { ClientLinkState, ClientLinkStatus } from "./link-status.js";

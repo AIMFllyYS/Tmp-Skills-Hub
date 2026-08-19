@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { getAction } from "../actions/registry.js";
+import { formatBatchResult } from "../skills/batch-links.js";
 import type { AdoptResponse } from "../skills/types.js";
 
 interface AdoptFormProps {
+  clientIds?: string[];
   onDone: () => void;
+  onNotice?: (text: string) => void;
 }
 
 /** 集合列顶部的收录入口:粘贴路径或链接,不浏览目录。 */
-export function AdoptForm({ onDone }: AdoptFormProps): React.JSX.Element {
+export function AdoptForm({ clientIds = [], onDone, onNotice }: AdoptFormProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
+  const [enableAll, setEnableAll] = useState(true);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const adopt = getAction("adopt");
@@ -23,9 +27,22 @@ export function AdoptForm({ onDone }: AdoptFormProps): React.JSX.Element {
     setResult(null);
     try {
       const report: AdoptResponse = await adopt.execute({ source: trimmed });
+      let extra = "";
+      const hashes = report.outcomes
+        .map((o) => o.hash ?? o.existingHash)
+        .filter((h): h is string => typeof h === "string" && h !== "");
+      if (enableAll && hashes.length > 0 && clientIds.length > 0) {
+        const linked = await getAction("apply-clean-links").execute({
+          hashes,
+          clientIds,
+          action: "enable",
+        });
+        extra = "。 " + formatBatchResult("enable", linked.created.length, linked.removed.length, linked.skipped);
+        onNotice?.(formatBatchResult("enable", linked.created.length, linked.removed.length, linked.skipped));
+      }
       setResult(
         "新增 " + String(report.adopted) + " / 重复 " + String(report.duplicates) +
-          " / 冲突 " + String(report.conflicts) + " / 未达标 " + String(report.invalid),
+          " / 冲突 " + String(report.conflicts) + " / 未达标 " + String(report.invalid) + extra,
       );
       if (report.adopted > 0 || report.duplicates > 0) onDone();
     } catch (e) {
@@ -60,6 +77,15 @@ export function AdoptForm({ onDone }: AdoptFormProps): React.JSX.Element {
             placeholder="本地路径 / GitHub / skills.sh 链接"
             className="w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
           />
+          <label className="flex items-center gap-2 text-xs text-ink-mid">
+            <input
+              type="checkbox"
+              data-testid="adopt-enable-all"
+              checked={enableAll}
+              onChange={(e) => setEnableAll(e.target.checked)}
+            />
+            同时启用到全部已发现应用
+          </label>
           <div className="flex items-center gap-2">
             <button
               type="submit"

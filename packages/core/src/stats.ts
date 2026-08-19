@@ -38,7 +38,10 @@ function empty(): StatsFile {
   return { version: STATS_FILE_VERSION, counters: {} };
 }
 
-/** 解析;缺失/占位 {} → 空;损坏 → 空(降级,自愈由下一次写入完成)。 */
+/**
+ * 解析;缺失/占位 {} → 空;JSON 损坏 → 空(降级,自愈由下一次写入完成)。
+ * 低版本走迁移链(保留已有数据),不再静默重置。
+ */
 function parse(raw: string): StatsFile {
   let data: unknown;
   try {
@@ -48,9 +51,12 @@ function parse(raw: string): StatsFile {
   }
   if (data === null || typeof data !== "object" || Array.isArray(data)) return empty();
   const obj = data as { version?: unknown; counters?: unknown };
-  if (obj.version !== STATS_FILE_VERSION || typeof obj.counters !== "object" || obj.counters === null || Array.isArray(obj.counters)) {
+  if (obj.version === undefined && obj.counters === undefined) return empty();
+  if (typeof obj.counters !== "object" || obj.counters === null || Array.isArray(obj.counters)) {
     return empty();
   }
+  const version = typeof obj.version === "number" ? obj.version : STATS_FILE_VERSION;
+  if (version > STATS_FILE_VERSION) return empty();
   return { version: STATS_FILE_VERSION, counters: obj.counters as Record<string, UsageCounters> };
 }
 

@@ -43,7 +43,7 @@ v0 不分页。list 返回全部命中;`total` 恒等于 `skills.length`。将�
 
 ## 2. 命令结构
 
-> 库存根解析:--home 是**显式库存根**(同时作沙箱 home 重定向);其次 SKILLS_HUB_HOME;最后指针文件。解析失败 → store-not-configured。
+> 库存根解析(`list` / `adopt` 等):--home 是**显式库存根**(同时作沙箱 home 重定向);其次 SKILLS_HUB_HOME;最后指针文件。解析失败 → store-not-configured。`ui` / `bootstrap` 拉起的面板进程例外:传入的 home 只作指针基座,库存读指针(或 SKILLS_HUB_HOME),见 [store-and-paths-v0.md](store-and-paths-v0.md) §1。
 
 ### 2.1 list
 
@@ -150,7 +150,29 @@ dry-run 附加 `"dryRun": true` 与 `wouldRestore`（将写入的客户端/skill
 
 失败:`auth-required`(无 token / 非交互缺 --yes);`remote-conflict`(远端同名不同内容,不覆盖);`github-push-failed`(401/403/限流/分支保护);`not-found`;`bad-usage`。
 
-### 2.10 reset
+### 2.10 new
+
+- allocate(无动词或 `new`):
+```json
+{ "ok": true, "command": "new", "verb": "allocate", "dirName": "my-skill", "storeDir": "C:\\...\\skills\\my-skill" }
+```
+- commit:
+```json
+{ "ok": true, "command": "new", "verb": "commit", "dirName": "my-skill", "hash": "abc123..." }
+```
+哈希在定稿时才计算(创建期不参与去重)。
+- discard:
+```json
+{ "ok": true, "command": "new", "verb": "discard", "dirName": "my-skill", "archivePath": "C:\\...\\archive\\drafts\\my-skill-2026..." }
+```
+半成品移入 `archive/drafts/`,不引入真删除路径。
+- list:
+```json
+{ "ok": true, "command": "new", "verb": "list", "drafts": [ { "dirName": "my-skill", "meta": { "name": "my-skill", "description": "..." }, "origin": { "kind": "authored", "reference": "cli" }, "createdAt": "..." } ] }
+```
+- 错误:`draft-exists`(占名冲突);`draft-not-found`(commit/discard 目标不存在);`draft-incomplete`(commit 时 SKILL.md 缺 name 或 description)。
+
+### 2.11 reset
 
 ```json
 { "ok": true, "command": "reset", "storeRoot": "...", "snapshotId": "...", "asideStore": "...", "asidePointer": "...", "adopted": 3 }
@@ -177,6 +199,9 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 | restore-failed | backup restore / reset 写回客户端 skills 失败 |
 | github-push-failed | share 推送被 GitHub 拒绝(无权限/限流/分支保护) |
 | remote-conflict | share 远端已有同名不同内容,不覆盖 |
+| draft-exists | new 占名时目标 dirName 已被 skills[] 或 drafts[] 占用 |
+| draft-not-found | new commit / new discard 目标不在 drafts[] 中 |
+| draft-incomplete | new commit 时 SKILL.md 缺 name 或 description |
 | io-error | 文件系统故障 |
 
 ## 4. ui-server 的 /api/skills(实时扫描视图)

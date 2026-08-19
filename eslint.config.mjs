@@ -18,7 +18,18 @@ export default tseslint.config(
   {
     files: ["apps/web/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
-    rules: reactHooks.configs.recommended.rules,
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["@skills-hub/core", "@skills-hub/core/*"], message: "web 不直接 import core——数据走 HTTP /api（project-structure.md §二）" },
+            { group: ["@skills-hub/cli", "@skills-hub/cli/*"], message: "web 不直接 import cli——数据走 HTTP /api（project-structure.md §二）" },
+          ],
+        },
+      ],
+    },
   },
   {
     // CLI 是终端程序,console 是它的正常输出通道

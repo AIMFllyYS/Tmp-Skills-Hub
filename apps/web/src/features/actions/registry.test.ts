@@ -22,6 +22,8 @@ describe("ACTION_REGISTRY", () => {
     }
     expect(getAction("preview-links").supportsPreview).toBe(true);
     expect(getAction("apply-links").supportsPreview).toBe(true);
+    expect(getAction("apply-clean-links").supportsPreview).toBe(true);
+    expect(getAction("apply-clean-links").verb).toBe("批量挂链");
     expect(getAction("adopt").verb).toBe("收录");
     expect(getAction("restore").verb).toBe("恢复");
     expect(getAction("restore").destructive).toBe(false);
@@ -36,5 +38,8 @@ describe("ACTION_REGISTRY", () => {
     expect(getAction("reset").destructive).toBe(true);
     expect(getAction("reset").supportsPreview).toBe(true);
     expect(getAction("restore").id).not.toBe("reset");
+    expect(getAction("create").verb).toBe("新建");
+    expect(getAction("create").destructive).toBe(false);
+    expect(getAction("create").supportsPreview).toBe(false);
   });
 });

@@ -1,51 +1,88 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
-import type { ActionId } from "./features/actions/registry.js";
-import { BatchBar } from "./features/panel/BatchBar.js";
-import { CommandPalette } from "./features/panel/CommandPalette.js";
-import { CollectionPane, type SortMode } from "./features/panel/CollectionPane.js";
-import { fallbackClientState, filterByClientEnable, type ClientEnableFilter } from "./features/panel/client-view.js";
-import { InspectorPane } from "./features/panel/InspectorPane.js";
-import { emptySelection, selectionReducer } from "./features/panel/selection.js";
-import { ScopeNav, scopeOptions } from "./features/panel/ScopeNav.js";
-import { buildScopeCounts, isSkillScope, scopeKey, skillsForScope, type ScopeSelection } from "./features/panel/scope.js";
+import { useCallback, useEffect, useState } from "react";
 import { getAction } from "./features/actions/registry.js";
-import { fetchArchive, fetchClientSkillStates, fetchClients, fetchGroups, fetchSkills, fetchStats } from "./features/skills/api.js";
+import { OverviewPage } from "./features/shell/OverviewPage.js";
+import { SettingsPage } from "./features/shell/SettingsPage.js";
+import { Sidebar } from "./features/shell/Sidebar.js";
+import { SkillsPage } from "./features/shell/SkillsPage.js";
+import { StatsPage } from "./features/shell/StatsPage.js";
+import type { AppPage, SkillsTab } from "./features/shell/page.js";
+import { sortClientsForApps } from "./features/shell/apps-layout.js";
+import {
+  fetchArchive,
+  fetchBackups,
+  fetchCatalog,
+  fetchClientSkillStates,
+  fetchClients,
+  fetchDoctor,
+  fetchStats,
+} from "./features/skills/api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./features/skills/async-resource.js";
-import { applyFilters, ALL_GROUP, ALL_SOURCE } from "./features/skills/filters.js";
-import type { ArchivedSkill, ClientInfo, ClientSkillStatesResponse, GroupDef, SkillRecord, UsageCounters } from "./features/skills/types.js";
+import type {
+  ArchivedSkill,
+  BackupsListResponse,
+  ClientInfo,
+  ClientSkillStatesResponse,
+  DoctorResponse,
+  SkillRecord,
+  StatsResponse,
+  UsageCounters,
+} from "./features/skills/types.js";
 
 type LoadState = "loading" | "ready" | "offline";
 
 export default function App() {
+  const [page, setPage] = useState<AppPage>("overview");
+  const [skillsTab, setSkillsTab] = useState<SkillsTab>("apps");
   const [skills, setSkills] = useState<SkillRecord[]>([]);
-  const [groups, setGroups] = useState<GroupDef[]>([]);
+  const [storeRoot, setStoreRoot] = useState("");
   const [clients, setClients] = useState<ClientInfo[]>([]);
   const [usageByHash, setUsageByHash] = useState<Map<string, UsageCounters>>(new Map());
+  const [ranking, setRanking] = useState<StatsResponse["ranking"]>([]);
   const [archived, setArchived] = useState<ArchivedSkill[]>([]);
+  const [doctor, setDoctor] = useState<DoctorResponse | null>(null);
+  const [latestSnapshotId, setLatestSnapshotId] = useState<string | null>(null);
+  const [snapshotCount, setSnapshotCount] = useState(0);
   const [state, setState] = useState<LoadState>("loading");
-  const [query, setQuery] = useState("");
-  const [sortMode, setSortMode] = useState<SortMode>("name");
-  const [scope, setScope] = useState<ScopeSelection>({ kind: "all" });
-  const [enableFilter, setEnableFilter] = useState<ClientEnableFilter>("all");
-  const [clientStates, setClientStates] = useState<ClientSkillStatesResponse | null>(null);
   const [focusedHash, setFocusedHash] = useState<string | null>(null);
-  const [selection, dispatchSelection] = useReducer(selectionReducer, emptySelection);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientStates, setClientStates] = useState<ClientSkillStatesResponse | null>(null);
   const [pendingHash, setPendingHash] = useState<string | null>(null);
-  const [batchBusy, setBatchBusy] = useState(false);
-  const [errors, setErrors] = useState<Map<string, string>>(new Map());
-  const [toast, setToast] = useState<{ message: string; undoName?: string } | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const applyCatalog = useCallback((
+    catalog: { storeRoot: string; skills: SkillRecord[] },
+    nextClients: ClientInfo[],
+    st: StatsResponse,
+    ar: ArchivedSkill[],
+    doc: DoctorResponse | null,
+    backups: BackupsListResponse | null,
+  ): void => {
+    setStoreRoot(catalog.storeRoot);
+    setSkills(catalog.skills);
+    const ordered = sortClientsForApps(nextClients, catalog.skills);
+    setClients(ordered);
+    setUsageByHash(new Map(Object.entries(st.stats.counters)));
+    setRanking(st.ranking);
+    setArchived(ar);
+    setDoctor(doc);
+    setLatestSnapshotId(backups?.latest ?? null);
+    setSnapshotCount(backups?.snapshots.length ?? 0);
+    setSelectedClientId((prev) => prev ?? ordered[0]?.clientId ?? null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchSkills(), fetchGroups(), fetchClients(), fetchStats(), fetchArchive()])
-      .then(([s, g, c, st, ar]) => {
+    Promise.all([
+      fetchCatalog(),
+      fetchClients(),
+      fetchStats(),
+      fetchArchive(),
+      fetchDoctor().catch(() => null),
+      fetchBackups().catch(() => null),
+    ])
+      .then(([catalog, nextClients, st, ar, doc, backups]) => {
         if (cancelled) return;
-        setSkills(s);
-        setGroups(g);
-        setClients(c);
-        setUsageByHash(new Map(Object.entries(st.stats.counters)));
-        setArchived(ar);
+        applyCatalog(catalog, nextClients, st, ar, doc, backups);
         setState("ready");
       })
       .catch(() => {
@@ -54,28 +91,25 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyCatalog]);
 
   useEffect(() => {
-    if (scope.kind !== "client" || scope.id === undefined) return;
+    if (page !== "skills" || skillsTab !== "apps" || selectedClientId === null) return;
     let cancelled = false;
-    void fetchClientSkillStates(scope.id).then((s) => {
-      if (!cancelled) setClientStates(s);
-    }).catch(() => {
-      if (!cancelled) setClientStates(null);
-    });
+    void fetchClientSkillStates(selectedClientId)
+      .then((s) => {
+        if (!cancelled) setClientStates(s);
+      })
+      .catch(() => {
+        if (!cancelled) setClientStates(null);
+      });
     return () => {
       cancelled = true;
     };
-  }, [scope]);
+  }, [page, skillsTab, selectedClientId]);
 
   const handleToggle = useCallback(async (skill: SkillRecord, clientId: string, enable: boolean) => {
     setPendingHash(skill.hash);
-    setErrors((prev) => {
-      const next = new Map(prev);
-      next.delete(skill.hash);
-      return next;
-    });
     try {
       await getAction(enable ? "enable" : "disable").execute({ hash: skill.hash, clientId });
       setSkills((prev) =>
@@ -91,22 +125,13 @@ export default function App() {
         if (prev === null || prev.clientId !== clientId) return prev;
         const rows = prev.rows.map((r) =>
           r.hash === skill.hash
-            ? { ...r, state: enable ? "managed" as const : "off" as const, detail: enable ? "受管链接" : "未启用" }
+            ? { ...r, state: enable ? "managed" as const : "off" as const, detail: enable ? "已启用" : "未启用" }
             : r,
         );
         return { ...prev, rows, enabled: rows.filter((r) => r.state === "managed").length };
       });
-      if (enable) {
-        setUsageByHash((prev) => {
-          const next = new Map(prev);
-          const cur = next.get(skill.hash) ?? { show: 0, enable: 0 };
-          next.set(skill.hash, { show: cur.show, enable: cur.enable + 1 });
-          return next;
-        });
-      }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setErrors((prev) => new Map(prev).set(skill.hash, "操作失败: " + msg));
+      setToast(e instanceof Error ? e.message : String(e));
     } finally {
       setPendingHash(null);
     }
@@ -117,525 +142,106 @@ export default function App() {
     invalidateResourcePrefix(fileResourceKey(oldHash, ""));
     setSkills((prev) => prev.map((s) => (s.hash === oldHash ? { ...s, hash: newHash } : s)));
     setFocusedHash(newHash);
-    dispatchSelection({ type: "replace-hash", from: oldHash, to: newHash });
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  const handleScope = useCallback((next: ScopeSelection) => {
-    setScope(next);
-    setEnableFilter("all");
-    if (!isSkillScope(next)) setFocusedHash(null);
-  }, []);
-
-  const handleToggleCheck = useCallback((hash: string, next: boolean) => {
-    dispatchSelection({ type: "toggle", hash, next });
-  }, []);
-
-  const counts = useMemo(() => buildScopeCounts(skills, groups, clients, archived), [skills, groups, clients, archived]);
-  const options = useMemo(() => scopeOptions(counts), [counts]);
-
-  const visible = useMemo(() => {
-    const scoped = skillsForScope(skills, groups, scope);
-    const filtered = applyFilters(scoped, groups, { query, sourceKind: ALL_SOURCE, groupId: ALL_GROUP });
-    if (sortMode === "usage") {
-      const total = (s: SkillRecord) => {
-        const u = usageByHash.get(s.hash);
-        return (u?.show ?? 0) + (u?.enable ?? 0);
-      };
-      return [...filtered].sort((a, b) => total(b) - total(a) || a.dirName.localeCompare(b.dirName));
-    }
-    return [...filtered].sort((a, b) => a.dirName.localeCompare(b.dirName));
-  }, [skills, groups, scope, query, sortMode, usageByHash]);
-
-  const activeClientStates =
-    scope.kind === "client" && clientStates !== null && clientStates.clientId === scope.id ? clientStates : null;
-
-  const listed = useMemo(() => {
-    if (scope.kind !== "client") return visible;
-    const clientId = scope.id ?? "";
-    const map = new Map((activeClientStates?.rows ?? []).map((r) => [r.hash, r.state]));
-    return filterByClientEnable(visible, enableFilter, (hash) => {
-      const hit = map.get(hash);
-      if (hit !== undefined) return hit;
-      const skill = visible.find((s) => s.hash === hash);
-      return fallbackClientState(skill?.visibleIn ?? [], clientId);
-    });
-  }, [visible, scope, enableFilter, activeClientStates]);
-
-  const handleToggleAllVisible = useCallback((next: boolean) => {
-    dispatchSelection({ type: "toggle-visible", hashes: listed.map((s) => s.hash), next });
-  }, [listed]);
-
-  const handleSelectStore = useCallback(() => {
-    dispatchSelection({ type: "select-store", hashes: skills.map((s) => s.hash) });
-  }, [skills]);
-
-  const handleBatchLink = useCallback(async (clientId: string, enable: boolean) => {
-    const hashes = [...selection.hashes];
-    if (hashes.length === 0) return;
-    setBatchBusy(true);
-    try {
-      const params = { hashes, clientIds: [clientId], action: enable ? "enable" as const : "disable" as const };
-      const preview = await getAction("preview-links").execute(params);
-      if (preview.conflictCount > 0) {
-        window.alert(
-          "冲突 " + String(preview.conflictCount) + " 条，未执行。\n" +
-          preview.conflicts.map((c) => c.dirName + ": " + c.reason).join("\n"),
-        );
-        return;
-      }
-      if (preview.add === 0 && preview.remove === 0) {
-        window.alert("无变更");
-        return;
-      }
-      if (!window.confirm("将新增 " + String(preview.add) + " 条 / 摘除 " + String(preview.remove) + " 条。确定？")) return;
-      await getAction("apply-links").execute(params);
-      const chosen = new Set(hashes);
-      setSkills((prev) =>
-        prev.map((s) => {
-          if (!chosen.has(s.hash)) return s;
-          const visible = enable
-            ? (s.visibleIn.includes(clientId) ? s.visibleIn : [...s.visibleIn, clientId])
-            : s.visibleIn.filter((id) => id !== clientId);
-          return { ...s, visibleIn: visible };
-        }),
-      );
-      setClientStates((prev) => {
-        if (prev === null || prev.clientId !== clientId) return prev;
-        const rows = prev.rows.map((r) =>
-          chosen.has(r.hash)
-            ? { ...r, state: enable ? "managed" as const : "off" as const, detail: enable ? "受管链接" : "未启用" }
-            : r,
-        );
-        return { ...prev, rows, enabled: rows.filter((r) => r.state === "managed").length };
+  const refreshCatalog = useCallback((): void => {
+    void Promise.all([fetchCatalog(), selectedClientId === null ? Promise.resolve(null) : fetchClientSkillStates(selectedClientId)])
+      .then(([c, states]) => {
+        setStoreRoot(c.storeRoot);
+        setSkills(c.skills);
+        if (states !== null) setClientStates(states);
       });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setErrors((prev) => {
-        const next = new Map(prev);
-        const first = hashes[0];
-        if (first !== undefined) next.set(first, "批量操作失败: " + msg);
-        return next;
-      });
-    } finally {
-      setBatchBusy(false);
-    }
-  }, [selection.hashes]);
+  }, [selectedClientId]);
 
-  const handleBatchArchive = useCallback(async () => {
-    const hashes = [...selection.hashes];
-    if (hashes.length === 0) return;
-    if (!window.confirm("将归档 " + hashes.length + " 个 skill（软删除，可从归档区恢复）。确定？")) return;
-    setBatchBusy(true);
-    try {
-      for (const hash of hashes) {
-        await getAction("archive").execute({ hash });
-      }
-      const gone = new Set(hashes);
-      setSkills((prev) => prev.filter((s) => !gone.has(s.hash)));
-      if (focusedHash !== null && gone.has(focusedHash)) setFocusedHash(null);
-      dispatchSelection({ type: "clear" });
-      setArchived(await fetchArchive());
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setErrors((prev) => {
-        const next = new Map(prev);
-        const first = hashes[0];
-        if (first !== undefined) next.set(first, "归档失败: " + msg);
-        return next;
-      });
-    } finally {
-      setBatchBusy(false);
-    }
-  }, [selection.hashes, focusedHash]);
-
-  const refreshGroups = useCallback(async () => {
-    setGroups(await fetchGroups());
-  }, []);
-
-  const handleCreateGroup = useCallback((id: string, name: string) => {
+  const handleRestore = useCallback((name: string) => {
     void (async () => {
       try {
-        await getAction("create-group").execute({ id, name });
-        await refreshGroups();
-        setScope({ kind: "group", id });
-        setToast({ message: "已新建分组 " + name });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setToast({ message: "新建分组失败: " + msg });
-      }
-    })();
-  }, [refreshGroups]);
-
-  const handleRenameGroup = useCallback((id: string, name: string) => {
-    void (async () => {
-      try {
-        await getAction("rename-group").execute({ id, name });
-        await refreshGroups();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setToast({ message: "重命名失败: " + msg });
-      }
-    })();
-  }, [refreshGroups]);
-
-  const handleDeleteGroup = useCallback((id: string) => {
-    void (async () => {
-      try {
-        await getAction("delete-group").execute({ id });
-        await refreshGroups();
-        if (scope.kind === "group" && scope.id === id) setScope({ kind: "all" });
-        setToast({ message: "已删除分组（skill 仍在库存）" });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setToast({ message: "删除分组失败: " + msg });
-      }
-    })();
-  }, [refreshGroups, scope]);
-
-  const handleAddToGroup = useCallback((groupId: string) => {
-    const hashes = [...selection.hashes];
-    if (hashes.length === 0) return;
-    void (async () => {
-      setBatchBusy(true);
-      try {
-        await getAction("add-to-group").execute({ id: groupId, hashes });
-        await refreshGroups();
-        setToast({ message: "已加入分组" });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setToast({ message: "加入分组失败: " + msg });
-      } finally {
-        setBatchBusy(false);
-      }
-    })();
-  }, [selection.hashes, refreshGroups]);
-
-  const handleRemoveFromGroup = useCallback((groupId: string) => {
-    const hashes = [...selection.hashes];
-    if (hashes.length === 0) return;
-    void (async () => {
-      try {
-        await getAction("remove-from-group").execute({ id: groupId, hashes });
-        await refreshGroups();
-        dispatchSelection({ type: "clear" });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setToast({ message: "移出分组失败: " + msg });
-      }
-    })();
-  }, [selection.hashes, refreshGroups]);
-
-  const handleArchiveSkill = useCallback((s: SkillRecord) => {
-    void (async () => {
-      try {
-        await getAction("archive").execute({ hash: s.hash });
-        setSkills((prev) => prev.filter((x) => x.hash !== s.hash));
-        if (focusedHash === s.hash) setFocusedHash(null);
-        dispatchSelection({ type: "toggle", hash: s.hash, next: false });
+        await getAction("restore").execute({ name });
+        setSkills((await fetchCatalog()).skills);
         setArchived(await fetchArchive());
-        setToast({ message: "已归档 " + s.dirName, undoName: s.dirName });
+        setToast("已恢复 " + name);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setErrors((prev) => new Map(prev).set(s.hash, "归档失败: " + msg));
+        setToast(e instanceof Error ? e.message : String(e));
       }
     })();
-  }, [focusedHash]);
+  }, []);
 
-  const handlePaletteRun = useCallback((id: ActionId, arg?: string) => {
-    const skill = focusedHash === null ? undefined : skills.find((s) => s.hash === focusedHash);
-    if (id === "archive" && skill !== undefined) {
-      handleArchiveSkill(skill);
-      return;
-    }
-    if (id === "share" && skill !== undefined) {
-      void getAction("share").execute({ target: skill.dirName }).then((r) => {
-        setToast({ message: r.idempotent ? "已存在 " + r.url : r.url });
-      }).catch((e: unknown) => {
-        setToast({ message: e instanceof Error ? e.message : String(e) });
-      });
-      return;
-    }
-    if (id === "analyze" && skill !== undefined) {
-      void getAction("analyze").execute({ target: skill.dirName }).then((r) => {
-        setToast({ message: "相近 " + String(r.similar.length) + " / 冲突 " + String(r.conflict.length) });
-      }).catch((e: unknown) => {
-        setToast({ message: e instanceof Error ? e.message : String(e) });
-      });
-      return;
-    }
-    if ((id === "enable" || id === "disable") && skill !== undefined && arg !== undefined) {
-      void handleToggle(skill, arg, id === "enable");
-      return;
-    }
-    if ((id === "preview-links" || id === "apply-links") && arg !== undefined) {
-      void handleBatchLink(arg, true);
-      return;
-    }
-    if (id === "add-to-group" && arg !== undefined) {
-      handleAddToGroup(arg);
-      return;
-    }
-    if (id === "remove-from-group" && arg !== undefined) {
-      handleRemoveFromGroup(arg);
-      return;
-    }
-    if (id === "adopt" && arg !== undefined) {
-      void getAction("adopt").execute({ source: arg }).then(() => {
-        void fetchSkills().then(setSkills);
-        setToast({ message: "收录完成" });
-      }).catch((e: unknown) => {
-        setToast({ message: e instanceof Error ? e.message : String(e) });
-      });
-      return;
-    }
-    if (id === "reset") {
-      setScope({ kind: "report" });
-      return;
-    }
-    if (id === "restore" && arg !== undefined) {
-      void getAction("restore").execute({ name: arg }).then(async () => {
-        setSkills(await fetchSkills());
-        setArchived(await fetchArchive());
-        setToast({ message: "已恢复 " + arg });
-      }).catch((e: unknown) => {
-        setToast({ message: e instanceof Error ? e.message : String(e) });
-      });
-      return;
-    }
-    if (id === "create-group" && arg !== undefined) {
-      handleCreateGroup(arg, arg);
-      return;
-    }
-    if (id === "delete-group" && arg !== undefined) {
-      handleDeleteGroup(arg);
-      return;
-    }
-    if (id === "rename-group" && arg !== undefined) {
-      const sp = arg.split(/\s+/);
-      const gid = sp[0] ?? "";
-      const name = sp.slice(1).join(" ");
-      if (gid !== "" && name !== "") handleRenameGroup(gid, name);
-      else setToast({ message: "用法: <id> <新名称>" });
-    }
-  }, [focusedHash, skills, handleArchiveSkill, handleToggle, handleBatchLink, handleAddToGroup, handleRemoveFromGroup, handleCreateGroup, handleDeleteGroup, handleRenameGroup]);
-
-  const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
-  const selectClass = "rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong";
+  const go = (next: AppPage, tab?: SkillsTab): void => {
+    setPage(next);
+    if (tab !== undefined) setSkillsTab(tab);
+  };
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-white">
-      <header className="shrink-0 border-b border-line px-4 py-3 lg:px-6">
-        <div className="flex items-baseline justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">skill-hub</h1>
-            <p className="mt-1 text-sm text-ink-mid">社团内部的 Agent Skill 共享与统一管理中心</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setPaletteOpen(true)}
-              className="text-xs text-ink-faint hover:text-ink-mid"
-            >
-              Ctrl+K 命令
-            </button>
-            <p className="text-xs text-ink-faint">
-              {state === "ready" ? "库存 " + skills.length + " 个" : " "}
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 lg:hidden">
-          <select
-            className={selectClass + " w-full"}
-            value={scopeKey(scope)}
-            onChange={(e) => {
-              const opt = options.find((o) => o.key === e.target.value);
-              if (opt !== undefined) handleScope(opt.scope);
+    <div className="flex h-dvh overflow-hidden bg-white">
+      <Sidebar page={page} onPage={setPage} />
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {state === "offline" && (
+          <p className="shrink-0 bg-amber-50 px-6 py-3 text-sm text-amber-800">
+            未连接到本地数据服务。先运行一键启动,再刷新本页。
+          </p>
+        )}
+        {state === "loading" && <p className="px-6 py-6 text-sm text-ink-mid">加载中…</p>}
+        {state === "ready" && page === "overview" && (
+          <OverviewPage
+            skills={skills}
+            clients={clients}
+            doctor={doctor}
+            snapshotCount={snapshotCount}
+            onGo={go}
+          />
+        )}
+        {state === "ready" && page === "stats" && (
+          <StatsPage skills={skills} clients={clients} ranking={ranking} counters={usageByHash} />
+        )}
+        {state === "ready" && page === "skills" && (
+          <SkillsPage
+            tab={skillsTab}
+            onTab={setSkillsTab}
+            skills={skills}
+            clients={clients}
+            archived={archived}
+            focusedHash={focusedHash}
+            onFocus={setFocusedHash}
+            pendingHash={pendingHash}
+            clientStates={clientStates}
+            selectedClientId={selectedClientId}
+            onSelectClient={setSelectedClientId}
+            onToggle={(skill, clientId, enable) => void handleToggle(skill, clientId, enable)}
+            onSaved={handleSaved}
+            onAdopted={refreshCatalog}
+            onRestore={handleRestore}
+            onNotice={setToast}
+            onBulkDone={refreshCatalog}
+          />
+        )}
+        {state === "ready" && page === "settings" && (
+          <SettingsPage
+            storeRoot={storeRoot}
+            clients={clients}
+            latestSnapshotId={latestSnapshotId}
+            onResetDone={() => {
+              void Promise.all([
+                fetchCatalog(),
+                fetchClients(),
+                fetchStats(),
+                fetchArchive(),
+                fetchDoctor().catch(() => null),
+                fetchBackups().catch(() => null),
+              ]).then(([catalog, nextClients, st, ar, doc, backups]) => {
+                applyCatalog(catalog, nextClients, st, ar, doc, backups);
+              });
             }}
-          >
-            {options.map((o) => (
-              <option key={o.key} value={o.key}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      </header>
-
-      {state === "offline" && (
-        <p className="shrink-0 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          未连接到本地数据服务。先运行 <code className="font-mono">skills-hub ui</code>
-          (开发时:<code className="font-mono">pnpm dev:cli ui</code>),再刷新本页。
-        </p>
-      )}
-
-      {state === "loading" && <p className="px-4 py-6 text-sm text-ink-mid">加载中…</p>}
-
-      {state === "ready" && (
-        <div className="flex min-h-0 flex-1">
-          <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-line lg:block">
-            <ScopeNav
-              counts={counts}
-              selected={scope}
-              onSelect={handleScope}
-              onCreateGroup={handleCreateGroup}
-              onRenameGroup={handleRenameGroup}
-              onDeleteGroup={handleDeleteGroup}
-            />
-          </aside>
-          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <CollectionPane
-              scope={scope}
-              query={query}
-              onQuery={setQuery}
-              sortMode={sortMode}
-              onSortMode={setSortMode}
-              skills={listed}
-              archived={archived}
-              clientTotal={clients.length}
-              checked={selection.hashes}
-              storeTotal={skills.length}
-              focusedHash={focusedHash}
-              onToggleCheck={handleToggleCheck}
-              onToggleAllVisible={handleToggleAllVisible}
-              onSelectStore={handleSelectStore}
-              onAdopted={() => {
-                void fetchSkills().then(setSkills);
-              }}
-              onRemoveFromGroup={handleRemoveFromGroup}
-              onRestore={(name) => {
-                void (async () => {
-                  try {
-                    await getAction("restore").execute({ name });
-                    setSkills(await fetchSkills());
-                    setArchived(await fetchArchive());
-                    setToast({ message: "已恢复 " + name });
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setToast({ message: "恢复失败: " + msg });
-                  }
-                })();
-              }}
-              onFocus={setFocusedHash}
-              clientView={
-                scope.kind === "client" && scope.id !== undefined
-                  ? {
-                      clientId: scope.id,
-                      skillsDir: activeClientStates?.skillsDir ?? clients.find((c) => c.clientId === scope.id)?.skillsDir ?? "",
-                      enabled: activeClientStates?.enabled ?? skills.filter((s) => s.visibleIn.includes(scope.id ?? "")).length,
-                      total: activeClientStates?.total ?? skills.length,
-                      enableFilter,
-                      onEnableFilter: setEnableFilter,
-                      clientViewOf: (skill) => {
-                        const row = activeClientStates?.rows.find((r) => r.hash === skill.hash);
-                        const clientId = scope.id ?? "";
-                        return {
-                          state: row?.state ?? (skill.visibleIn.includes(clientId) ? "managed" : "off"),
-                          detail: row?.detail ?? (skill.visibleIn.includes(clientId) ? "受管链接" : "未启用"),
-                          pending: pendingHash === skill.hash,
-                          onToggle: (en) => void handleToggle(skill, clientId, en),
-                        };
-                      },
-                    }
-                  : null
-              }
-            />
-          </section>
-          <aside
-            className={
-              "overflow-y-auto bg-white " +
-              (focused === null
-                ? "hidden w-[28rem] shrink-0 border-l border-line lg:block"
-                : "fixed inset-0 z-10 lg:static lg:z-auto lg:w-[28rem] lg:shrink-0 lg:border-l lg:border-line")
-            }
-          >
-            <InspectorPane
-              skill={focused}
-              clients={clients}
-              usage={focused === null ? undefined : usageByHash.get(focused.hash)}
-              pending={focused !== null && pendingHash === focused.hash}
-              error={focused === null ? null : (errors.get(focused.hash) ?? null)}
-              onClose={() => setFocusedHash(null)}
-              onToggle={handleToggle}
-              onSaved={handleSaved}
-              onArchive={handleArchiveSkill}
-            />
-          </aside>
-        </div>
-      )}
-
-      {state === "ready" && selection.hashes.size > 0 && (
-        <BatchBar
-          count={selection.hashes.size}
-          clients={clients}
-          groups={groups.map((g) => ({ id: g.id, name: g.name }))}
-          busy={batchBusy}
-          onClear={() => dispatchSelection({ type: "clear" })}
-          onEnableTo={(id) => void handleBatchLink(id, true)}
-          onDisableFrom={(id) => void handleBatchLink(id, false)}
-          onAddToGroup={handleAddToGroup}
-          onArchive={() => void handleBatchArchive()}
-          lockedClientId={scope.kind === "client" ? scope.id : undefined}
-        />
-      )}
-      {toast !== null && (
-        <div className="flex shrink-0 items-center gap-2 border-t border-line bg-white px-4 py-2">
-          <p className="text-xs text-ink-mid">{toast.message}</p>
-          {toast.undoName !== undefined && (
-            <button
-              type="button"
-              onClick={() => {
-                const name = toast.undoName;
-                if (name === undefined) return;
-                void (async () => {
-                  try {
-                    await getAction("restore").execute({ name });
-                    setSkills(await fetchSkills());
-                    setArchived(await fetchArchive());
-                    setToast({ message: "已恢复 " + name });
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setToast({ message: "撤销失败: " + msg });
-                  }
-                })();
-              }}
-              className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
-            >
-              {getAction("restore").verb}
+          />
+        )}
+        {toast !== null && (
+          <div className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-2">
+            <p className="text-xs text-ink-mid">{toast}</p>
+            <button type="button" onClick={() => setToast(null)} className="ml-auto text-xs text-ink-faint hover:text-ink-mid">
+              关闭
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setToast(null)}
-            className="ml-auto text-xs text-ink-faint hover:text-ink-mid"
-          >
-            关闭
-          </button>
-        </div>
-      )}
-      {paletteOpen && (
-      <CommandPalette
-        open
-        onClose={() => setPaletteOpen(false)}
-        ctx={{
-          hasFocused: focused !== null,
-          selectedCount: selection.hashes.size,
-          clientCount: clients.length,
-          groupCount: groups.length,
-        }}
-        clients={clients.map((c) => ({ id: c.clientId, name: c.clientId }))}
-        groups={groups.map((g) => ({ id: g.id, name: g.name }))}
-        onRun={handlePaletteRun}
-      />
-      )}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

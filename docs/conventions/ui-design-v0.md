@@ -106,9 +106,9 @@ Tailwind 4 是 CSS-first:在 index.css 的 @import 后用 @theme 定义语义 to
 **v0 不做深色模式。** 理由:这是高频内部工具,浅色方案已足够;深色需要整套灰阶 token 反转与状态色对比度审计,半吊子深色比没有更伤。
 后续在满足以下条件时再立 issue 做:1) 有明确用户需求;2) 浅色方案已稳定(至少一个完整面板落地);3) 由本规范 §8 的 token 体系承载(只需换 @theme 值,不污染组件)。
 
-## 10. 面板骨架(三栏 + 批量条 + 行高)
+## 10. 虚拟列表行高(旧三栏遗留)
 
-批 8 落地后的主操作台骨架。信息架构见 [panel-ia-v1.md](../designs/panel-ia-v1.md);本节目只定视觉节奏,避免下次重新发明。
+整页骨架已改为人用壳,见 §12 与 [app-shell-v2.md](../designs/app-shell-v2.md)。本节只保留仍在用的行高与批量条视觉,不再约束页面分栏。
 
 ### 10.1 三栏列宽与分隔
 
@@ -156,3 +156,25 @@ Tailwind 4 是 CSS-first:在 index.css 的 @import 后用 @theme 定义语义 to
 ## 11. 例外裁定
 
 与「克制」相冲突且本规范未覆盖的场景,默认按最保守方案;需要突破时先在 PR 里说明理由,由 review 裁定后回写本规范。
+
+## 12. 人用壳(侧栏 + 隐藏滚动条)
+
+人用 IA 见 [app-shell-v2.md](../designs/app-shell-v2.md)。§10 三栏只约束仍在用虚拟列表的行高,不再约束整页骨架。
+
+### 12.1 侧栏
+
+| 项 | Tailwind | 说明 |
+| --- | --- | --- |
+| 侧栏 | `w-56 shrink-0` | 固定宽 |
+| 主区 | `min-w-0 flex-1` | 吃剩余宽度 |
+| 分隔 | `border-r border-line` | 不要 `gap-*` |
+| 设置 | 侧栏底部 | 左下角,与三个板块分开 |
+
+### 12.2 滚动条
+
+滚动保留,滚动条隐藏。在 `index.css` 全局写:
+
+- `scrollbar-width: none`（Firefox）
+- `::-webkit-scrollbar { display: none }`（Chromium / Safari）
+
+不要用装饰性滚动条。页面根仍 `overflow: hidden`,分区 `overflow-y-auto`。

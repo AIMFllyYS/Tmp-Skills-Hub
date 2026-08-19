@@ -85,11 +85,19 @@ export interface UsageCounters {
   enable: number;
 }
 
+/** 与 core UsageRankEntry / GET /api/stats 同形;字段是 skillHash,没有 hash。 */
+export interface UsageRankEntry {
+  skillHash: string;
+  show: number;
+  enable: number;
+  total: number;
+}
+
 export interface StatsResponse {
   ok: true;
   command: "stats";
   stats: { version: number; counters: Record<string, UsageCounters> };
-  ranking: { hash: string; total: number; show: number; enable: number }[];
+  ranking: UsageRankEntry[];
 }
 
 export interface ArchivedSkill {

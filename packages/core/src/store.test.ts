@@ -223,7 +223,7 @@ describe("readStoreIndex / writeStoreIndex", () => {
     const store = await fakeStore();
     await writeStoreIndex(store, []);
     const raw = JSON.parse(await readFile(path.join(store, "index.json"), "utf8"));
-    expect(raw.version).toBe(1);
+    expect(raw.version).toBe(2);
     expect(raw.skills).toEqual([]);
     expect(await readdir(path.join(store, STORE_TMP_DIR))).toEqual([]);
   });
@@ -234,6 +234,6 @@ describe("readStoreIndex / writeStoreIndex", () => {
     await expect(readStoreIndex(store)).rejects.toThrow(/无法解析/);
     // 版本不支持
     await writeFile(path.join(store, "index.json"), JSON.stringify({ version: 99, skills: [] }));
-    await expect(readStoreIndex(store)).rejects.toThrow(/版本或结构/);
+    await expect(readStoreIndex(store)).rejects.toThrow(/版本过高/);
   });
 });

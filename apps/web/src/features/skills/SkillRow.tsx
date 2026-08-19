@@ -17,9 +17,10 @@ interface SkillRowProps {
   onToggleCheck: (hash: string, next: boolean) => void;
   onFocus: (hash: string) => void;
   clientView?: SkillRowClientView | undefined;
+  selectable?: boolean;
 }
 
-/** 集合列的一行:复选 + 名称 + 启用聚合(12/23) + 状态点。开关不在行上。 */
+/** 集合列的一行:名称 + 启用聚合或该应用的开关。 */
 export const SkillRow = memo(function SkillRow({
   skill,
   clientTotal,
@@ -28,6 +29,7 @@ export const SkillRow = memo(function SkillRow({
   onToggleCheck,
   onFocus,
   clientView,
+  selectable = true,
 }: SkillRowProps): React.JSX.Element {
   const on = skill.visibleIn.length;
   const blocked = clientView !== undefined && (clientView.state === "unregistered-conflict" || clientView.state === "dangling");
@@ -45,13 +47,15 @@ export const SkillRow = memo(function SkillRow({
       style={{ height: SKILL_ROW_HEIGHT_PX }}
     >
       <div className="flex h-full items-center gap-2 px-4">
-        <input
-          type="checkbox"
-          checked={checked}
-          aria-label={"选择 " + skill.dirName}
-          onChange={(e) => onToggleCheck(skill.hash, e.target.checked)}
-          className="shrink-0"
-        />
+        {selectable && (
+          <input
+            type="checkbox"
+            checked={checked}
+            aria-label={"选择 " + skill.dirName}
+            onChange={(e) => onToggleCheck(skill.hash, e.target.checked)}
+            className="shrink-0"
+          />
+        )}
         <button
           type="button"
           data-testid="skill-card-open"
@@ -74,7 +78,7 @@ export const SkillRow = memo(function SkillRow({
         {clientView !== undefined && (
           <button
             type="button"
-            data-testid="client-row-switch"
+            data-testid="client-switch"
             aria-pressed={enabled}
             disabled={clientView.pending || blocked}
             title={blocked ? clientView.detail : undefined}

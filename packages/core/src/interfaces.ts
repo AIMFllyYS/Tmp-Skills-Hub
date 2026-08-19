@@ -3,7 +3,8 @@
  * 原则:走到可以停的地方停下来,把接口先抽象出来;第一版只做最简实现。
  */
 
-import type { LinkScope, SkillHash, SkillRecord } from "./types.js";
+import type { LinkScope, SkillHash, SkillRecord, SkillSource } from "./types.js";
+import type { DraftRecord } from "./store.js";
 
 /**
  * 存储介质接口。第一版实现:文件系统目录。
@@ -21,6 +22,15 @@ export interface StorageProvider {
    * 全项目不存在真删除路径——需要彻底删除时只向用户显示归档文件路径。
    */
   archive(hash: SkillHash): Promise<void>;
+  /**
+   * 占位:在库存内分配目录并写入模板,登记到 drafts[](#169)。
+   * 与 add 相反:add 是 content-first(内容先到),allocate 是 location-first(先占名再写内容)。
+   */
+  allocate(dirName: string, origin: SkillSource): Promise<DraftRecord>;
+  /**
+   * 定稿:校验 SKILL.md 达标后算哈希,从 drafts[] 移入 skills[](#169)。
+   */
+  commit(dirName: string): Promise<SkillRecord>;
 }
 
 /**

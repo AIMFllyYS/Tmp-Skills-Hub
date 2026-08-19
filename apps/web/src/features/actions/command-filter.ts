@@ -22,9 +22,9 @@ export function actionUnavailableReason(id: ActionId, ctx: PaletteContext): stri
     if ((id === "enable" || id === "disable") && ctx.clientCount === 0) return "未发现客户端";
     return null;
   }
-  if (id === "preview-links" || id === "apply-links" || id === "add-to-group" || id === "remove-from-group") {
+  if (id === "preview-links" || id === "apply-links" || id === "apply-clean-links" || id === "add-to-group" || id === "remove-from-group") {
     if (ctx.selectedCount === 0) return "先勾选 skill";
-    if ((id === "preview-links" || id === "apply-links") && ctx.clientCount === 0) return "未发现客户端";
+    if ((id === "preview-links" || id === "apply-links" || id === "apply-clean-links") && ctx.clientCount === 0) return "未发现客户端";
     if ((id === "add-to-group" || id === "remove-from-group") && ctx.groupCount === 0) return "暂无分组";
     return null;
   }
@@ -36,7 +36,7 @@ export function actionNeedsText(id: ActionId): boolean {
 }
 
 export function actionNeedsClient(id: ActionId): boolean {
-  return id === "enable" || id === "disable" || id === "preview-links" || id === "apply-links";
+  return id === "enable" || id === "disable" || id === "preview-links" || id === "apply-links" || id === "apply-clean-links";
 }
 
 export function actionNeedsGroup(id: ActionId): boolean {

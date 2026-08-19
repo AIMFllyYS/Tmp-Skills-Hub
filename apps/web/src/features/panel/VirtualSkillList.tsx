@@ -11,6 +11,7 @@ interface VirtualSkillListProps {
   onToggleCheck: (hash: string, next: boolean) => void;
   onFocus: (hash: string) => void;
   clientViewOf?: ((skill: SkillRecord) => SkillRowClientView | undefined) | undefined;
+  selectable?: boolean;
 }
 
 /** 固定行高虚拟列表:只挂可见窗口 + overscan,选中态由数据驱动不随卸载丢失。 */
@@ -22,6 +23,7 @@ export function VirtualSkillList({
   onToggleCheck,
   onFocus,
   clientViewOf,
+  selectable = true,
 }: VirtualSkillListProps): React.JSX.Element {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -95,6 +97,7 @@ export function VirtualSkillList({
             onToggleCheck={onToggleCheck}
             onFocus={onFocus}
             clientView={clientViewOf?.(skill)}
+            selectable={selectable}
           />
         ))}
         {win.bottomPad > 0 && <li aria-hidden style={{ height: win.bottomPad }} />}

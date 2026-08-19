@@ -5,6 +5,13 @@ html, body, #root {
   overflow: hidden;
 }
 
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
 /* ui-design-v0.md §8:语义 token 由 @theme 定义,组件只引用 token 类 */
 @theme {
   --color-ink-strong: #030712; /* gray-950 */

@@ -5,7 +5,12 @@ import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import {
   addSkillToGroups,
+  allocateDraft,
   archiveSkill,
+  commitDraft,
+  createAndCommit,
+  discardDraft,
+  listDrafts,
   restoreArchivedSkill,
   classifyClientLink,
   createGroup,
@@ -698,6 +703,58 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }),
   );
 
+  // ============ drafts (#169) ============
+
+  app.get("/api/drafts", (c) =>
+    withStore(c, "drafts", async (root) => {
+      const drafts = await listDrafts(root);
+      return c.json({ ok: true, command: "drafts", drafts });
+    }),
+  );
+
+  app.post("/api/drafts", (c) =>
+    withStore(c, "new", async (root) => {
+      const raw = (await c.req.json().catch(() => null)) as { dirName?: unknown; description?: unknown } | null;
+      const dirName = typeof raw?.dirName === "string" ? raw.dirName.trim() : "";
+      if (dirName === "") return err(c, "new", "bad-usage", "body 需要 { dirName: string }", 400);
+      const description = typeof raw?.description === "string" ? raw.description.trim() : "";
+      if (description !== "") {
+        const result = await createAndCommit(root, dirName, description, { kind: "authored", reference: "web" });
+        if (result.kind === "conflict") return err(c, "new", "draft-exists", result.reason, 409);
+        if (result.kind === "incomplete" || result.kind === "draft-not-found") {
+          return err(c, "new", "draft-incomplete", "kind" in result && "reason" in result ? (result as { reason: string }).reason : "SKILL.md 未达标", 400);
+        }
+        if (result.kind === "duplicate") return err(c, "new", "draft-exists", "内容与已有记录重复: " + result.record.dirName, 409);
+        if (result.kind !== "committed") return err(c, "new", "io-error", "未知结果", 500);
+        return c.json({ ok: true, command: "new", verb: "create", dirName, hash: result.record.hash, storeDir: path.join(root, "skills", dirName) });
+      }
+      const result = await allocateDraft(root, dirName, { origin: { kind: "authored", reference: "web" } });
+      if (result.kind === "conflict") return err(c, "new", "draft-exists", result.reason, 409);
+      return c.json({ ok: true, command: "new", verb: "allocate", dirName: result.draft.dirName, storeDir: result.storeDir });
+    }),
+  );
+
+  app.post("/api/drafts/:dirName/commit", (c) =>
+    withStore(c, "new", async (root) => {
+      const dirName = c.req.param("dirName");
+      const result = await commitDraft(root, dirName);
+      if (result.kind === "draft-not-found") return err(c, "new", "not-found", "草稿不存在: " + dirName, 404);
+      if (result.kind === "incomplete") return err(c, "new", "bad-usage", result.reason, 400);
+      if (result.kind === "duplicate") return err(c, "new", "draft-exists", "内容与已有记录重复: " + result.record.dirName, 409);
+      if (result.kind === "conflict") return err(c, "new", "draft-exists", result.reason, 409);
+      return c.json({ ok: true, command: "new", verb: "commit", dirName, hash: result.record.hash });
+    }),
+  );
+
+  app.post("/api/drafts/:dirName/discard", (c) =>
+    withStore(c, "new", async (root) => {
+      const dirName = c.req.param("dirName");
+      const result = await discardDraft(root, dirName);
+      if (result.kind === "draft-not-found") return err(c, "new", "not-found", "草稿不存在: " + dirName, 404);
+      return c.json({ ok: true, command: "new", verb: "discard", dirName, archivePath: result.archivePath });
+    }),
+  );
+
   app.post("/api/skills/:hash/archive", (c) =>
     withStore(c, "archive", async (root) => {
       const needle = c.req.param("hash");
@@ -759,15 +816,23 @@ export interface StartUiServerOptions {
   home?: string;
 }
 
-export async function startUiServer(opts: StartUiServerOptions = {}): Promise<void> {
-  const port = opts.port ?? DEFAULT_UI_PORT;
-  const h = opts.home ?? resolveHome();
-  const storeOpts: StoreRootOptions = { pointerFilePath: path.join(h, POINTER_REL) };
-  if (opts.home !== undefined && opts.home !== "") storeOpts.cliHome = opts.home;
+/**
+ * 面板库存定位:home 只作指针基座,不当 storeRoot。
+ * `resolveStoreRoot` 的 cliHome 会直通成库存根;bootstrap / `ui --home` 传入的是用户目录,
+ * 库存与 home 分离时(本机默认形态)会把主目录当成空库存。
+ */
+export async function resolveUiStoreRoot(home: string): Promise<string | null> {
+  const storeOpts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
   const envHome = process.env.SKILLS_HUB_HOME;
   if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
   const resolved = await resolveStoreRoot(storeOpts);
-  const storeRoot = resolved.ok ? resolved.storeRoot : null;
+  return resolved.ok ? resolved.storeRoot : null;
+}
+
+export async function startUiServer(opts: StartUiServerOptions = {}): Promise<void> {
+  const port = opts.port ?? DEFAULT_UI_PORT;
+  const h = opts.home ?? resolveHome();
+  const storeRoot = await resolveUiStoreRoot(h);
   serve({ fetch: createUiApp({ storeRoot, home: h }).fetch, port, hostname: "127.0.0.1" }, (info) => {
     console.log("skill-hub ui: http://127.0.0.1:" + info.port + "/api/skills" + (storeRoot === null ? " (库存未配置)" : ""));
   });
