@@ -1,5 +1,7 @@
 import type { ClientInfo, SkillRecord, UsageCounters, UsageRankEntry } from "../skills/types.js";
 
+export const STATS_TOP_N = 8;
+
 export function coverageOf(skills: SkillRecord[]): { linked: number; total: number } {
   return { linked: skills.filter((s) => s.visibleIn.length > 0).length, total: skills.length };
 }
@@ -8,6 +10,23 @@ export function recentSkills(skills: SkillRecord[], limit: number): SkillRecord[
   return [...skills]
     .sort((a, b) => b.installedAt.localeCompare(a.installedAt) || a.dirName.localeCompare(b.dirName))
     .slice(0, limit);
+}
+
+export function topN<T>(rows: readonly T[], n: number): T[] {
+  return rows.slice(0, n);
+}
+
+export function shareOf(part: number, all: number): number {
+  if (all <= 0) return 0;
+  return part / all;
+}
+
+export function formatShare(part: number, all: number): string {
+  return String(Math.round(shareOf(part, all) * 100)) + "%";
+}
+
+export function usageSum(rows: readonly { total: number }[]): number {
+  return rows.reduce((s, r) => s + r.total, 0);
 }
 
 export function usageRows(
@@ -36,12 +55,14 @@ export function usageRows(
 export function appDistribution(
   skills: SkillRecord[],
   clients: ClientInfo[],
-): { id: string; enabled: number; total: number }[] {
-  return clients.map((c) => ({
-    id: c.clientId,
-    enabled: skills.filter((s) => s.visibleIn.includes(c.clientId)).length,
-    total: skills.length,
-  }));
+): { id: string; enabled: number; total: number; coverage: number }[] {
+  return clients
+    .map((c) => {
+      const enabled = skills.filter((s) => s.visibleIn.includes(c.clientId)).length;
+      const total = skills.length;
+      return { id: c.clientId, enabled, total, coverage: shareOf(enabled, total) };
+    })
+    .sort((a, b) => b.coverage - a.coverage || b.enabled - a.enabled || a.id.localeCompare(b.id));
 }
 
 export function sourceDistribution(skills: SkillRecord[]): { kind: string; count: number }[] {
@@ -53,4 +74,8 @@ export function sourceDistribution(skills: SkillRecord[]): { kind: string; count
   return [...counts.entries()]
     .map(([kind, count]) => ({ kind, count }))
     .sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
+}
+
+export function chartHeightPx(rows: number): number {
+  return Math.max(160, rows * 36 + 48);
 }

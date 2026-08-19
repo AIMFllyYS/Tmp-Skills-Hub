@@ -303,22 +303,23 @@ export function SkillsPage({
                   </div>
                 </div>
               ) : (
-                <>
-                  <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
-                    <p className="truncate text-sm font-medium text-ink-strong">{focused.dirName}</p>
-                    <SkillActions
-                      key={focused.hash}
-                      skill={focused}
-                      groups={groups}
-                      onArchive={onArchive}
-                      onGroupsChanged={onGroupsChanged}
-                      onNotice={onNotice}
-                    />
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    <SkillViewer key={focused.hash} hash={focused.hash} onSaved={onSaved} />
-                  </div>
-                </>
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <SkillViewer
+                    key={focused.hash}
+                    hash={focused.hash}
+                    skill={focused}
+                    actions={
+                      <SkillActions
+                        skill={focused}
+                        groups={groups}
+                        onArchive={onArchive}
+                        onGroupsChanged={onGroupsChanged}
+                        onNotice={onNotice}
+                      />
+                    }
+                    onSaved={onSaved}
+                  />
+                </div>
               )}
             </div>
           </div>

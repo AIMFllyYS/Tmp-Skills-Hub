@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { ClientInfo, SkillRecord } from "../skills/types.js";
-import { appDistribution, coverageOf, sourceDistribution, usageRows } from "./stats-model.js";
+import {
+  appDistribution,
+  chartHeightPx,
+  coverageOf,
+  formatShare,
+  shareOf,
+  sourceDistribution,
+  STATS_TOP_N,
+  topN,
+  usageRows,
+  usageSum,
+} from "./stats-model.js";
 
 function skill(name: string, visibleIn: string[], origins: string[] = []): SkillRecord {
   return {
@@ -26,8 +37,8 @@ describe("stats-model", () => {
       { clientId: "cursor", skillsDir: "/u" },
     ];
     expect(appDistribution(skills, clients)).toEqual([
-      { id: "claude", enabled: 2, total: 2 },
-      { id: "cursor", enabled: 1, total: 2 },
+      { id: "claude", enabled: 2, total: 2, coverage: 1 },
+      { id: "cursor", enabled: 1, total: 2, coverage: 0.5 },
     ]);
   });
 
@@ -57,5 +68,23 @@ describe("stats-model", () => {
     const orphan = "5b715426f4c8be86bc50b65171c4c43435cec6bc02d1025f2e40988551f304a5";
     const rows = usageRows([], [{ skillHash: orphan, show: 0, enable: 2, total: 2 }], new Map());
     expect(rows[0]).toEqual({ hash: orphan, name: orphan.slice(0, 12), total: 2, show: 0, enable: 2 });
+  });
+
+  it("shareOf / formatShare 总量为 0 时是 0%", () => {
+    expect(shareOf(3, 0)).toBe(0);
+    expect(formatShare(3, 0)).toBe("0%");
+    expect(formatShare(1, 4)).toBe("25%");
+  });
+
+  it("topN 只切前 n 条,STATS_TOP_N 是 8", () => {
+    expect(STATS_TOP_N).toBe(8);
+    expect(topN([1, 2, 3, 4], 2)).toEqual([1, 2]);
+    expect(topN([1], 8)).toEqual([1]);
+  });
+
+  it("usageSum 加总,chartHeightPx 随条数增高", () => {
+    expect(usageSum([{ total: 2 }, { total: 3 }])).toBe(5);
+    expect(chartHeightPx(8)).toBeGreaterThan(chartHeightPx(2));
+    expect(chartHeightPx(1)).toBeGreaterThanOrEqual(160);
   });
 });

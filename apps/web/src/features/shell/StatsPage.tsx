@@ -4,6 +4,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   XAxis,
@@ -11,12 +12,29 @@ import {
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, CHART_INK, CHART_SERIES } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  CHART_COLOR,
+  CHART_INK,
+  CHART_SERIES,
+} from "@/components/ui/chart";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableHead, TableRow, TableTd, TableTh } from "@/components/ui/table";
 import { tabTriggerClass } from "@/components/ui/tabs";
 import type { ClientInfo, SkillRecord, UsageCounters, UsageRankEntry } from "../skills/types.js";
 import type { ShellNav, StatsTab } from "./page.js";
-import { appDistribution, sourceDistribution, usageRows } from "./stats-model.js";
+import {
+  appDistribution,
+  chartHeightPx,
+  formatShare,
+  sourceDistribution,
+  STATS_TOP_N,
+  topN,
+  usageRows,
+  usageSum,
+} from "./stats-model.js";
 
 interface StatsPageProps {
   skills: SkillRecord[];
@@ -44,20 +62,26 @@ function Empty({ onGo }: { onGo: (target: ShellNav) => void }): React.JSX.Elemen
 function UsageChart({
   rows,
   onSelect,
-  tall = false,
 }: {
-  rows: { hash: string; name: string; total: number }[];
+  rows: { hash: string; name: string; total: number; show: number; enable: number }[];
   onSelect: (hash: string) => void;
-  tall?: boolean;
 }): React.JSX.Element {
   const animate = !reducedMotion();
+  const open = (d: unknown): void => {
+    if (typeof d !== "object" || d === null) return;
+    const payload = (d as { payload?: { hash?: unknown } }).payload;
+    if (payload !== undefined && typeof payload.hash === "string" && payload.hash !== "") {
+      onSelect(payload.hash);
+    }
+  };
   return (
-    <ChartContainer className={tall ? "h-[28rem]" : "h-64"}>
+    <ChartContainer heightPx={chartHeightPx(rows.length)}>
       <BarChart
         accessibilityLayer
         data={rows}
         layout="vertical"
-        margin={{ left: 8, right: 16, top: 8, bottom: 8 }}
+        margin={{ left: 8, right: 36, top: 8, bottom: 8 }}
+        barCategoryGap={8}
       >
         <CartesianGrid horizontal={false} stroke={CHART_INK.line} />
         <XAxis
@@ -69,27 +93,34 @@ function UsageChart({
         <YAxis
           type="category"
           dataKey="name"
-          width={112}
+          width={128}
           tick={{ fill: CHART_INK.strong, fontSize: 12 }}
           axisLine={false}
           tickLine={false}
         />
         <ChartTooltip cursor={{ fill: CHART_INK.surface }} content={<ChartTooltipContent />} />
         <Bar
-          dataKey="total"
-          name="次数"
-          fill={CHART_INK.strong}
-          radius={4}
+          dataKey="show"
+          name="查看"
+          stackId="usage"
+          fill={CHART_COLOR.show}
+          radius={[4, 0, 0, 4]}
           isAnimationActive={animate}
           animationDuration={150}
-          onClick={(d: unknown) => {
-            if (typeof d !== "object" || d === null) return;
-            const payload = (d as { payload?: { hash?: unknown } }).payload;
-            if (payload !== undefined && typeof payload.hash === "string" && payload.hash !== "") {
-              onSelect(payload.hash);
-            }
-          }}
+          onClick={open}
         />
+        <Bar
+          dataKey="enable"
+          name="启用"
+          stackId="usage"
+          fill={CHART_COLOR.enable}
+          radius={[0, 4, 4, 0]}
+          isAnimationActive={animate}
+          animationDuration={150}
+          onClick={open}
+        >
+          <LabelList dataKey="total" position="right" fill={CHART_INK.mid} fontSize={12} />
+        </Bar>
       </BarChart>
     </ChartContainer>
   );
@@ -98,41 +129,42 @@ function UsageChart({
 function AppsChart({
   rows,
   onSelect,
-  tall = false,
 }: {
-  rows: { id: string; enabled: number; total: number }[];
+  rows: { id: string; enabled: number; total: number; coverage: number; coveragePct: number; coverageLabel: string }[];
   onSelect: (id: string) => void;
-  tall?: boolean;
 }): React.JSX.Element {
   const animate = !reducedMotion();
   return (
-    <ChartContainer className={tall ? "h-[28rem]" : "h-64"}>
+    <ChartContainer heightPx={chartHeightPx(rows.length)}>
       <BarChart
         accessibilityLayer
         data={rows}
         layout="vertical"
-        margin={{ left: 8, right: 16, top: 8, bottom: 8 }}
+        margin={{ left: 8, right: 48, top: 8, bottom: 8 }}
+        barCategoryGap={8}
       >
         <CartesianGrid horizontal={false} stroke={CHART_INK.line} />
         <XAxis
           type="number"
+          domain={[0, 100]}
           tick={{ fill: CHART_INK.mid, fontSize: 12 }}
           axisLine={{ stroke: CHART_INK.line }}
           tickLine={false}
+          tickFormatter={(v: number) => String(v) + "%"}
         />
         <YAxis
           type="category"
           dataKey="id"
-          width={112}
+          width={128}
           tick={{ fill: CHART_INK.strong, fontSize: 12 }}
           axisLine={false}
           tickLine={false}
         />
         <ChartTooltip cursor={{ fill: CHART_INK.surface }} content={<ChartTooltipContent />} />
         <Bar
-          dataKey="enabled"
-          name="已启用"
-          fill={CHART_INK.strong}
+          dataKey="coveragePct"
+          name="覆盖率 %"
+          fill={CHART_COLOR.enable}
           radius={4}
           isAnimationActive={animate}
           animationDuration={150}
@@ -141,20 +173,9 @@ function AppsChart({
             const payload = (d as { payload?: { id?: unknown } }).payload;
             if (payload !== undefined && typeof payload.id === "string") onSelect(payload.id);
           }}
-        />
-        <Bar
-          dataKey="total"
-          name="库存"
-          fill={CHART_INK.faint}
-          radius={4}
-          isAnimationActive={animate}
-          animationDuration={150}
-          onClick={(d: unknown) => {
-            if (typeof d !== "object" || d === null) return;
-            const payload = (d as { payload?: { id?: unknown } }).payload;
-            if (payload !== undefined && typeof payload.id === "string") onSelect(payload.id);
-          }}
-        />
+        >
+          <LabelList dataKey="coverageLabel" position="right" fill={CHART_INK.mid} fontSize={12} />
+        </Bar>
       </BarChart>
     </ChartContainer>
   );
@@ -163,7 +184,7 @@ function AppsChart({
 function SourceChart({ rows }: { rows: { kind: string; count: number }[] }): React.JSX.Element {
   const animate = !reducedMotion();
   return (
-    <ChartContainer>
+    <ChartContainer heightPx={256}>
       <PieChart accessibilityLayer>
         <ChartTooltip content={<ChartTooltipContent />} />
         <Pie
@@ -183,7 +204,7 @@ function SourceChart({ rows }: { rows: { kind: string; count: number }[] }): Rea
           }}
         >
           {rows.map((row, i) => {
-            const fill = CHART_SERIES[i % CHART_SERIES.length] ?? CHART_INK.strong;
+            const fill = CHART_SERIES[i % CHART_SERIES.length] ?? CHART_COLOR.show;
             return <Cell key={row.kind} fill={fill} />;
           })}
         </Pie>
@@ -192,13 +213,19 @@ function SourceChart({ rows }: { rows: { kind: string; count: number }[] }): Rea
   );
 }
 
-/** 定量页:默认多图仪表盘，Tab 看大图。 */
+/** 定量页:前 8 名粗柱 + 排行表。 */
 export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPageProps): React.JSX.Element {
   const [tab, setTab] = useState<StatsTab>("overview");
   const usage = useMemo(() => usageRows(skills, ranking, counters), [skills, ranking, counters]);
   const apps = useMemo(() => appDistribution(skills, clients), [skills, clients]);
   const sources = useMemo(() => sourceDistribution(skills), [skills]);
-  const dashUsage = usage.slice(0, 8);
+  const usageHead = topN(usage, STATS_TOP_N);
+  const appHead = topN(apps, STATS_TOP_N).map((r) => ({
+    ...r,
+    coveragePct: Math.round(r.coverage * 100),
+    coverageLabel: String(r.enabled) + "/" + String(r.total),
+  }));
+  const allUsage = usageSum(usage);
   const noData = usage.length === 0 && apps.length === 0;
 
   const openSkill = (hash: string): void => {
@@ -231,22 +258,22 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
         )}
       </nav>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="p-6">
+        <div className="space-y-6 p-6">
           {tab === "overview" && (
             noData ? <Empty onGo={onGo} /> : (
               <div className="grid gap-4 lg:grid-cols-2">
-                {dashUsage.length > 0 && (
+                {usageHead.length > 0 && (
                   <Card>
-                    <h2 className="text-base font-medium text-ink-strong">用量</h2>
-                    <p className="mt-1 text-xs text-ink-mid">次数；点击进入该 skill。</p>
-                    <UsageChart rows={dashUsage} onSelect={openSkill} />
+                    <h2 className="text-base font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>
+                    <p className="mt-1 text-xs text-ink-mid">蓝 = 查看，青 = 启用。点击进入该 skill。</p>
+                    <UsageChart rows={usageHead} onSelect={openSkill} />
                   </Card>
                 )}
-                {apps.length > 0 && (
+                {appHead.length > 0 && (
                   <Card>
-                    <h2 className="text-base font-medium text-ink-strong">应用分布</h2>
-                    <p className="mt-1 text-xs text-ink-mid">已启用 / 库存；点击打开该应用。</p>
-                    <AppsChart rows={apps} onSelect={openApp} />
+                    <h2 className="text-base font-medium text-ink-strong">应用覆盖</h2>
+                    <p className="mt-1 text-xs text-ink-mid">已启用 / 库存。点击打开该应用。</p>
+                    <AppsChart rows={appHead} onSelect={openApp} />
                   </Card>
                 )}
                 {sources.length > 0 && (
@@ -254,6 +281,11 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
                     <h2 className="text-base font-medium text-ink-strong">来源</h2>
                     <p className="mt-1 text-xs text-ink-mid">有标记的收录来源。</p>
                     <SourceChart rows={sources} />
+                    <ul className="mt-3 space-y-1 text-sm text-ink-mid">
+                      {sources.map((s) => (
+                        <li key={s.kind}>{s.kind} · {String(s.count)} 份</li>
+                      ))}
+                    </ul>
                   </Card>
                 )}
               </div>
@@ -261,18 +293,83 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
           )}
           {tab === "usage" && (
             usage.length === 0 ? <Empty onGo={onGo} /> : (
-              <Card>
-                <h2 className="text-base font-medium text-ink-strong">用量</h2>
-                <UsageChart rows={usage} onSelect={openSkill} tall />
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <h2 className="text-base font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>
+                  <p className="mt-1 text-xs text-ink-mid">全集在下表，不把全部塞进一张图。</p>
+                  <UsageChart rows={usageHead} onSelect={openSkill} />
+                </Card>
+                <div>
+                  <h2 className="mb-2 text-base font-medium text-ink-strong">排行</h2>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableTh className="w-12">#</TableTh>
+                        <TableTh>名称</TableTh>
+                        <TableTh className="text-right">查看</TableTh>
+                        <TableTh className="text-right">启用</TableTh>
+                        <TableTh className="text-right">合计</TableTh>
+                        <TableTh className="text-right">占比</TableTh>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {usage.map((row, i) => (
+                        <TableRow
+                          key={row.hash}
+                          className="cursor-pointer transition-colors duration-[150ms] hover:bg-surface"
+                          onClick={() => openSkill(row.hash)}
+                        >
+                          <TableTd className="text-ink-faint">{String(i + 1)}</TableTd>
+                          <TableTd className="font-medium text-ink-strong">{row.name}</TableTd>
+                          <TableTd className="text-right">{String(row.show)}</TableTd>
+                          <TableTd className="text-right">{String(row.enable)}</TableTd>
+                          <TableTd className="text-right">{String(row.total)}</TableTd>
+                          <TableTd className="text-right">{formatShare(row.total, allUsage)}</TableTd>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             )
           )}
           {tab === "apps" && (
             apps.length === 0 ? <Empty onGo={onGo} /> : (
-              <Card>
-                <h2 className="text-base font-medium text-ink-strong">应用分布</h2>
-                <AppsChart rows={apps} onSelect={openApp} tall />
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <h2 className="text-base font-medium text-ink-strong">覆盖前 {String(appHead.length)} 名</h2>
+                  <AppsChart rows={appHead} onSelect={openApp} />
+                </Card>
+                <div>
+                  <h2 className="mb-2 text-base font-medium text-ink-strong">应用</h2>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableTh className="w-12">#</TableTh>
+                        <TableTh>应用</TableTh>
+                        <TableTh className="text-right">已启用</TableTh>
+                        <TableTh className="text-right">库存</TableTh>
+                        <TableTh className="text-right">覆盖</TableTh>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {apps.map((row, i) => (
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer transition-colors duration-[150ms] hover:bg-surface"
+                          onClick={() => openApp(row.id)}
+                        >
+                          <TableTd className="text-ink-faint">{String(i + 1)}</TableTd>
+                          <TableTd className="font-medium text-ink-strong">{row.id}</TableTd>
+                          <TableTd className="text-right">{String(row.enabled)}</TableTd>
+                          <TableTd className="text-right">{String(row.total)}</TableTd>
+                          <TableTd className="text-right">{formatShare(row.enabled, row.total)}</TableTd>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             )
           )}
           {tab === "sources" && (
@@ -280,6 +377,11 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
               <Card>
                 <h2 className="text-base font-medium text-ink-strong">来源</h2>
                 <SourceChart rows={sources} />
+                <ul className="mt-3 space-y-1 text-sm text-ink-mid">
+                  {sources.map((s) => (
+                    <li key={s.kind}>{s.kind} · {String(s.count)} 份</li>
+                  ))}
+                </ul>
               </Card>
             )
           )}

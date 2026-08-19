@@ -30,7 +30,7 @@
 
 - 函数组件 + hooks，不引状态管理库（数据流是「fetch 一次 + 本地过滤」的量级，`useState`/`useMemo` 够用；引库需先立 issue）
 - Tailwind CSS 写样式，不使用 CSS Modules；条件 className 用 `cn()`（`clsx` + `tailwind-merge`，见 `apps/web/src/lib/utils.ts`）
-- 跨页按钮、输入、对话框、Tab、Toast、开关、侧栏拖条、ScrollArea、Skeleton、Tooltip、折叠、图表容器必须来自 `apps/web/src/components/ui/`，服从 [ui-design-v1.md](./ui-design-v1.md)；业务文件不复制第三套控件样式，不手写条形图
+- 跨页按钮、输入、对话框、Tab、Toast、开关、侧栏拖条、ScrollArea、Skeleton、Tooltip、折叠、图表容器、表必须来自 `apps/web/src/components/ui/`，服从 [ui-design-v1.md](./ui-design-v1.md)；业务文件不复制第三套控件样式，不手写条形图
 - 图标只用 Lucide 线性变体，且仅在能省字或帮助扫读时出现
 - 新 UI 文件可用 `@/` 指向 `apps/web/src/`；feature 内既有相对路径 `.js` 导入不必为了 alias 全量改写
 - 与 CLI 服务的数据契约（`/api/skills` 的字段）变更时,同一个 PR 里同步改 `ui-server.ts` 和 web 端类型
