@@ -4,18 +4,18 @@
 > 取代 [ui-design-v0.md](./ui-design-v0.md)（#30）。v0 的视觉硬约束全部保留；v1 补上人用旅程规则，并把控件收口到同一套组件。
 > 信息架构仍服从 [app-shell-v2.md](../designs/app-shell-v2.md)。数据层仍服从 [panel-ia-v1.md](../designs/panel-ia-v1.md)。
 > 修订理由:人用壳四页已经落地，但按钮、输入、对话框、Toast 各写一套 class；批 9 的分组 / 分析 / 分享从主路径消失却仍留在死代码里。需要一份同时约束视觉、组件来源与旅程的口径，否则每个页面会再次各自发挥。
-> `docs/designs/design.pen` 若仍按旧 token / 三栏草图，以本文为准，该文件视为过时。
+> **批 14 修订（2026-08-20）**：批 13 把 class 收口到 `components/ui/`，但规范 §6 仍禁止页切、骨架、位移，设置仍是主区第四页，长名单是纯文字。按旧禁令做完就会「生硬」。本修订允许反馈动效、Skeleton、侧栏收起/拖宽、长名单折叠；灰阶 / 无渐变 / 无毛玻璃 / 无大阴影仍硬。`docs/designs/design.pen` 若仍按旧 token / 三栏草图，以本文为准，该文件视为过时。
 
 这是给自己人天天用的工具面板，不是宣传页。高端感来自克制与秩序：留白、层级清晰、字重与灰阶的节制使用、动效只用于表达状态变化。用户离开时应该能说：That was easy.
 
 ## 0. 修订相对 v0
 
-| 仍硬 | v1 新增 |
-| --- | --- |
-| 灰阶优先、三档状态色、无渐变 / 毛玻璃 / 大阴影 | UX 铁律（清晰、少、可预期、点击有理由） |
-| 字号字重档位、4px 间距、标题不超过 semibold | 控件必须来自 `apps/web/src/components/ui/`，禁止第三套手写按钮 |
-| 无深色模式、隐藏滚动条、集合行 `h-10` | 动效收口为 150ms token；图标只做微型叙事 |
-| 侧栏 `w-56` + 左下角设置 | 第一印象、空状态、反馈（Toast / 对话框）必须统一 |
+| 仍硬 | v1 新增 | 批 14 修订 |
+| --- | --- | --- |
+| 灰阶优先、三档状态色、无渐变 / 毛玻璃 / 大阴影 | UX 铁律（清晰、少、可预期、点击有理由） | 反馈动效允许：按压 `scale`、hover 底纹、主区 opacity fade、Tab 指示、图表首次绘制、开关拨动 |
+| 字号字重档位、4px 间距、标题不超过 semibold | 控件必须来自 `apps/web/src/components/ui/`，禁止第三套手写按钮 | 侧栏 / 图 / 骨架 / 滚动区 / 提示也必须走组件库，禁止 feature 里再手写一套 |
+| 无深色模式、隐藏滚动条、集合行 `h-10` | 动效收口为 150ms token（上限 200ms）；图标只做微型叙事 | 加载用 Skeleton（允许极弱 pulse）；禁止彩色 shimmer；`prefers-reduced-motion` 时只留颜色变化 |
+| 左下角设置入口 | 第一印象、空状态、反馈（Toast / 对话框）必须统一 | 侧栏默认 `w-56`、可拖宽、可收成图标栏；设置是 Dialog 不是第四页；超过约 6 项的名单必须可折叠 |
 
 ## 1. 原则
 
@@ -89,20 +89,27 @@
 
 ## 6. 动效
 
-全仓只承认一个时长 token：`--duration-fast: 150ms`（允许范围 100–150ms，上限 **200ms**）。easing 用默认。
+全仓只承认一个时长 token：`--duration-fast: 150ms`（允许范围 100–200ms，默认 150ms）。easing 用默认。动效只表达「点到了 / 换页了 / 在加载」，不是装饰。
 
 允许:
 
-- hover / focus / disabled 的颜色、边框、透明度
+- hover / focus / disabled 的颜色、边框、透明度、底纹
+- 按钮与导航的按压 `scale`（约 `0.98`，仍走同一时长 token）
 - 对话框遮罩与面板的 opacity fade
-- 开关拨动（组件内部、仍 ≤150ms）
+- 主区切页 opacity fade（150–200ms）；用 `key={page}` 触发一次，不要 slide
+- Tab 选中指示（下边框或底纹切换）
+- 开关拨动（组件内部）
+- 图表首次绘制（库默认入场，时长仍 ≤200ms）
+- Skeleton 极弱 pulse（只变透明度，禁止彩色跑条 / shimmer）
 
 禁止:
 
-- 入场 zoom / slide / bounce / 弹性
-- 滚动视差、粒子、循环装饰动画
-- 骨架屏闪烁或 shimmer
-- 数据加载用旋转表演；用静态文案「加载中…」，可配**无动画**的底纹占位条
+- bounce / 弹性 / 入场 zoom / 位移滑入
+- 滚动视差、粒子、循环装饰动画、彩色 glow、大阴影
+- 彩色 shimmer 或旋转表演当加载反馈
+- 把单行「加载中…」当作全壳唯一加载态（查看器文件切换等局部态可用短文案，但主区首次加载必须是 Skeleton）
+
+`prefers-reduced-motion: reduce`：取消 scale、fade、pulse、图表入场，只留颜色 / 边框变化。
 
 ## 7. 禁用清单
 
@@ -154,8 +161,9 @@
 - 边框 `border-line`；底纹 `bg-surface`
 - 状态色用 Tailwind 语义类（`green-700` 等），禁止自定义
 - 条件 class 用 `cn()`（`clsx` + `tailwind-merge`），不要再叠一套字符串拼接惯例
-- 图标仅 Lucide 线性、默认 16px、`text-ink-mid`；只在能代替文字或帮助扫读时使用（搜索、设置、添加、更多）。导航仍以文字为主，图标不得单独承担信息
+- 图标仅 Lucide 线性、默认 16px、`text-ink-mid`；只在能代替文字或帮助扫读时使用（搜索、设置、添加、更多、侧栏收起后的导航）。**展开侧栏仍以文字为主**；收成图标栏时，图标 + Tooltip 承担名称，不得只留一个无标签方块
 - 引用本规范数值时写 Tailwind 类名（如 `text-sm`），不写 px 值
+- 跨页复用还必须覆盖：可收起侧栏、拖边改宽、ScrollArea、Skeleton、Tooltip、折叠/手风琴、图表容器。禁止在 `features/` 里再手写第三套按钮、侧栏、条形图
 
 ## 9. UX 铁律（旅程）
 
@@ -186,15 +194,20 @@
 
 ## 12. 人用壳（侧栏 + 隐藏滚动条）
 
-| 项 | Tailwind | 说明 |
+| 项 | 口径 | 说明 |
 | --- | --- | --- |
-| 侧栏 | `w-56 shrink-0` | 固定宽 |
-| 主区 | `min-w-0 flex-1` | 吃剩余宽度 |
-| 分隔 | `border-r border-line` | 不要 `gap-*` |
-| 设置 | 侧栏底部 | 左下角，与三个板块分开 |
+| 侧栏默认宽 | `w-56`（224px） | 展开态默认；写入 `localStorage` 键 `skills-hub.shell` |
+| 侧栏拖宽 | 约 180–360px | 展开时可拖分隔条；收起时不可拖 |
+| 侧栏收起 | 图标栏（约 48px） | 三板块 + 左下角设置仍可达；名称用 Tooltip |
+| 主区 | `min-w-0 flex-1` | 吃剩余宽度；切页 opacity fade |
+| 分隔 | `border-r border-line` 或 1px 拖条 | 不要 `gap-*` 当列分隔 |
+| 设置 | 侧栏底部打开 Dialog | **不是**主区第四页；冒烟 `nav-settings` 留在左下角按钮 |
 | 选中项 | `bg-surface text-ink-strong` | 与列表选中同一套 |
+| 加载 | Skeleton | 全壳一种；离线横条与 Skeleton 分开，不要两句灰字叠在一起 |
+| 长名单 | 超过约 6 项进折叠卡 / 手风琴 | 禁止整页纯文字 `clientId` 清单 |
+| 路径 / id | 截断 + Tooltip 全文，等宽 | 不靠把列撑爆来显示 |
 
-滚动保留，滚动条隐藏（`scrollbar-width: none`；`::-webkit-scrollbar { display: none }`）。不要装饰性滚动条。页面根 `overflow: hidden`，分区 `overflow-y-auto`。不做移动端专门设计。
+滚动保留，滚动条**视觉隐藏**（`scrollbar-width: none`；`::-webkit-scrollbar { display: none }`）。可滚动区域走 `ScrollArea`（或等价封装），避免 Windows 上全局 `*` 选择器漏网。不要装饰性滚动条。页面根 `overflow: hidden`。不做移动端专门设计。虚拟列表仍自己管 `scrollTop`，不要外包一层会抢走滚动事件的容器。
 
 ## 13. 例外裁定
 

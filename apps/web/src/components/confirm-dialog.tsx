@@ -23,7 +23,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps): React.JSX.Element {
   return (
     <Dialog open onOpenChange={(next) => { if (!next && !busy) onCancel(); }}>
-      <DialogContent>
+      <DialogContent nested>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{body}</DialogDescription>
         <div className="mt-4 flex justify-end gap-2">

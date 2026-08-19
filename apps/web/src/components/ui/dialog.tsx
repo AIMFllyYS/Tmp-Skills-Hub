@@ -6,13 +6,19 @@ export function Dialog({
   open,
   onOpenChange,
   children,
+  disablePointerDismissal,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
+  disablePointerDismissal?: boolean;
 }): React.JSX.Element {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(next) => onOpenChange(next)}
+      {...(disablePointerDismissal === true ? { disablePointerDismissal: true } : {})}
+    >
       {children}
     </DialogPrimitive.Root>
   );
@@ -21,14 +27,21 @@ export function Dialog({
 export function DialogContent({
   className,
   children,
+  nested = false,
   ...props
-}: ComponentProps<typeof DialogPrimitive.Popup>): React.JSX.Element {
+}: ComponentProps<typeof DialogPrimitive.Popup> & { nested?: boolean }): React.JSX.Element {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-ink-strong/40 transition-opacity duration-[150ms]" />
+      <DialogPrimitive.Backdrop
+        className={cn(
+          "fixed inset-0 bg-ink-strong/40 transition-opacity duration-[150ms]",
+          nested ? "z-[60]" : "z-50",
+        )}
+      />
       <DialogPrimitive.Popup
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-white p-4 outline-none",
+          "fixed top-1/2 left-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-white p-4 outline-none",
+          nested ? "z-[61]" : "z-50",
           className,
         )}
         {...props}

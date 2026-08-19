@@ -37,3 +37,23 @@ export function filterSkillsByQuery(skills: readonly SkillRecord[], query: strin
     : skills.filter((s) => s.dirName.toLowerCase().includes(q) || s.meta.description.toLowerCase().includes(q));
   return rows.sort((a, b) => a.dirName.localeCompare(b.dirName));
 }
+
+export type ClientIdGroup = { key: "cursor" | "claude" | "other"; label: string; ids: string[] };
+
+/** 设置折叠卡：cursor / claude 各一组，其余进「其他」。不改发现规则。 */
+export function groupClientIds(ids: readonly string[]): ClientIdGroup[] {
+  const cursor: string[] = [];
+  const claude: string[] = [];
+  const other: string[] = [];
+  for (const id of ids) {
+    const lower = id.toLowerCase();
+    if (lower.includes("cursor")) cursor.push(id);
+    else if (lower.includes("claude")) claude.push(id);
+    else other.push(id);
+  }
+  const groups: ClientIdGroup[] = [];
+  if (cursor.length > 0) groups.push({ key: "cursor", label: "Cursor", ids: cursor });
+  if (claude.length > 0) groups.push({ key: "claude", label: "Claude", ids: claude });
+  if (other.length > 0) groups.push({ key: "other", label: "其他", ids: other });
+  return groups;
+}

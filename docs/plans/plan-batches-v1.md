@@ -29,10 +29,11 @@
 | 11 | 分享闭环 | 社团共享：拉已有、补推 | 9-3 |
 | 12 | 一键恢复到初始化前 | 备份被用过一轮后的 restore + 面板 reset | 10 |
 | 13 | 人用壳设计系统：克制灰阶 + 统一组件 | 天天用的壳要清晰、少、可预期 | 12 / #160 |
+| 14 | 人用壳交互：反馈、收纳、仪表盘 | 批 13 只换了皮，交互语法仍像静态灰字 | 13 |
 
 一批 = 一个父 issue + 一群 sub-issue = 一个分支族。按 [issue-to-pr](../../AGENTS.md) 规范，**每个 sub-issue 单独出一个 PR**，PR 打向 `dev`，正文末尾唯一一条 `Closes #N`。
 
-> 批 0–6 已于 2026-08-16 完成（43 个 issue 全关）。当前执行队列从批 7 起。设计依据：[panel-ia-v1.md](../designs/panel-ia-v1.md)；事实依据：[panel-and-perf-audit-2026-08-17.md](../audits/panel-and-perf-audit-2026-08-17.md)。
+> 批 0–6 已于 2026-08-16 完成（43 个 issue 全关）。批 7–13 已合入 `dev`。当前执行从批 14（人用壳交互）起。设计依据：[panel-ia-v1.md](../designs/panel-ia-v1.md)、[app-shell-v2.md](../designs/app-shell-v2.md)、[ui-design-v1.md](../conventions/ui-design-v1.md)。
 
 ## 各批内容与验收
 
@@ -119,6 +120,14 @@ HTTP 补 adopt / links.apply / group / analyze / verify / restore；面板按钮
 四页控件各写一套 class，确认层不像对话框，Toast 是底栏，收录/创建靠展开药丸；批 9 的分组 / 分析 / 分享从人用壳进不去。先把视觉规范升级为 [ui-design-v1.md](../conventions/ui-design-v1.md)，再把四页收口到同一套组件与旅程，并把次级动作放回 Skills「内容」。不改 IA（仍是总览 / 统计 / Skills / 设置），不恢复三栏，不把命令面板放回主路径，不改链接写盘语义。
 
 验收：四页按钮 / 输入 / Tab / 对话框 / Toast 同源；无阴影、渐变、毛玻璃；动效 ≤150ms 且只作状态反馈；空状态带主动作；分组 / 分析 / 分享可从内容页到达；主路径仍看不到哈希与 Ctrl+K；`pnpm lint` / `typecheck` / `build` / 相关 web 测试 / `pnpm smoke` 通过。
+
+### 批 14 人用壳交互：反馈、收纳、仪表盘
+
+批 13 把按钮 / 输入 / 对话框换成薄封装，外观仍是克制灰阶、IA 仍是「点左边换整页」。缺的是交互语法：无过渡、设置为第四页、应用名单是纯文字、统计是 CSS 细条、加载是一句「加载中…」。规范 [ui-design-v1.md](../conventions/ui-design-v1.md) 当时还禁止页切与骨架。本批先修订规范，再真正接上侧栏收起/拖宽、设置 Dialog、折叠名单、统计图、Skeleton。不改 `packages/core` / 链接写盘语义，不恢复三栏，不上深色模式，不同步 Pencil。
+
+子项：14-1 规范；14-2 壳（Sidebar 收起/拖宽、ScrollArea、Skeleton、页切/按压、Tooltip）；14-3 设置 Dialog + 应用折叠卡；14-4 统计仪表盘；14-5 总览可点数字/事项 + Skills 空状态与应用列密度；14-6 `lint` / `typecheck` / `build` / web 测试 / `pnpm smoke`。
+
+验收：点任何导航/按钮有反馈；设置是弹窗；长应用名单默认折叠；侧栏可收可拖；统计是图不是细条；加载是骨架不是一句字；滚动条不可见；主路径仍无哈希/Ctrl+K。
 
 ## 不做（本计划）
 

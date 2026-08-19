@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
+import { Archive } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, NativeSelect } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { tabTriggerClass } from "@/components/ui/tabs";
+import { TruncateTip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { getAction } from "../actions/registry.js";
 import { AdoptForm } from "../panel/AdoptForm.js";
 import { CreateForm } from "../panel/CreateForm.js";
@@ -154,21 +159,29 @@ export function SkillsPage({
 
       {tab === "apps" && (
         <div className="flex min-h-0 flex-1">
-          <div className="w-48 shrink-0 overflow-y-auto border-r border-line py-2">
-            {orderedClients.length === 0 && <p className="px-4 py-3 text-sm text-ink-mid">未发现应用</p>}
-            {orderedClients.map((c) => (
-              <button
-                key={c.clientId}
-                type="button"
-                onClick={() => onSelectClient(c.clientId)}
-                className={
-                  "flex w-full px-4 py-2 text-left text-sm transition-colors duration-[150ms] " +
-                  (clientId === c.clientId ? "bg-surface text-ink-strong" : "text-ink-mid hover:bg-surface")
-                }
-              >
-                {c.clientId}
-              </button>
-            ))}
+          <div className="flex w-52 shrink-0 flex-col border-r border-line">
+            <ScrollArea className="min-h-0 flex-1 py-2">
+              {orderedClients.length === 0 && <p className="px-4 py-3 text-sm text-ink-mid">未发现应用</p>}
+              {orderedClients.map((c) => {
+                const n = enabledCountForClient(skills, c.clientId);
+                const selected = clientId === c.clientId;
+                return (
+                  <button
+                    key={c.clientId}
+                    type="button"
+                    onClick={() => onSelectClient(c.clientId)}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-2 px-3 py-2 text-left",
+                      "transition-[background-color,transform] duration-[150ms] active:scale-[0.98] motion-reduce:active:scale-100",
+                      selected ? "bg-surface text-ink-strong" : "text-ink-mid hover:bg-surface",
+                    )}
+                  >
+                    <TruncateTip text={c.clientId} className="min-w-0 flex-1 text-sm" />
+                    <Badge>{String(n)}</Badge>
+                  </button>
+                );
+              })}
+            </ScrollArea>
           </div>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {clientId === null ? (
@@ -176,7 +189,7 @@ export function SkillsPage({
             ) : (
               <>
                 <div className="shrink-0 border-b border-line px-4 py-3">
-                  <p className="text-sm font-medium text-ink-strong">{clientId}</p>
+                  <TruncateTip text={clientId} className="text-sm font-medium text-ink-strong" />
                   <p className="mt-1 text-xs text-ink-mid">{appsCoverageHint(enabledHere, skills.length)}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
@@ -282,7 +295,13 @@ export function SkillsPage({
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {focused === null ? (
-                <p className="px-6 py-6 text-sm text-ink-mid">从左侧选一个 skill 查看内容。</p>
+                <div className="flex flex-col items-start gap-3 px-6 py-6">
+                  <p className="text-sm text-ink-mid">从左侧选一个 skill 查看内容。</p>
+                  <div className="flex flex-wrap gap-2">
+                    <AdoptForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
+                    <CreateForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
@@ -304,8 +323,9 @@ export function SkillsPage({
             </div>
           </div>
           <div className="shrink-0 border-t border-line px-4 py-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setShowArchive((v) => !v)}>
-              {showArchive ? "收起归档" : "归档区"}
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowArchive((v) => !v)}>
+              <Archive className="size-4 text-ink-mid" aria-hidden />
+              {showArchive ? "收起归档" : archived.length > 0 ? "归档区（" + String(archived.length) + "）" : "归档区"}
             </Button>
             {showArchive && (
               <div className="mt-2">
