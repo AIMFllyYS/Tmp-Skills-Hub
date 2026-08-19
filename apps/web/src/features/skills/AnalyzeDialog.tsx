@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { getAction } from "../actions/registry.js";
-import type { AnalyzeReportItem, AnalyzeResponse } from "../skills/types.js";
+import type { AnalyzeReportItem, AnalyzeResponse } from "./types.js";
 
 function ItemList({ title, items, empty }: { title: string; items: AnalyzeReportItem[]; empty: string }): React.JSX.Element {
   return (
@@ -23,8 +25,15 @@ function ItemList({ title, items, empty }: { title: string; items: AnalyzeReport
   );
 }
 
-/** 检查器分析页:点一下才请求;无密钥只展示降级文案;没有任何自动修复按钮。 */
-export function AnalyzePanel({ target }: { target: string }): React.JSX.Element {
+export function AnalyzeDialog({
+  open,
+  target,
+  onOpenChange,
+}: {
+  open: boolean;
+  target: string;
+  onOpenChange: (open: boolean) => void;
+}): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
@@ -46,28 +55,23 @@ export function AnalyzePanel({ target }: { target: string }): React.JSX.Element 
   };
 
   return (
-    <div className="p-4">
-      <button
-        type="button"
-        data-testid="analyze-run"
-        disabled={busy}
-        onClick={() => void run()}
-        className="rounded-full bg-ink-strong px-3 py-1 text-xs text-white disabled:opacity-50"
-      >
-        {busy ? "分析中…" : analyze.verb}
-      </button>
-      {error !== null && (
-        <p data-testid="analyze-degraded" className="mt-3 text-sm text-ink-mid">
-          {error.message}
-        </p>
-      )}
-      {error === null && report !== null && (
-        <div data-testid="analyze-report">
-          <ItemList title="相近" items={report.similar} empty="未发现相近 skill" />
-          <ItemList title="可能冲突" items={report.conflict} empty="未发现冲突" />
-          <p className="mt-4 text-xs text-ink-faint">报告仅为建议，未做任何写操作。</p>
-        </div>
-      )}
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto">
+        <DialogTitle>{analyze.verb}</DialogTitle>
+        <DialogDescription>报告仅为建议,未做任何写操作。</DialogDescription>
+        <Button type="button" className="mt-3" data-testid="analyze-run" disabled={busy} onClick={() => void run()}>
+          {busy ? "分析中…" : analyze.verb}
+        </Button>
+        {error !== null && (
+          <p data-testid="analyze-degraded" className="mt-3 text-sm text-ink-mid">{error.message}</p>
+        )}
+        {error === null && report !== null && (
+          <div data-testid="analyze-report">
+            <ItemList title="相近" items={report.similar} empty="未发现相近 skill" />
+            <ItemList title="可能冲突" items={report.conflict} empty="未发现冲突" />
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,4 +1,7 @@
 import { getAction } from "../actions/registry.js";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { ArchivedSkill } from "./types.js";
 
 function formatBytes(n: number): string {
@@ -21,24 +24,20 @@ export function ArchivePanel({
   return (
     <ul className="space-y-3">
       {archived.map((a) => (
-        <li key={a.file} className="rounded-xl border border-line bg-white p-4">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-sm font-medium text-ink-strong">{a.name}</h2>
-            <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs text-ink-mid">
-              {formatBytes(a.sizeBytes)}
-            </span>
-          </div>
-          <p className="mt-1 font-mono text-xs text-ink-faint break-all">{a.file}</p>
-          <p className="mt-1 text-xs text-ink-mid">
-            归档于 {new Date(a.archivedAt).toLocaleString()} · 彻底清除请自行处理上述文件(本工具不提供删除按钮)
-          </p>
-          <button
-            type="button"
-            onClick={() => onRestore(a.name)}
-            className="mt-2 rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
-          >
-            {getAction("restore").verb}到活跃区
-          </button>
+        <li key={a.file}>
+          <Card>
+            <div className="flex items-baseline justify-between gap-4">
+              <h2 className="text-sm font-medium text-ink-strong">{a.name}</h2>
+              <Badge>{formatBytes(a.sizeBytes)}</Badge>
+            </div>
+            <p className="mt-1 break-all font-mono text-xs text-ink-faint">{a.file}</p>
+            <p className="mt-1 text-xs text-ink-mid">
+              归档于 {new Date(a.archivedAt).toLocaleString()} · 彻底清除请自行处理上述文件(本工具不提供删除按钮)
+            </p>
+            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onRestore(a.name)}>
+              {getAction("restore").verb}到活跃区
+            </Button>
+          </Card>
         </li>
       ))}
     </ul>

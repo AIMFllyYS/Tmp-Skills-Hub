@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { startReset } from "../skills/api.js";
 import type { ClientInfo } from "../skills/types.js";
-import { ConfirmDialog } from "./ConfirmDialog.js";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface SettingsPageProps {
   storeRoot: string;
@@ -27,12 +29,12 @@ export function SettingsPage({
       <p className="mt-1 text-sm text-ink-mid">不常改、但要找得到的东西。</p>
 
       <section className="mt-8">
-        <h2 className="text-base font-medium text-ink-strong">库存</h2>
-        <p className="mt-2 break-all text-sm text-ink-mid">{storeRoot === "" ? "未配置" : storeRoot}</p>
+        <Label>库存</Label>
+        <p className="mt-2 break-all font-mono text-sm text-ink-mid">{storeRoot === "" ? "未配置" : storeRoot}</p>
       </section>
 
       <section className="mt-8">
-        <h2 className="text-base font-medium text-ink-strong">已发现的应用</h2>
+        <Label>已发现的应用</Label>
         {clients.length === 0 ? (
           <p className="mt-2 text-sm text-ink-mid">未发现应用。</p>
         ) : (
@@ -45,20 +47,21 @@ export function SettingsPage({
       </section>
 
       <section className="mt-8" data-testid="reset-panel">
-        <h2 className="text-base font-medium text-ink-strong">重置</h2>
+        <Label>重置</Label>
         <p className="mt-1 text-sm text-ink-mid">按备份快照回到初始化前,再自动收录。请再次确认后才会执行。</p>
-        <button
+        <Button
           type="button"
+          variant="destructive"
           data-testid="reset-button"
+          className="mt-3"
           disabled={busy || latestSnapshotId === null}
           onClick={() => {
             setNotice(null);
             setAsk(true);
           }}
-          className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-700 hover:border-red-300 disabled:border-line disabled:text-ink-faint"
         >
           重置
-        </button>
+        </Button>
         {latestSnapshotId === null && <p className="mt-2 text-sm text-ink-mid">尚无备份快照,无法重置。</p>}
         {notice !== null && <p className="mt-2 text-sm text-ink-mid">{notice}</p>}
       </section>

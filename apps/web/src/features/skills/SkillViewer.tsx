@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { marked, type Tokens } from "marked";
 import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
@@ -179,10 +182,10 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
                   <button
                     type="button"
                     onClick={() => void load(e.path)}
-                    className={[
+                    className={cn(
                       "block w-full truncate rounded px-1 py-0.5 text-left text-xs",
                       selected === e.path ? "bg-surface text-ink-strong" : "text-ink-mid hover:text-ink-strong",
-                    ].join(" ")}
+                    )}
                   >
                     {e.path}
                   </button>
@@ -196,51 +199,29 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
           {fileError !== null && <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />}
           {fileError === null && !editing && html !== "" && (
             <div className="mb-2 flex justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                size="sm"
+                variant={showTranslated ? "default" : "outline"}
                 disabled={translating}
                 onClick={() => void toggleTranslate()}
-                className={[
-                  "rounded-full border px-3 py-1 text-xs transition-colors duration-150",
-                  showTranslated
-                    ? "border-line-strong bg-surface text-ink-strong"
-                    : "border-line bg-white text-ink-mid hover:border-line-strong hover:text-ink-strong",
-                  translating ? "opacity-60" : "",
-                ].join(" ")}
               >
                 {translating ? "翻译中…" : showTranslated ? "原文" : "译成中文"}
-              </button>
-              <button
-                type="button"
-                onClick={startEdit}
-                className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong hover:text-ink-strong"
-              >
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={startEdit}>
                 编辑
-              </button>
+              </Button>
             </div>
           )}
           {translateError !== null && <Notice text={translateError} tone={translateError.includes("DEEPSEEK_API_KEY") ? "warn" : "error"} />}
           {editing && (
             <div className="mb-2 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => setEditing(false)}
-                className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
-              >
+              <Button type="button" size="sm" variant="outline" disabled={saving} onClick={() => setEditing(false)}>
                 取消
-              </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void save()}
-                className={[
-                  "rounded-full px-3 py-1 text-xs",
-                  saving ? "bg-ink-faint text-white" : "bg-ink-strong text-white hover:opacity-90",
-                ].join(" ")}
-              >
+              </Button>
+              <Button type="button" size="sm" disabled={saving} onClick={() => void save()}>
                 {saving ? "保存中…" : "保存"}
-              </button>
+              </Button>
             </div>
           )}
           {saveError !== null && <Notice text={saveError} tone="error" />}
@@ -252,11 +233,11 @@ export function SkillViewer({ hash, onSaved }: SkillViewerProps): React.JSX.Elem
             <div className="skill-md text-sm leading-relaxed" data-testid="skill-md" dangerouslySetInnerHTML={{ __html: showTranslated && translated !== null ? (marked.parse(translated) as string) : html }} />
           )}
           {fileError === null && editing && (
-            <textarea
+            <Textarea
               value={draft}
               onChange={(ev) => setDraft(ev.target.value)}
               spellCheck={false}
-              className="h-72 w-full resize-y rounded-lg border border-line bg-white p-2 font-mono text-xs text-ink-strong focus:border-line-strong focus:outline-none"
+              className="h-72 resize-y"
             />
           )}
         </div>
