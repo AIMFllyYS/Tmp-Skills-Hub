@@ -12,17 +12,37 @@ html, body, #root {
   display: none;
 }
 
-/* ui-design-v0.md §8:语义 token 由 @theme 定义,组件只引用 token 类 */
+/* ui-design-v1: ink token 与组件库 CSS 变量同一套数值 */
 @theme {
-  --color-ink-strong: #030712; /* gray-950 */
-  --color-ink-mid: #4b5563;   /* gray-600 */
-  --color-ink-faint: #9ca3af; /* gray-400 */
-  --color-line: #e5e7eb;      /* gray-200 */
-  --color-line-strong: #9ca3af; /* gray-400:悬停/聚焦边框 */
-  --color-surface: #f9fafb;   /* gray-50 */
+  --color-ink-strong: #030712;
+  --color-ink-mid: #4b5563;
+  --color-ink-faint: #9ca3af;
+  --color-line: #e5e7eb;
+  --color-line-strong: #9ca3af;
+  --color-surface: #f9fafb;
+  --color-background: #ffffff;
+  --color-foreground: #030712;
+  --color-primary: #030712;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #f9fafb;
+  --color-muted-foreground: #4b5563;
+  --color-border: #e5e7eb;
+  --color-ring: #9ca3af;
+  --duration-fast: 150ms;
 }
 
-/* skill 内容查看器的 Markdown 排版(灰阶、克制) */
+:root {
+  --background: #ffffff;
+  --foreground: #030712;
+  --primary: #030712;
+  --primary-foreground: #ffffff;
+  --muted: #f9fafb;
+  --muted-foreground: #4b5563;
+  --border: #e5e7eb;
+  --ring: #9ca3af;
+  --radius: 0.5rem;
+}
+
 .skill-md h1, .skill-md h2, .skill-md h3 {
   font-weight: 600;
   color: var(--color-ink-strong);
