@@ -17,6 +17,7 @@
 - [code-style.md](./code-style.md) — 代码风格规范（TypeScript、core 纯净性、CLI、React/Tailwind、中英文口径）
 - [code-size-and-organization.md](./code-size-and-organization.md) — 代码长度与文件组织规范（长度阈值、colocation 原则、拆分判断方法）
 - [code-review.md](./code-review.md) — Code review 检查清单
+- [ui-design-v1.md](./ui-design-v1.md) — UI 设计规范（克制灰阶、统一组件、UX 铁律）；[ui-design-v0.md](./ui-design-v0.md) 已取代
 
 ## 与 AGENTS.md 的关系
 

@@ -1,4 +1,6 @@
 import { memo } from "react";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { SKILL_ROW_HEIGHT_PX } from "../panel/virtual-window.js";
 import type { ClientLinkState, SkillRecord } from "./types.js";
 
@@ -39,11 +41,11 @@ export const SkillRow = memo(function SkillRow({
       data-testid="skill-card"
       role="option"
       aria-selected={focused}
-      className={
-        "box-border overflow-hidden " +
-        (checked ? "bg-surface " : "") +
-        (focused ? "outline outline-1 outline-line-strong outline-offset-[-1px]" : "")
-      }
+      className={cn(
+        "box-border overflow-hidden",
+        checked && "bg-surface",
+        focused && "bg-surface outline outline-1 outline-offset-[-1px] outline-line-strong",
+      )}
       style={{ height: SKILL_ROW_HEIGHT_PX }}
     >
       <div className="flex h-full items-center gap-2 px-4">
@@ -67,7 +69,7 @@ export const SkillRow = memo(function SkillRow({
             <span className="flex shrink-0 items-center gap-2 font-mono text-xs text-ink-mid">
               {on}/{clientTotal}
               <span
-                className={"inline-block h-1.5 w-1.5 rounded-full " + (on > 0 ? "bg-ink-strong" : "bg-line")}
+                className={cn("inline-block h-1.5 w-1.5 rounded-full", on > 0 ? "bg-ink-strong" : "bg-line")}
                 aria-hidden
               />
             </span>
@@ -76,21 +78,14 @@ export const SkillRow = memo(function SkillRow({
           )}
         </button>
         {clientView !== undefined && (
-          <button
-            type="button"
+          <Switch
             data-testid="client-switch"
-            aria-pressed={enabled}
+            checked={enabled}
             disabled={clientView.pending || blocked}
-            title={blocked ? clientView.detail : undefined}
-            onClick={() => clientView.onToggle(!enabled)}
-            className={[
-              "shrink-0 rounded-full px-3 py-1 text-xs",
-              enabled ? "bg-ink-strong text-white" : "border border-line bg-white text-ink-mid",
-              clientView.pending || blocked ? "opacity-60" : "",
-            ].join(" ")}
-          >
-            {blocked ? (clientView.state === "dangling" ? "悬空" : "占用") : enabled ? "已启用" : "未启用"}
-          </button>
+            {...(blocked ? { title: clientView.detail } : {})}
+            onCheckedChange={(next) => clientView.onToggle(next)}
+            aria-label={blocked ? clientView.detail : enabled ? "已启用" : "未启用"}
+          />
         )}
       </div>
     </li>

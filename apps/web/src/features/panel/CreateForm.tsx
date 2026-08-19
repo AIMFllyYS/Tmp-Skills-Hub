@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { getAction } from "../actions/registry.js";
 import { formatBatchResult } from "../skills/batch-links.js";
 
@@ -14,7 +18,6 @@ export function CreateForm({ clientIds = [], onDone, onNotice }: CreateFormProps
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [enableAll, setEnableAll] = useState(true);
-  const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const create = getAction("create");
 
@@ -24,24 +27,23 @@ export function CreateForm({ clientIds = [], onDone, onNotice }: CreateFormProps
     if (name === "" || desc === "") return;
     setBusy(true);
     setError(null);
-    setResult(null);
     try {
       const res = await create.execute({ dirName: name, description: desc });
+      const hash = res.hash;
       let extra = "";
-      const hash = "hash" in res ? (res as { hash?: string }).hash : undefined;
-      if (enableAll && hash && clientIds.length > 0) {
+      if (enableAll && hash !== undefined && hash !== "" && clientIds.length > 0) {
         const linked = await getAction("apply-clean-links").execute({
           hashes: [hash],
           clientIds,
           action: "enable",
         });
         extra = "。 " + formatBatchResult("enable", linked.created.length, linked.removed.length, linked.skipped);
-        onNotice?.(formatBatchResult("enable", linked.created.length, linked.removed.length, linked.skipped));
       }
-      setResult("已创建: " + name + extra);
+      onNotice?.("已创建: " + name + extra);
       setDirName("");
       setDescription("");
       onDone();
+      setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -50,60 +52,57 @@ export function CreateForm({ clientIds = [], onDone, onNotice }: CreateFormProps
   };
 
   return (
-    <div className="shrink-0 border-b border-line px-4 py-2">
-      <button
-        type="button"
-        data-testid="create-open"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
-      >
+    <>
+      <Button type="button" variant="outline" size="sm" data-testid="create-open" onClick={() => setOpen(true)}>
         {create.verb}
-      </button>
-      {open && (
-        <form
-          className="mt-2 flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit();
-          }}
-        >
-          <input
-            data-testid="create-name"
-            value={dirName}
-            onChange={(e) => setDirName(e.target.value)}
-            placeholder="skill 名（英文,作为目录名）"
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
-          />
-          <input
-            data-testid="create-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述（SKILL.md 的 description）"
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
-          />
-          <label className="flex items-center gap-2 text-xs text-ink-mid">
-            <input
-              type="checkbox"
-              data-testid="create-enable-all"
-              checked={enableAll}
-              onChange={(e) => setEnableAll(e.target.checked)}
+      </Button>
+      <Dialog open={open} onOpenChange={(next) => { if (!busy) setOpen(next); }}>
+        <DialogContent>
+          <DialogTitle>{create.verb}</DialogTitle>
+          <DialogDescription>英文名会变成目录名。描述写入 SKILL.md。</DialogDescription>
+          <form
+            className="mt-3 flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <Input
+              data-testid="create-name"
+              value={dirName}
+              onChange={(e) => setDirName(e.target.value)}
+              placeholder="skill 名（英文,作为目录名）"
             />
-            同时启用到全部已发现应用
-          </label>
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              data-testid="create-submit"
-              disabled={busy || dirName.trim() === "" || description.trim() === ""}
-              className="rounded-full bg-ink-strong px-3 py-1 text-xs text-white disabled:opacity-50"
-            >
-              {busy ? "创建中…" : create.verb}
-            </button>
-            {result !== null && <p className="text-xs text-ink-mid">{result}</p>}
+            <Input
+              data-testid="create-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="描述（SKILL.md 的 description）"
+            />
+            <label className="flex items-center gap-2 text-xs text-ink-mid">
+              <Checkbox
+                data-testid="create-enable-all"
+                checked={enableAll}
+                onCheckedChange={setEnableAll}
+              />
+              同时启用到全部已发现应用
+            </label>
             {error !== null && <p className="text-xs text-red-700">{error}</p>}
-          </div>
-        </form>
-      )}
-    </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>
+                取消
+              </Button>
+              <Button
+                type="submit"
+                data-testid="create-submit"
+                disabled={busy || dirName.trim() === "" || description.trim() === ""}
+              >
+                {busy ? "创建中…" : create.verb}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

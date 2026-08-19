@@ -167,4 +167,4 @@ scripts/        辅助脚本（setup/build/dev）
 - [code-style.md](docs/conventions/code-style.md) — 代码风格（TypeScript、core 纯净性、CLI、React/Tailwind）
 - [code-size-and-organization.md](docs/conventions/code-size-and-organization.md) — 代码长度与文件组织（colocation 原则、拆分判断方法）
 - [code-review.md](docs/conventions/code-review.md) — Code review 检查清单
-- [ui-design-v0.md](docs/conventions/ui-design-v0.md) — UI 设计规范：灰阶、字号、间距、人用壳侧栏、隐藏滚动条、禁用清单
+- [ui-design-v1.md](docs/conventions/ui-design-v1.md) — UI 设计规范：克制灰阶、统一组件、UX 铁律、动效 150ms、禁用清单（v0 已并入）

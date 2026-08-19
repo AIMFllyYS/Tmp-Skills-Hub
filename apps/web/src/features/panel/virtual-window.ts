@@ -1,6 +1,6 @@
 /**
  * 集合列虚拟窗口(无第三方依赖)。
- * 行高取 ui-design-v0 的 4px 网格:h-10 = 40px。
+ * 行高取 ui-design-v1 的 4px 网格:h-10 = 40px。
  */
 export const SKILL_ROW_HEIGHT_PX = 40;
 export const SKILL_ROW_OVERSCAN = 8;

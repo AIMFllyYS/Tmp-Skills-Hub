@@ -12,10 +12,16 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@base-ui/react": "^1.7.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "highlight.js": "^11.12.0",
+    "lucide-react": "^1.33.0",
     "marked": "^18.0.9",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

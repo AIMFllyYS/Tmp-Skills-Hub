@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { getAction } from "../actions/registry.js";
 import { formatBatchResult } from "../skills/batch-links.js";
 import type { AdoptResponse } from "../skills/types.js";
@@ -9,13 +13,12 @@ interface AdoptFormProps {
   onNotice?: (text: string) => void;
 }
 
-/** 集合列顶部的收录入口:粘贴路径或链接,不浏览目录。 */
+/** 收录入口:对话框一次填完,不浏览目录。 */
 export function AdoptForm({ clientIds = [], onDone, onNotice }: AdoptFormProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
   const [enableAll, setEnableAll] = useState(true);
-  const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const adopt = getAction("adopt");
 
@@ -24,13 +27,12 @@ export function AdoptForm({ clientIds = [], onDone, onNotice }: AdoptFormProps):
     if (trimmed === "") return;
     setBusy(true);
     setError(null);
-    setResult(null);
     try {
       const report: AdoptResponse = await adopt.execute({ source: trimmed });
-      let extra = "";
       const hashes = report.outcomes
         .map((o) => o.hash ?? o.existingHash)
         .filter((h): h is string => typeof h === "string" && h !== "");
+      let extra = "";
       if (enableAll && hashes.length > 0 && clientIds.length > 0) {
         const linked = await getAction("apply-clean-links").execute({
           hashes,
@@ -38,13 +40,14 @@ export function AdoptForm({ clientIds = [], onDone, onNotice }: AdoptFormProps):
           action: "enable",
         });
         extra = "。 " + formatBatchResult("enable", linked.created.length, linked.removed.length, linked.skipped);
-        onNotice?.(formatBatchResult("enable", linked.created.length, linked.removed.length, linked.skipped));
       }
-      setResult(
+      onNotice?.(
         "新增 " + String(report.adopted) + " / 重复 " + String(report.duplicates) +
           " / 冲突 " + String(report.conflicts) + " / 未达标 " + String(report.invalid) + extra,
       );
       if (report.adopted > 0 || report.duplicates > 0) onDone();
+      setSource("");
+      setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -53,53 +56,47 @@ export function AdoptForm({ clientIds = [], onDone, onNotice }: AdoptFormProps):
   };
 
   return (
-    <div className="shrink-0 border-b border-line px-4 py-2">
-      <button
-        type="button"
-        data-testid="adopt-open"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong"
-      >
+    <>
+      <Button type="button" variant="outline" size="sm" data-testid="adopt-open" onClick={() => setOpen(true)}>
         {adopt.verb}
-      </button>
-      {open && (
-        <form
-          className="mt-2 flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit();
-          }}
-        >
-          <input
-            data-testid="adopt-source"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            placeholder="本地路径 / GitHub / skills.sh 链接"
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
-          />
-          <label className="flex items-center gap-2 text-xs text-ink-mid">
-            <input
-              type="checkbox"
-              data-testid="adopt-enable-all"
-              checked={enableAll}
-              onChange={(e) => setEnableAll(e.target.checked)}
+      </Button>
+      <Dialog open={open} onOpenChange={(next) => { if (!busy) setOpen(next); }}>
+        <DialogContent>
+          <DialogTitle>{adopt.verb}</DialogTitle>
+          <DialogDescription>粘贴本地路径、GitHub 或 skills.sh 链接。</DialogDescription>
+          <form
+            className="mt-3 flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <Input
+              data-testid="adopt-source"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              placeholder="本地路径 / GitHub / skills.sh 链接"
             />
-            同时启用到全部已发现应用
-          </label>
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              data-testid="adopt-submit"
-              disabled={busy || source.trim() === ""}
-              className="rounded-full bg-ink-strong px-3 py-1 text-xs text-white disabled:opacity-50"
-            >
-              {busy ? "收录中…" : adopt.verb}
-            </button>
-            {result !== null && <p className="text-xs text-ink-mid">{result}</p>}
+            <label className="flex items-center gap-2 text-xs text-ink-mid">
+              <Checkbox
+                data-testid="adopt-enable-all"
+                checked={enableAll}
+                onCheckedChange={setEnableAll}
+              />
+              同时启用到全部已发现应用
+            </label>
             {error !== null && <p className="text-xs text-red-700">{error}</p>}
-          </div>
-        </form>
-      )}
-    </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>
+                取消
+              </Button>
+              <Button type="submit" data-testid="adopt-submit" disabled={busy || source.trim() === ""}>
+                {busy ? "收录中…" : adopt.verb}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

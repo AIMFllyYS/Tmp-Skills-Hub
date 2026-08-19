@@ -8,7 +8,10 @@
     "noEmit": true,
     "declaration": false,
     "sourceMap": false,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src", "vite.config.ts"],
   "exclude": ["src/**/*.test.ts"]

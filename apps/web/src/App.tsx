@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { getAction } from "./features/actions/registry.js";
 import { OverviewPage } from "./features/shell/OverviewPage.js";
 import { SettingsPage } from "./features/shell/SettingsPage.js";
@@ -14,6 +16,7 @@ import {
   fetchClientSkillStates,
   fetchClients,
   fetchDoctor,
+  fetchGroups,
   fetchStats,
 } from "./features/skills/api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./features/skills/async-resource.js";
@@ -23,6 +26,7 @@ import type {
   ClientInfo,
   ClientSkillStatesResponse,
   DoctorResponse,
+  GroupDef,
   SkillRecord,
   StatsResponse,
   UsageCounters,
@@ -36,6 +40,7 @@ export default function App() {
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [storeRoot, setStoreRoot] = useState("");
   const [clients, setClients] = useState<ClientInfo[]>([]);
+  const [groups, setGroups] = useState<GroupDef[]>([]);
   const [usageByHash, setUsageByHash] = useState<Map<string, UsageCounters>>(new Map());
   const [ranking, setRanking] = useState<StatsResponse["ranking"]>([]);
   const [archived, setArchived] = useState<ArchivedSkill[]>([]);
@@ -47,7 +52,6 @@ export default function App() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientStates, setClientStates] = useState<ClientSkillStatesResponse | null>(null);
   const [pendingHash, setPendingHash] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   const applyCatalog = useCallback((
     catalog: { storeRoot: string; skills: SkillRecord[] },
@@ -56,6 +60,7 @@ export default function App() {
     ar: ArchivedSkill[],
     doc: DoctorResponse | null,
     backups: BackupsListResponse | null,
+    nextGroups: GroupDef[],
   ): void => {
     setStoreRoot(catalog.storeRoot);
     setSkills(catalog.skills);
@@ -67,6 +72,7 @@ export default function App() {
     setDoctor(doc);
     setLatestSnapshotId(backups?.latest ?? null);
     setSnapshotCount(backups?.snapshots.length ?? 0);
+    setGroups(nextGroups);
     setSelectedClientId((prev) => prev ?? ordered[0]?.clientId ?? null);
   }, []);
 
@@ -79,10 +85,11 @@ export default function App() {
       fetchArchive(),
       fetchDoctor().catch(() => null),
       fetchBackups().catch(() => null),
+      fetchGroups().catch(() => []),
     ])
-      .then(([catalog, nextClients, st, ar, doc, backups]) => {
+      .then(([catalog, nextClients, st, ar, doc, backups, nextGroups]) => {
         if (cancelled) return;
-        applyCatalog(catalog, nextClients, st, ar, doc, backups);
+        applyCatalog(catalog, nextClients, st, ar, doc, backups, nextGroups);
         setState("ready");
       })
       .catch(() => {
@@ -131,7 +138,7 @@ export default function App() {
         return { ...prev, rows, enabled: rows.filter((r) => r.state === "managed").length };
       });
     } catch (e) {
-      setToast(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setPendingHash(null);
     }
@@ -145,12 +152,16 @@ export default function App() {
   }, []);
 
   const refreshCatalog = useCallback((): void => {
-    void Promise.all([fetchCatalog(), selectedClientId === null ? Promise.resolve(null) : fetchClientSkillStates(selectedClientId)])
-      .then(([c, states]) => {
-        setStoreRoot(c.storeRoot);
-        setSkills(c.skills);
-        if (states !== null) setClientStates(states);
-      });
+    void Promise.all([
+      fetchCatalog(),
+      selectedClientId === null ? Promise.resolve(null) : fetchClientSkillStates(selectedClientId),
+      fetchGroups().catch(() => []),
+    ]).then(([c, states, nextGroups]) => {
+      setStoreRoot(c.storeRoot);
+      setSkills(c.skills);
+      setGroups(nextGroups);
+      if (states !== null) setClientStates(states);
+    });
   }, [selectedClientId]);
 
   const handleRestore = useCallback((name: string) => {
@@ -159,9 +170,23 @@ export default function App() {
         await getAction("restore").execute({ name });
         setSkills((await fetchCatalog()).skills);
         setArchived(await fetchArchive());
-        setToast("已恢复 " + name);
+        toast("已恢复 " + name);
       } catch (e) {
-        setToast(e instanceof Error ? e.message : String(e));
+        toast.error(e instanceof Error ? e.message : String(e));
+      }
+    })();
+  }, []);
+
+  const handleArchive = useCallback((hash: string) => {
+    void (async () => {
+      try {
+        await getAction("archive").execute({ hash });
+        setSkills((await fetchCatalog()).skills);
+        setArchived(await fetchArchive());
+        setFocusedHash(null);
+        toast("已归档");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e));
       }
     })();
   }, []);
@@ -171,8 +196,13 @@ export default function App() {
     if (tab !== undefined) setSkillsTab(tab);
   };
 
+  const notice = (text: string): void => {
+    toast(text);
+  };
+
   return (
     <div className="flex h-dvh overflow-hidden bg-white">
+      <Toaster />
       <Sidebar page={page} onPage={setPage} />
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {state === "offline" && (
@@ -191,7 +221,7 @@ export default function App() {
           />
         )}
         {state === "ready" && page === "stats" && (
-          <StatsPage skills={skills} clients={clients} ranking={ranking} counters={usageByHash} />
+          <StatsPage skills={skills} clients={clients} ranking={ranking} counters={usageByHash} onGo={setPage} />
         )}
         {state === "ready" && page === "skills" && (
           <SkillsPage
@@ -199,6 +229,7 @@ export default function App() {
             onTab={setSkillsTab}
             skills={skills}
             clients={clients}
+            groups={groups}
             archived={archived}
             focusedHash={focusedHash}
             onFocus={setFocusedHash}
@@ -210,7 +241,9 @@ export default function App() {
             onSaved={handleSaved}
             onAdopted={refreshCatalog}
             onRestore={handleRestore}
-            onNotice={setToast}
+            onArchive={handleArchive}
+            onGroupsChanged={refreshCatalog}
+            onNotice={notice}
             onBulkDone={refreshCatalog}
           />
         )}
@@ -227,19 +260,12 @@ export default function App() {
                 fetchArchive(),
                 fetchDoctor().catch(() => null),
                 fetchBackups().catch(() => null),
-              ]).then(([catalog, nextClients, st, ar, doc, backups]) => {
-                applyCatalog(catalog, nextClients, st, ar, doc, backups);
+                fetchGroups().catch(() => []),
+              ]).then(([catalog, nextClients, st, ar, doc, backups, nextGroups]) => {
+                applyCatalog(catalog, nextClients, st, ar, doc, backups, nextGroups);
               });
             }}
           />
-        )}
-        {toast !== null && (
-          <div className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-2">
-            <p className="text-xs text-ink-mid">{toast}</p>
-            <button type="button" onClick={() => setToast(null)} className="ml-auto text-xs text-ink-faint hover:text-ink-mid">
-              关闭
-            </button>
-          </div>
         )}
       </main>
     </div>

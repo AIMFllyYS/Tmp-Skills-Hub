@@ -25,7 +25,7 @@
 5. `docs/plans/plan-batches-v1.md` —— 执行依据；当前从批 7 起
 6. `docs/specs/store-and-paths-v0.md` —— 库存位置、沙箱边界
 7. `docs/specs/cli-commands-v0.md` —— 命令名唯一口径，新命令先改本文
-8. `docs/conventions/ui-design-v0.md` —— 视觉铁律：无阴影、无毛玻璃、无渐变
+8. `docs/conventions/ui-design-v1.md` —— 视觉与旅程铁律：无阴影、无毛玻璃、无渐变；控件走统一组件
 9. `docs/conventions/core-patterns.md` —— 确定性内核（注意 2026-08-16 修订）
 
 方向有疑问时，回去看 `docs/updates/meeting-2026-08-15-first-sync.md` 的录音稿原文。

@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input, NativeSelect } from "@/components/ui/input";
+import { tabTriggerClass } from "@/components/ui/tabs";
 import { getAction } from "../actions/registry.js";
 import { AdoptForm } from "../panel/AdoptForm.js";
 import { CreateForm } from "../panel/CreateForm.js";
@@ -6,10 +9,13 @@ import { fallbackClientState } from "../panel/client-view.js";
 import { VirtualSkillList } from "../panel/VirtualSkillList.js";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
 import { formatBatchResult } from "../skills/batch-links.js";
+import { ALL_GROUP, applyFilters } from "../skills/filters.js";
+import { GroupManager } from "../skills/GroupManager.js";
+import { SkillActions } from "../skills/SkillActions.js";
 import { SkillViewer } from "../skills/SkillViewer.js";
-import type { ArchivedSkill, ClientInfo, ClientSkillStatesResponse, SkillRecord } from "../skills/types.js";
-import { appsCoverageHint, enabledCountForClient, filterSkillsByQuery, sortClientsForApps } from "./apps-layout.js";
-import { ConfirmDialog } from "./ConfirmDialog.js";
+import type { ArchivedSkill, ClientInfo, ClientSkillStatesResponse, GroupDef, SkillRecord } from "../skills/types.js";
+import { appsCoverageHint, enabledCountForClient, sortClientsForApps } from "./apps-layout.js";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { SkillsTab } from "./page.js";
 
 interface SkillsPageProps {
@@ -17,6 +23,7 @@ interface SkillsPageProps {
   onTab: (tab: SkillsTab) => void;
   skills: SkillRecord[];
   clients: ClientInfo[];
+  groups: GroupDef[];
   archived: ArchivedSkill[];
   focusedHash: string | null;
   onFocus: (hash: string) => void;
@@ -28,15 +35,10 @@ interface SkillsPageProps {
   onSaved: (oldHash: string, newHash: string) => void;
   onAdopted: () => void;
   onRestore: (name: string) => void;
+  onArchive: (hash: string) => void;
+  onGroupsChanged: () => void;
   onNotice: (text: string) => void;
   onBulkDone: () => void;
-}
-
-function tabClass(active: boolean): string {
-  return (
-    "px-3 py-2 text-sm transition-colors duration-150 " +
-    (active ? "border-b border-ink-strong text-ink-strong" : "text-ink-mid hover:text-ink-strong")
-  );
 }
 
 /** Skills 管理:应用 / 内容两个全幅 tab。 */
@@ -45,6 +47,7 @@ export function SkillsPage({
   onTab,
   skills,
   clients,
+  groups,
   archived,
   focusedHash,
   onFocus,
@@ -56,10 +59,13 @@ export function SkillsPage({
   onSaved,
   onAdopted,
   onRestore,
+  onArchive,
+  onGroupsChanged,
   onNotice,
   onBulkDone,
 }: SkillsPageProps): React.JSX.Element {
   const [query, setQuery] = useState("");
+  const [groupId, setGroupId] = useState(ALL_GROUP);
   const [showArchive, setShowArchive] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirm, setConfirm] = useState<{
@@ -69,7 +75,10 @@ export function SkillsPage({
     remove: number;
     conflicts: number;
   } | null>(null);
-  const listed = useMemo(() => filterSkillsByQuery(skills, query), [skills, query]);
+  const listed = useMemo(
+    () => applyFilters(skills, groups, { query, sourceKind: "all", groupId }),
+    [skills, groups, query, groupId],
+  );
   const orderedClients = useMemo(() => sortClientsForApps(clients, skills), [clients, skills]);
   const focused = focusedHash === null ? null : (skills.find((s) => s.hash === focusedHash) ?? null);
   const clientId = selectedClientId ?? orderedClients[0]?.clientId ?? null;
@@ -134,10 +143,10 @@ export function SkillsPage({
       <header className="shrink-0 border-b border-line px-6 pt-4">
         <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">Skills 管理</h1>
         <nav className="mt-3 flex" aria-label="Skills 管理页签">
-          <button type="button" data-testid="skills-tab-apps" className={tabClass(tab === "apps")} onClick={() => onTab("apps")}>
+          <button type="button" data-testid="skills-tab-apps" className={tabTriggerClass(tab === "apps")} onClick={() => onTab("apps")}>
             应用
           </button>
-          <button type="button" data-testid="skills-tab-content" className={tabClass(tab === "content")} onClick={() => onTab("content")}>
+          <button type="button" data-testid="skills-tab-content" className={tabTriggerClass(tab === "content")} onClick={() => onTab("content")}>
             内容
           </button>
         </nav>
@@ -153,7 +162,7 @@ export function SkillsPage({
                 type="button"
                 onClick={() => onSelectClient(c.clientId)}
                 className={
-                  "flex w-full px-4 py-2 text-left text-sm " +
+                  "flex w-full px-4 py-2 text-left text-sm transition-colors duration-[150ms] " +
                   (clientId === c.clientId ? "bg-surface text-ink-strong" : "text-ink-mid hover:bg-surface")
                 }
               >
@@ -170,40 +179,42 @@ export function SkillsPage({
                   <p className="text-sm font-medium text-ink-strong">{clientId}</p>
                   <p className="mt-1 text-xs text-ink-mid">{appsCoverageHint(enabledHere, skills.length)}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
+                    <Button
                       type="button"
+                      size="sm"
                       data-testid="bulk-enable-client"
                       disabled={bulkBusy}
                       onClick={() => void startBulk("enable", [clientId])}
-                      className="rounded-full bg-ink-strong px-3 py-1 text-xs text-white disabled:opacity-50"
                     >
                       全部启用
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      size="sm"
+                      variant="destructive"
                       data-testid="bulk-disable-client"
                       disabled={bulkBusy || enabledHere === 0}
                       onClick={() => void startBulk("disable", [clientId])}
-                      className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong disabled:opacity-50"
                     >
                       全部停用
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      size="sm"
+                      variant="outline"
                       data-testid="bulk-enable-all"
                       disabled={bulkBusy || allClientIds.length === 0}
                       onClick={() => void startBulk("enable", allClientIds)}
-                      className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink-mid hover:border-line-strong disabled:opacity-50"
                     >
                       启用到全部应用
-                    </button>
+                    </Button>
                   </div>
-                  <input
+                  <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="搜索名称 / 描述…"
                     data-testid="apps-skill-search"
-                    className="mt-3 w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
+                    className="mt-3"
                   />
                 </div>
                 <VirtualSkillList
@@ -235,15 +246,25 @@ export function SkillsPage({
 
       {tab === "content" && (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="shrink-0 border-b border-line px-4 py-3">
-            <input
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+            <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索名称 / 描述…"
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm text-ink-strong outline-none focus:border-line-strong placeholder:text-ink-faint"
+              className="min-w-48 flex-1"
             />
-          </div>
-          <div className="flex gap-2 border-b border-line">
+            <NativeSelect
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              aria-label="按分组过滤"
+              className="w-40"
+            >
+              <option value={ALL_GROUP}>全部分组</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </NativeSelect>
+            <GroupManager groups={groups} onChanged={onGroupsChanged} onNotice={onNotice} />
             <AdoptForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
             <CreateForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
           </div>
@@ -259,22 +280,33 @@ export function SkillsPage({
                 selectable={false}
               />
             </div>
-            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {focused === null ? (
                 <p className="px-6 py-6 text-sm text-ink-mid">从左侧选一个 skill 查看内容。</p>
               ) : (
-                <SkillViewer key={focused.hash} hash={focused.hash} onSaved={onSaved} />
+                <>
+                  <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
+                    <p className="truncate text-sm font-medium text-ink-strong">{focused.dirName}</p>
+                    <SkillActions
+                      key={focused.hash}
+                      skill={focused}
+                      groups={groups}
+                      onArchive={onArchive}
+                      onGroupsChanged={onGroupsChanged}
+                      onNotice={onNotice}
+                    />
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-hidden">
+                    <SkillViewer key={focused.hash} hash={focused.hash} onSaved={onSaved} />
+                  </div>
+                </>
               )}
             </div>
           </div>
           <div className="shrink-0 border-t border-line px-4 py-2">
-            <button
-              type="button"
-              onClick={() => setShowArchive((v) => !v)}
-              className="text-xs text-ink-mid hover:text-ink-strong"
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={() => setShowArchive((v) => !v)}>
               {showArchive ? "收起归档" : "归档区"}
-            </button>
+            </Button>
             {showArchive && (
               <div className="mt-2">
                 <ArchivePanel archived={archived} onRestore={onRestore} />
