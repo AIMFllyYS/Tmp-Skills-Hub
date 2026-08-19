@@ -2,13 +2,8 @@ import { getAction } from "../actions/registry.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { formatBytes } from "./skill-tree.js";
 import type { ArchivedSkill } from "./types.js";
-
-function formatBytes(n: number): string {
-  if (n < 1024) return n + " B";
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
-  return (n / (1024 * 1024)).toFixed(1) + " MB";
-}
 
 /** 归档区:列出已归档内容与绝对路径(软删除铁律的可见部分)。没有真删除按钮。 */
 export function ArchivePanel({

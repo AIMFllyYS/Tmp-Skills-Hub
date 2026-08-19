@@ -2,7 +2,7 @@ import type { ComponentProps, ReactElement } from "react";
 import { ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
-/** 图表只用 ink / surface / line，不高饱和彩虹。 */
+/** 轴/网格仍用 ink；系列色只给统计图。 */
 export const CHART_INK = {
   strong: "#030712",
   mid: "#4b5563",
@@ -11,22 +11,32 @@ export const CHART_INK = {
   surface: "#f9fafb",
 } as const;
 
+export const CHART_COLOR = {
+  show: "#3b82f6",
+  enable: "#0d9488",
+  amber: "#d97706",
+  purple: "#7c3aed",
+} as const;
+
 export const CHART_SERIES = [
-  CHART_INK.strong,
-  CHART_INK.mid,
-  CHART_INK.faint,
-  CHART_INK.line,
+  CHART_COLOR.show,
+  CHART_COLOR.enable,
+  CHART_COLOR.amber,
+  CHART_COLOR.purple,
 ] as const;
 
 export function ChartContainer({
   className,
+  heightPx,
   children,
 }: {
   className?: string;
+  heightPx?: number;
   children: ReactElement;
 }): React.JSX.Element {
+  const height = heightPx ?? 256;
   return (
-    <div className={cn("h-64 w-full min-h-[200px]", className)}>
+    <div className={cn("w-full", className)} style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         {children}
       </ResponsiveContainer>

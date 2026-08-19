@@ -28,7 +28,7 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 │       └── src/
 │           ├── main.tsx
 │           ├── App.tsx
-│           ├── components/ui/      # 跨页控件（button / dialog / switch…）
+│           ├── components/ui/      # 跨页控件（button / dialog / chart / table…）
 │           └── features/           # 按领域聚合(见第三节)
 ├── docs/                           # designs / plans / conventions / updates / issues / specs / audits / ops
 ├── scripts/                        # setup / build / dev 辅助脚本
