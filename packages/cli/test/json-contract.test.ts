@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -131,7 +131,7 @@ describe("json 契约 v0(#28)", () => {
     expect(do2.code).toBe("group-exists");
   });
 
-  it("enable --json:缺 --yes 报 auth-required;成功含 clientId(与来源分离)", () => {
+  it("enable --json:缺 --yes 报 auth-required;成功含 clientId(与来源分离)", async () => {
     const noYes = runCli(["enable", "demo", "--client", "claude", "--home", home, "--json"]);
     expect(noYes.code).toBe(2);
     const ne = JSON.parse(noYes.stdout) as { ok: boolean; code: string };
@@ -144,11 +144,13 @@ describe("json 契约 v0(#28)", () => {
     expect(out.command).toBe("enable");
     expect(out.clientId).toBe("claude");
     expect(out.created).toHaveLength(1);
-    // 链接后 list --json:visibleIn 记录可见性,origins 仍为收录来源
+    // 链接后 list --json:visibleIn 由台账推导;index.json 不缓存
     const list = runCli(["list", "--home", home, "--json"]);
     const lo = JSON.parse(list.stdout) as { skills: Array<{ visibleIn: string[]; origins: unknown[] }> };
     expect(lo.skills[0]!.visibleIn).toContain("claude");
     expect(lo.skills[0]!.origins).toHaveLength(1);
+    const index = JSON.parse(await readFile(path.join(home, "index.json"), "utf8")) as { skills: Array<{ visibleIn: string[] }> };
+    expect(index.skills[0]!.visibleIn).toEqual([]);
   });
 
   it("backup --json:dry-run 不写盘;create/list/verify 信封", () => {

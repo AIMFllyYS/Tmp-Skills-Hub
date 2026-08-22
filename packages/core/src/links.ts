@@ -1,7 +1,8 @@
-import { lstat, readFile, realpath, rename, writeFile } from "node:fs/promises";
+import { readFile, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { readLinkTarget } from "./link-probe.js";
+import { inspectClientPath } from "./link-probe.js";
 import { STORE_SKILLS_DIR } from "./store-layout.js";
+import type { SkillRecord } from "./types.js";
 
 /**
  * 受管链接台账(#20):区分「我们建的」与「用户自己的」。
@@ -82,7 +83,20 @@ export async function writeLinksLedger(storeRoot: string, entries: LinkEntry[]):
   await rename(tmp, file);
 }
 
-/** 追加/更新条目(按 id 去重),整份重写,原子。返回新清单。 */
+/**
+ * 由台账推导某 skill 在哪些客户端可见。
+ * index.json 的 visibleIn 不是权威来源;JSON 边界用本函数(或 attachVisibleIn)填入。
+ */
+export function visibleInFromLedger(dirName: string, ledger: readonly LinkEntry[]): string[] {
+  return [...new Set(ledger.filter((e) => e.entryName === dirName).map((e) => e.clientId))].sort();
+}
+
+/** 把库存记录的 visibleIn 替换为台账推导值,不写盘。 */
+export function attachVisibleIn(skills: readonly SkillRecord[], ledger: readonly LinkEntry[]): SkillRecord[] {
+  return skills.map((s) => ({ ...s, visibleIn: visibleInFromLedger(s.dirName, ledger) }));
+}
+
+/** 追加/更新条目(按 id 去重),整份重写,原子。测试夹具用;生产写路径走 applyLinkSet。 */
 export async function upsertLinkEntries(storeRoot: string, entries: LinkEntry[]): Promise<LinkEntry[]> {
   const current = await readLinksLedger(storeRoot);
   const byId = new Map(current.map((e) => [e.id, e]));
@@ -92,7 +106,7 @@ export async function upsertLinkEntries(storeRoot: string, entries: LinkEntry[])
   return next;
 }
 
-/** 按 id 移除条目,整份重写,原子。返回剩余清单。 */
+/** 按 id 移除条目,整份重写,原子。测试夹具用;生产写路径走 applyLinkSet。 */
 export async function removeLinkEntries(storeRoot: string, ids: string[]): Promise<LinkEntry[]> {
   const current = await readLinksLedger(storeRoot);
   const drop = new Set(ids);
@@ -122,34 +136,32 @@ export interface LinkEntryCheck {
 }
 
 /**
- * 台账与磁盘对账:逐条检查落点条目。
- * - missing:条目已被外部删除(或从未生效)→ 台账脏,可安全重建
- * - not-link:落点存在但不是链接(用户用自己的文件夹占了名字)→ 绝不触碰,报警
- * - target-invalid:链接还在但指向的 store 目录缺失/哈希不符 → 链接失效,需重建
- * 只读,不修改任何东西。
+ * 台账与磁盘对账:逐条检查落点条目。磁盘形态走 inspectClientPath(与 classifyClientLink 同一套)。
+ * - missing:落点不存在 → classify 为 dangling
+ * - not-link:用户目录/文件占名 → classify 为 unregistered-conflict
+ * - target-invalid:死链或库存目标消失 → classify 为 dangling
+ * 本函数保留更细的台账行状态,不另发明第四套枚举。只读,不修改任何东西。
  */
 export async function checkLinksLedger(storeRoot: string, entries: LinkEntry[]): Promise<LinkEntryCheck[]> {
   const checks: LinkEntryCheck[] = [];
   for (const entry of entries) {
     const linkPath = path.join(entry.targetDir, entry.entryName);
     const expectedDir = path.join(storeRoot, STORE_SKILLS_DIR, entry.entryName);
-    const target = await readLinkTarget(linkPath);
+    const disk = await inspectClientPath(linkPath);
     const expectedTarget = await realpathIfExists(expectedDir);
-    if (target === null) {
-      const exists = await pathExists(linkPath);
-      checks.push({
-        entry,
-        state: exists ? "not-link" : "missing",
-        target: null,
-        expectedTarget,
-      });
+    if (disk.kind === "missing") {
+      checks.push({ entry, state: "missing", target: null, expectedTarget });
       continue;
     }
-    if (expectedTarget === null) {
-      checks.push({ entry, state: "target-invalid", target, expectedTarget });
+    if (disk.kind === "not-link") {
+      checks.push({ entry, state: "not-link", target: null, expectedTarget });
       continue;
     }
-    checks.push({ entry, state: "ok", target, expectedTarget });
+    if (disk.kind === "dead-link" || expectedTarget === null) {
+      checks.push({ entry, state: "target-invalid", target: disk.target, expectedTarget });
+      continue;
+    }
+    checks.push({ entry, state: "ok", target: disk.target, expectedTarget });
   }
   return checks;
 }
@@ -161,14 +173,3 @@ async function realpathIfExists(p: string): Promise<string | null> {
     return null;
   }
 }
-
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await lstat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-

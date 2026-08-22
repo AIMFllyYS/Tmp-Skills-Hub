@@ -117,7 +117,7 @@ export async function commitDraft(storeRoot: string, dirName: string): Promise<C
     dirName,
     meta,
     origins: [draft.origin],
-    visibleIn: [],
+    visibleIn: [], // 权威在台账;JSON 边界 attachVisibleIn
     installedAt: new Date().toISOString(),
   };
 

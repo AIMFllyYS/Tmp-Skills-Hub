@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readdir, realpath, rm, symlink } from "node:fs/promises
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { discoverClientRoots, isExcludedRoot } from "./clients.js";
+import { discoverClientRoots, isExcludedRoot, isOwnClientId } from "./clients.js";
 
 /**
  * 客户端 root 发现:按目录形状扫描,不维护品牌名单。
@@ -140,6 +140,17 @@ describe("discoverClientRoots: 真实路径去重", () => {
     expect(roots).toHaveLength(1);
     expect(roots[0]!.skillsDir).toBe(path.join(home, "store", "skills"));
     expect(roots[0]!.skillsDir).not.toContain(".cursor");
+  });
+});
+
+describe("isOwnClientId", () => {
+  it("skills-hub 及带后缀变体为本项目,其它客户端不是", () => {
+    expect(isOwnClientId("skills-hub")).toBe(true);
+    expect(isOwnClientId(".skills-hub")).toBe(true);
+    expect(isOwnClientId("skills-hub.pre-bootstrap-20260101T000000")).toBe(true);
+    expect(isOwnClientId("Skills-Hub.bak")).toBe(true);
+    expect(isOwnClientId("claude")).toBe(false);
+    expect(isOwnClientId("skills-hubx")).toBe(false);
   });
 });
 

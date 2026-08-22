@@ -3,13 +3,16 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { readLinkTarget } from "./link-probe.js";
+import * as coreBarrel from "./index.js";
 import {
+  attachVisibleIn,
   checkLinksLedger,
   LINKS_LEDGER_VERSION,
   queryLinksByClient,
   readLinksLedger,
   removeLinkEntries,
   upsertLinkEntries,
+  visibleInFromLedger,
   writeLinksLedger,
   type LinkEntry,
 } from "./links.js";
@@ -87,6 +90,32 @@ describe("links 台账读写", () => {
     entries = await removeLinkEntries(store, ["link-1"]);
     expect(entries).toHaveLength(1);
     expect((await readLinksLedger(store))[0]!.id).toBe("link-2");
+  });
+
+  it("visibleIn 由台账推导,与 index 缓存无关", () => {
+    const ledger = [entry(), entry({ id: "l2", clientId: "cursor" }), entry({ id: "l3", clientId: "claude", entryName: "other" })];
+    expect(visibleInFromLedger("demo", ledger)).toEqual(["claude", "cursor"]);
+    expect(visibleInFromLedger("other", ledger)).toEqual(["claude"]);
+    expect(visibleInFromLedger("nope", ledger)).toEqual([]);
+    const skills = [
+      {
+        hash: "h",
+        dirName: "demo",
+        meta: { name: "demo", description: "d" },
+        origins: [],
+        visibleIn: ["stale"],
+        installedAt: "t",
+      },
+    ];
+    expect(attachVisibleIn(skills, ledger)[0]!.visibleIn).toEqual(["claude", "cursor"]);
+    expect(skills[0]!.visibleIn).toEqual(["stale"]);
+  });
+
+  it("包入口不导出只改台账的 upsert/remove", () => {
+    expect("upsertLinkEntries" in coreBarrel).toBe(false);
+    expect("removeLinkEntries" in coreBarrel).toBe(false);
+    expect("applyLinkSet" in coreBarrel).toBe(true);
+    expect("attachVisibleIn" in coreBarrel).toBe(true);
   });
 
   it("queryLinksByClient:按客户端过滤,可叠加范围", async () => {

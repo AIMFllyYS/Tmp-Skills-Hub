@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   adoptMany,
   archiveSkill,
+  attachVisibleIn,
   restoreArchivedSkill,
   discoverClientRoots,
   discoverClientRootsAt,
@@ -218,7 +219,7 @@ async function cleanupGithubTmp(storeRoot: string): Promise<void> {
 export async function runList(args: ListArgs): Promise<void> {
   const storeRoot = await resolveStoreRootOrFail(args, "list");
   if (storeRoot === null) return;
-  let skills = await readStoreIndex(storeRoot);
+  let skills = attachVisibleIn(await readStoreIndex(storeRoot), await readLinksLedger(storeRoot));
   if (args.source !== undefined && args.source !== "") {
     const needle = args.source.toLowerCase();
     skills = skills.filter((s) =>
@@ -258,7 +259,7 @@ export async function runShow(args: ShowArgs): Promise<void> {
     emitError(args.json === true, "show", "bad-usage", "用法: skills-hub show <skill名或哈希前缀>");
     return;
   }
-  const skills = await readStoreIndex(storeRoot);
+  const skills = attachVisibleIn(await readStoreIndex(storeRoot), await readLinksLedger(storeRoot));
   const exact = skills.find((s) => s.dirName === needle);
   const byHash = exact === undefined ? skills.filter((s) => s.hash.startsWith(needle.toLowerCase())) : [];
   if (exact === undefined && byHash.length === 0) {

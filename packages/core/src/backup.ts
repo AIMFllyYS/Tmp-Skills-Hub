@@ -3,13 +3,12 @@ import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from
 import path from "node:path";
 import { discoverClientRoots } from "./clients.js";
 import { readLinkTarget } from "./link-probe.js";
+import { isIgnoredSkillEntry } from "./skill-ignore.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
 
 /** 备份区(与 skills/ archive/ tmp 并列)。 */
 export const STORE_BACKUPS_DIR = "backups";
 export const BACKUP_MANIFEST_VERSION = 1;
-
-const IGNORED = new Set([".git", "node_modules", ".DS_Store", "Thumbs.db"]);
 
 export interface BackupFileEntry {
   clientId: string;
@@ -134,7 +133,7 @@ export async function createBackupSnapshot(storeRoot: string, home: string): Pro
         else if (tst.isDirectory()) {
           const names = (await readdir(realTarget)).sort();
           for (const name of names) {
-            if (IGNORED.has(name)) continue;
+            if (isIgnoredSkillEntry(name)) continue;
             await walk(path.join(realTarget, name), clientId, rel + "/" + name);
           }
         }
@@ -147,7 +146,7 @@ export async function createBackupSnapshot(storeRoot: string, home: string): Pro
     if (st.isDirectory()) {
       const names = (await readdir(abs)).sort();
       for (const name of names) {
-        if (IGNORED.has(name)) continue;
+        if (isIgnoredSkillEntry(name)) continue;
         const nextRel = rel === "" ? name : rel + "/" + name;
         await walk(path.join(abs, name), clientId, nextRel);
       }
