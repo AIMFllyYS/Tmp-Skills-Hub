@@ -26,6 +26,7 @@ import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze } from "./analyze.js";
 import { performShare } from "./share.js";
 import { chatCompletion, chatCompletionStream, type LlmMessage } from "./llm.js";
+import { readTranslation, writeTranslation } from "./translations.js";
 import { parseWireMessages, runAgentTurn, type AgentTurnOptions } from "./agent/loop.js";
 import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
 import { executeAgentTool } from "./agent/tools.js";
@@ -176,27 +177,50 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   );
 
   app.post("/api/translate", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as { text?: unknown } | null;
+    const body = (await c.req.json().catch(() => null)) as { text?: unknown; target?: unknown; path?: unknown } | null;
     if (body === null || typeof body?.text !== "string" || body.text === "") {
       return err(c, "translate", "bad-usage", "body 需要 { text: string }");
+    }
+    // 译文留存(#208):target+path 都带且能解析时,流式成功结束后 best-effort 落盘;绝不写 skills/ 原件
+    let persist: { root: string; hash: string; rel: string } | null = null;
+    if (storeRoot !== null && typeof body.target === "string" && body.target.trim() !== "" && typeof body.path === "string" && body.path.trim() !== "") {
+      const hit = resolveSkill(body.target.trim(), await readStoreIndex(storeRoot).catch(() => []));
+      if (hit.ok) persist = { root: storeRoot, hash: hit.skill.hash, rel: body.path.trim() };
     }
     const messages: LlmMessage[] = [
       { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
       { role: "user", content: body.text.slice(0, MAX_TRANSLATE_CHARS) },
     ];
     return streamSSE(c, async (stream) => {
+      let full = "";
       for await (const ev of translateStream(messages, { signal: c.req.raw.signal })) {
         if (ev.type === "text") {
+          full += ev.delta;
           await stream.writeSSE({ event: "delta", data: JSON.stringify({ text: ev.delta }) });
         } else if (ev.type === "error") {
           await stream.writeSSE({ event: "error", data: JSON.stringify({ code: ev.code, message: ev.message }) });
           return;
         } else if (ev.type === "done") {
+          if (persist !== null) await writeTranslation(persist.root, persist.hash, persist.rel, full); // 落盘失败静默,不影响 done
           await stream.writeSSE({ event: "done", data: "{}" });
         }
       }
     });
   });
+
+  // 译文缓存读取(#208):命中直接复用,不再调模型。键 = 记录哈希 + 相对路径。
+  app.get("/api/skills/:hash/translation", (c) =>
+    withStore(ctx, c, "skill-translation", async (root) => {
+      const needle = c.req.param("hash") ?? "";
+      const hit = resolveSkill(needle, await readStoreIndex(root));
+      if (!hit.ok) return skillLookupErr(c, "skill-translation", hit);
+      const rel = c.req.query("path") ?? "";
+      if (rel === "") return err(c, "skill-translation", "bad-usage", "缺少 path 查询参数(?path=SKILL.md)");
+      const res = await readTranslation(root, hit.skill.hash, rel);
+      if (!res.ok) return err(c, "skill-translation", res.code, res.message, res.code === "translation-not-found" ? 404 : 400);
+      return c.json({ ok: true, command: "skill-translation", hash: hit.skill.hash, path: rel, translated: res.content });
+    }),
+  );
 
   app.get("/api/agent/models", (c) =>
     c.json({ ok: true, command: "agent-models", defaultModel: DEFAULT_AGENT_MODEL, models: AGENT_MODELS }),
