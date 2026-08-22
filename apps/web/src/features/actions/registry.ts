@@ -53,7 +53,7 @@ export interface TranslateParams {
 }
 
 /**
- * 可编程动作表(D10)。按钮/菜单/命令面板只按 id 取这一份。
+ * 可编程动作表(D10)。按钮/菜单只按 id 取这一份。
  * 新动作往表里加,不要在组件里另写请求。
  */
 export const ACTION_REGISTRY = {
@@ -197,8 +197,4 @@ export type ActionRegistry = typeof ACTION_REGISTRY;
 
 export function getAction<K extends ActionId>(id: K): ActionRegistry[K] {
   return ACTION_REGISTRY[id];
-}
-
-export function listActions(): ActionRegistry[ActionId][] {
-  return (Object.keys(ACTION_REGISTRY) as ActionId[]).map((id) => ACTION_REGISTRY[id]);
 }

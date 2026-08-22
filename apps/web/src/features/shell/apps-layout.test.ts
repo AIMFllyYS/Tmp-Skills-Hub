@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ClientInfo, SkillRecord } from "../skills/types.js";
-import { appsCoverageHint, enabledCountForClient, filterSkillsByQuery, groupClientIds, sortClientsForApps } from "./apps-layout.js";
+import { appsCoverageHint, enabledCountForClient, groupClientIds, sortClientsForApps } from "./apps-layout.js";
 
 function client(id: string): ClientInfo {
   return { clientId: id, skillsDir: "/x/" + id };
@@ -43,15 +43,6 @@ describe("appsCoverageHint", () => {
 
   it("已有启用时报分数", () => {
     expect(appsCoverageHint(3, 12)).toContain("已启用 3 / 12");
-  });
-});
-
-describe("filterSkillsByQuery", () => {
-  it("按名称或描述过滤并按目录名排序", () => {
-    const skills = [skill("zeta", []), skill("alpha", [])];
-    skills[0]!.meta.description = "formal report";
-    expect(filterSkillsByQuery(skills, "formal").map((s) => s.dirName)).toEqual(["zeta"]);
-    expect(filterSkillsByQuery(skills, "").map((s) => s.dirName)).toEqual(["alpha", "zeta"]);
   });
 });
 

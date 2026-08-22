@@ -233,11 +233,8 @@ export function SkillsPage({
                 <VirtualSkillList
                   skills={listed}
                   clientTotal={clients.length}
-                  checked={new Set()}
                   focusedHash={null}
-                  onToggleCheck={() => undefined}
                   onFocus={() => undefined}
-                  selectable={false}
                   clientViewOf={(skill) => {
                     const row = clientStates?.clientId === clientId
                       ? clientStates.rows.find((r) => r.hash === skill.hash)
@@ -286,11 +283,8 @@ export function SkillsPage({
               <VirtualSkillList
                 skills={listed}
                 clientTotal={clients.length}
-                checked={new Set()}
                 focusedHash={focusedHash}
-                onToggleCheck={() => undefined}
                 onFocus={onFocus}
-                selectable={false}
               />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

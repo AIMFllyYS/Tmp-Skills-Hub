@@ -1,6 +1,6 @@
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
 import { hashesByClient, hashesForApply } from "./batch-links.js";
-import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, BackupsListResponse, BackupsPreviewResponse, ClientLinkRow, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, ResetResponse, ShareResponse, SkillFileEntry, SkillFileResponse, SkillLinksResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse, VerifyResponse } from "./types.js";
+import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, BackupsListResponse, BackupsPreviewResponse, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, ResetResponse, ShareResponse, SkillFileEntry, SkillFileResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛错(调用方转为离线态)。 */
 export async function fetchCatalog(): Promise<{ storeRoot: string; skills: SkillRecord[] }> {
@@ -9,10 +9,6 @@ export async function fetchCatalog(): Promise<{ storeRoot: string; skills: Skill
   const body = (await res.json()) as SkillsResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
   return { storeRoot: body.storeRoot, skills: body.skills };
-}
-
-export async function fetchSkills(): Promise<SkillRecord[]> {
-  return (await fetchCatalog()).skills;
 }
 
 export async function createGroup(id: string, name: string, description = ""): Promise<void> {
@@ -59,14 +55,6 @@ export async function fetchGroups(): Promise<GroupsResponse["groups"]> {
   return body.groups;
 }
 
-export async function fetchSkillLinks(hash: string): Promise<ClientLinkRow[]> {
-  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/links");
-  if (!res.ok) throw new Error("GET skill-links → " + res.status);
-  const body = (await res.json()) as SkillLinksResponse | { ok: false; message: string };
-  if (!body.ok) throw new Error(body.message);
-  return body.links;
-}
-
 export async function fetchClientSkillStates(clientId: string): Promise<ClientSkillStatesResponse> {
   const res = await fetch("/api/clients/" + encodeURIComponent(clientId) + "/skill-states");
   if (!res.ok) throw new Error("GET client-skill-states → " + res.status);
@@ -81,15 +69,6 @@ export async function fetchClients(): Promise<ClientsResponse["clients"]> {
   const body = (await res.json()) as ClientsResponse | { ok: false; message: string };
   if (!body.ok) throw new Error(body.message);
   return body.clients;
-}
-
-export async function fetchVerify(): Promise<VerifyResponse> {
-  const res = await fetch("/api/verify");
-  const body = (await res.json().catch(() => null)) as VerifyResponse | { ok: false; message?: string } | null;
-  if (!res.ok || body === null || !body.ok) {
-    throw new Error(body !== null && "message" in body ? (body.message ?? "HTTP " + res.status) : "HTTP " + res.status);
-  }
-  return body;
 }
 
 export async function fetchBackups(): Promise<BackupsListResponse> {

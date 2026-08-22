@@ -22,8 +22,3 @@ export function applyFilters(skills: SkillRecord[], groups: GroupDef[], f: Skill
     return true;
   });
 }
-
-/** 库存中出现的全部来源 kind(去重排序,供筛选下拉)。 */
-export function sourceKindsOf(skills: SkillRecord[]): string[] {
-  return [...new Set(skills.flatMap((s) => s.origins.map((o) => o.kind)))].sort();
-}
