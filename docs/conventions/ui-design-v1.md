@@ -6,17 +6,20 @@
 > 修订理由:人用壳四页已经落地，但按钮、输入、对话框、Toast 各写一套 class；批 9 的分组 / 分析 / 分享从主路径消失却仍留在死代码里。需要一份同时约束视觉、组件来源与旅程的口径，否则每个页面会再次各自发挥。
 > **批 14 修订（2026-08-20）**：批 13 把 class 收口到 `components/ui/`，但规范 §6 仍禁止页切、骨架、位移，设置仍是主区第四页，长名单是纯文字。按旧禁令做完就会「生硬」。本修订允许反馈动效、Skeleton、侧栏收起/拖宽、长名单折叠；灰阶 / 无渐变 / 无毛玻璃 / 无大阴影仍硬。`docs/designs/design.pen` 若仍按旧 token / 三栏草图，以本文为准，该文件视为过时。
 > **批 15 修订（2026-08-20）**：统计图若全用灰阶细柱，20 条会挤成马赛克，也无法区分查看/启用。控件/导航/按钮仍灰阶；**统计图与内容区文件树**允许一组固定系列色。用量/应用的全集走排行表，图只画前 8 名粗柱。Skills 内容详情用层级树 + 元信息网格，不是扁平路径清单。
+> **批 16 修订（2026-08-20）**：150ms 线性过渡让切页、Tab、图表显得抽搐。本修订把动效收口为分层时长 + 弹簧/平滑缓动（`--ease-spring` / `--ease-smooth`）；Tab 改为分段胶囊控制器；图表入场可到 600ms。灰阶 / 无渐变 / 无毛玻璃 / 无大阴影仍硬；分段选中块与总览 KPI hover 允许极弱高度。
+> **批 17 修订（2026-08-21）**：token 有了但业务仍复制 `duration-*` / `active:scale` 串，侧栏收起卸载文字、切页只有入场。本修订把动效收成可引用的 `motion-*` 类别；侧栏收起是宽度插值 + 文字淡出。灰阶 / 无渐变 / 无毛玻璃 / 无大阴影 / 无 bounce 仍硬。
+> **批 18 修订（2026-08-21）**：批 17 把 View Transition 和 `motion-enter` 叠在一起，切页双重卡顿并闪现。本修订**只保留** `key` + `motion-enter` 这一套缓动刷新；禁止再引入 View Transition / `withViewTransition`。侧栏导航必须是纵向 flex 栏（不能随拖宽变成横排）。
 
 这是给自己人天天用的工具面板，不是宣传页。高端感来自克制与秩序：留白、层级清晰、字重与灰阶的节制使用、动效只用于表达状态变化。用户离开时应该能说：That was easy.
 
 ## 0. 修订相对 v0
 
-| 仍硬 | v1 新增 | 批 14 / 15 修订 |
+| 仍硬 | v1 新增 | 批 14 / 15 / 16 修订 |
 | --- | --- | --- |
-| 控件灰阶、三档状态色、无渐变 / 毛玻璃 / 大阴影 | UX 铁律（清晰、少、可预期、点击有理由） | 反馈动效允许：按压 `scale`、hover 底纹、主区 opacity fade、Tab 指示、图表首次绘制、开关拨动 |
+| 控件灰阶、三档状态色、无渐变 / 毛玻璃 / 大阴影 | UX 铁律（清晰、少、可预期、点击有理由） | 反馈动效允许：`motion-*` 类别、按压 `scale`、hover 底纹、主区 `motion-enter`、分段 Tab、图表生长、开关拨动 |
 | 字号字重档位、4px 间距、标题不超过 semibold | 控件必须来自 `apps/web/src/components/ui/`，禁止第三套手写按钮 | 侧栏 / 图 / 骨架 / 滚动区 / 提示 / 表也必须走组件库 |
-| 无深色模式、隐藏滚动条、集合行 `h-10` | 动效收口为 150ms token（上限 200ms）；图标只做微型叙事 | 加载用 Skeleton；`prefers-reduced-motion` 时只留颜色变化 |
-| 左下角设置入口 | 第一印象、空状态、反馈（Toast / 对话框）必须统一 | 侧栏可收可拖；设置是 Dialog；长名单折叠；**统计图与文件树允许固定系列色** |
+| 无深色模式、隐藏滚动条、集合行 `h-10` | 分层动效 token（100/200/300/500ms + spring/smooth）；图标只做微型叙事 | 加载用 Skeleton；`prefers-reduced-motion` 时只留颜色变化 |
+| 左下角设置入口 | 第一印象、空状态、反馈（Toast / 对话框）必须统一 | 侧栏可收可拖；设置是 Dialog；长名单折叠；**统计图与文件树允许固定系列色**；分段控件与 KPI hover 允许极弱高度 |
 
 ## 1. 原则
 
@@ -87,43 +90,71 @@
 
 ## 5. 圆角、边框、层级
 
-- 卡片:`rounded-xl`（12px），1px `border-line`，**无阴影**
+- 卡片:`rounded-xl`（12px），1px `border-line`，**默认无阴影**
 - 输入 / 下拉 / 对话框面板:`rounded-lg`（8px），1px 边框；focus 无彩色光环，只变边框为 `line-strong`；允许 1px `ring-line-strong` 作为键盘焦点，禁止彩色 glow
 - 标签 / 计数胶囊:`rounded-full`，`px-2 py-0.5`，`bg-surface text-ink-mid`。**按钮不用胶囊圆角**——按钮一律 `rounded-lg`，避免和标签抢形状
 - 主按钮:`bg-ink-strong text-white`；次按钮:`border border-line bg-white`；危险:`border-red-200 text-red-700 bg-white`（浅底深字，不用红底白字）
 - 对话框遮罩:`bg-ink-strong/40`，**无** `backdrop-blur`。用户预期是「背后变暗」，不是白雾
-- 层级用实体面 + 边框表达，不用阴影、不用半透明浮层
+- 层级用实体面 + 边框表达。大阴影、彩色 glow、组件库默认 elevation 禁止
+- **极弱高度例外**（只用 token，禁止 `shadow-md` 及以上）：分段控件选中块 `--shadow-thumb`；总览 KPI 卡 hover `--shadow-lift`
 
 ## 6. 动效
 
-全仓只承认一个时长 token：`--duration-fast: 150ms`（允许范围 100–200ms，默认 150ms）。easing 用默认。动效只表达「点到了 / 换页了 / 在加载」，不是装饰。
+动效只表达「点到了 / 换页了 / 在加载 / 数据长出来了」，不是装饰。全仓用分层 token，禁止再手写 `150ms` / `ease`。
+
+| Token | 值 | 用途 |
+| --- | --- | --- |
+| `--duration-instant` | 100ms | 纯微反馈 |
+| `--duration-fast` | 200ms | hover、按压 `scale(0.98)`、边框/颜色 |
+| `--duration-normal` | 300ms | Tab、弹窗、抽屉、开关拨动、侧栏宽度 |
+| `--duration-slow` | 500ms | 排行微进度条、复杂视图 |
+| `--ease-spring` | `cubic-bezier(0.34, 1.3, 0.64, 1)` | 分段选中、弹窗缩放、开关拇指、树形 chevron |
+| `--ease-smooth` | `cubic-bezier(0.16, 1, 0.3, 1)` | 切页、遮罩、抽屉高度、侧栏收起 |
+| `--ease-out-quad` | `cubic-bezier(0.25, 1, 0.5, 1)` | 按钮按压与常规 hover |
+
+业务文件与页面**必须引用**下列类别，禁止复制 `duration-*` / `ease-*` / `active:scale` 串：
+
+| 类别 | 做什么 | 用在哪 |
+| --- | --- | --- |
+| `motion-press` | `--duration-fast` + `--ease-out-quad`，按下 `scale(0.98)` | `Button`、分段 Tab、KPI 卡 |
+| `motion-fill` | 只过渡 `color` / `background-color` / `border-color` | 输入、表行底纹、分隔条 |
+| `motion-enter` | 沿用 `page-in`（opacity + `translateY(4px)`，520ms `--ease-smooth`） | **唯一**切页 / 页内 Tab 刷新 |
+| `motion-row` | `motion-press` + `motion-fill` 的组合 | 列表行、可点表行、文件树节点、应用列 |
+
+切页与侧栏是结构动效，不在业务文件里手写过渡：
+
+- **主区切页**：只允许一套：`key={page}` 重挂载 + 根节点 `motion-enter`。Skills / 统计的页内 Tab 同样：换页签时面板根节点 `motion-enter`。禁止 View Transition、`document.startViewTransition`、`withViewTransition`，也禁止再叠一层淡出动画。不要整页横向滑入。
+- **侧栏收起**：导航 Panel 宽度插值（`flex-grow`，`--duration-normal` `--ease-smooth`）；标签和品牌文案留在 DOM，用 opacity 淡出，宽度由 panel `overflow: hidden` 裁切。禁止 `{!collapsed && label}`，也禁止给品牌单独 `truncate` / `max-width`（会在还没收到 48px 时就出现省略号）。侧栏内部是 **48px 图标列 + 文案列** 同一套 grid，收起/展开不换按钮尺寸、不加一层占满宽度的 Tooltip 盒子。仅按钮收起/展开时开过渡；拖分隔条时关掉。按钮动画期间把 `minSize` 降到图标栏宽，避免中间帧小于展开 `minSize` 被库自动 collapse（收起后再点开无效）。导航是**纵向栏**（`flex-col` + 每项 `w-full`），不随侧栏变宽改成横排。
+- **归档区**：用 `Collapsible` 高度过渡，不要卸载再 `animate-page-in`。
 
 允许:
 
 - hover / focus / disabled 的颜色、边框、透明度、底纹
-- 按钮与导航的按压 `scale`（约 `0.98`，仍走同一时长 token）
-- 对话框遮罩与面板的 opacity fade
-- 主区切页 opacity fade（150–200ms）；用 `key={page}` 触发一次，不要 slide
-- Tab 选中指示（下边框或底纹切换）
-- 开关拨动（组件内部）
-- 图表首次绘制（库默认入场，时长仍 ≤200ms）
+- 按钮、导航、可点行的按压 `scale`（约 `0.98`，走 `motion-press` / `motion-row`）
+- 对话框遮罩 opacity fade + 面板 `scale(0.96) → 1`（`--ease-spring`，约 300ms）
+- 主区切页 / 页内 Tab：`motion-enter`（opacity + `translateY(4px) → 0`）。不要再叠 View Transition
+- 分段胶囊 Tab（`SegmentedTabs`）：浅灰底槽 + 白底选中块；键盘左右/Home/End
+- 总览 KPI 卡 hover 轻抬 `translateY(-2px)` + `--shadow-lift`（可叠在 `motion-press` 上）
+- 开关拨动、文件树 chevron 旋转（组件内部）
+- 图表首次绘制（约 600ms，`ease-out`）；排行表微进度条 `scaleX` 入场
 - Skeleton 极弱 pulse（只变透明度，禁止彩色跑条 / shimmer）
 
 禁止:
 
-- bounce / 弹性 / 入场 zoom / 位移滑入
-- 滚动视差、粒子、循环装饰动画、彩色 glow、大阴影
+- bounce 关键帧、循环装饰动画、滚动视差、粒子、彩色 glow
+- 入场 zoom 超过弹窗那一次 `0.96→1`；整页横向滑入；View Transition 与 `motion-enter` 叠用
 - 彩色 shimmer 或旋转表演当加载反馈
 - 把单行「加载中…」当作全壳唯一加载态（查看器文件切换等局部态可用短文案，但主区首次加载必须是 Skeleton）
+- 在 `features/` 里复制 `transition-[…] duration-* ease-* active:scale` 长串
 
-`prefers-reduced-motion: reduce`：取消 scale、fade、pulse、图表入场，只留颜色 / 边框变化。
+`prefers-reduced-motion: reduce`：取消 scale、fade、pulse、位移、图表入场，只留颜色 / 边框变化。`motion-enter` 此时无动画。
 
 ## 7. 禁用清单
 
 - 渐变（背景、文字）一律禁止
 - 玻璃拟态（`backdrop-blur` 叠层）一律禁止
-- `shadow-*` 与超出 `0 0 0 1px` 的 box-shadow 禁止（含组件库默认阴影，引入后必须剥掉）
-- 跳动 / 循环入场、滚动视差、粒子禁止
+- `shadow-md` 及以上、超出 `--shadow-thumb` / `--shadow-lift` 的 box-shadow 禁止（含组件库默认阴影，引入后必须剥掉）
+- bounce 关键帧、循环入场、滚动视差、粒子禁止
 - 装饰性插画、emoji 当图标、花哨 icon 变体禁止
 - 荧光色 / 高饱和强调色禁止；状态色与 §2 的图表/文件树系列色除外
 - 主按钮必须黑底白字；灰底灰字的「主按钮」禁止
@@ -146,7 +177,13 @@
   --color-line: #e5e7eb;
   --color-line-strong: #9ca3af;
   --color-surface: #f9fafb;
-  --duration-fast: 150ms;
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quad: cubic-bezier(0.25, 1, 0.5, 1);
+  --duration-instant: 100ms;
+  --duration-fast: 200ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
 }
 
 :root {
@@ -170,7 +207,8 @@
 - 条件 class 用 `cn()`（`clsx` + `tailwind-merge`），不要再叠一套字符串拼接惯例
 - 图标仅 Lucide 线性、默认 16px、`text-ink-mid`；只在能代替文字或帮助扫读时使用（搜索、设置、添加、更多、侧栏收起后的导航）。**展开侧栏仍以文字为主**；收成图标栏时，图标 + Tooltip 承担名称，不得只留一个无标签方块
 - 引用本规范数值时写 Tailwind 类名（如 `text-sm`），不写 px 值
-- 跨页复用还必须覆盖：可收起侧栏、拖边改宽、ScrollArea、Skeleton、Tooltip、折叠/手风琴、图表容器、表。禁止在 `features/` 里再手写第三套按钮、侧栏、条形图
+- 跨页复用还必须覆盖：可收起侧栏、拖边改宽、ScrollArea、Skeleton、Tooltip、折叠/手风琴、图表容器、表、**分段胶囊 Tab（`SegmentedTabs`）**、**动效类别（`motion-press` / `motion-fill` / `motion-enter` / `motion-row`）**。禁止在 `features/` 里再手写第三套按钮、侧栏、条形图、下划线 Tab，也禁止复制 duration/ease 串
+- 切页只引用 `motion-enter`，不要 `startViewTransition`。侧栏收起的宽度过渡写在 `index.css`（`.sidebar-motion`），拖拽时加 `.sidebar-dragging` 关掉。侧栏主体是纵向 flex 栏，以后树状导航放进同一滚动区，不要改成行内横排
 
 ## 9. UX 铁律（旅程）
 
@@ -205,8 +243,8 @@
 | --- | --- | --- |
 | 侧栏默认宽 | `w-56`（224px） | 展开态默认；写入 `localStorage` 键 `skills-hub.shell` |
 | 侧栏拖宽 | 约 180–360px | 展开时可拖分隔条；收起时不可拖 |
-| 侧栏收起 | 图标栏（约 48px） | 三板块 + 左下角设置仍可达；名称用 Tooltip |
-| 主区 | `min-w-0 flex-1` | 吃剩余宽度；切页 opacity fade |
+| 侧栏收起 | 图标栏（约 48px） | 宽度插值 + 文字淡出（不卸载标签）；导航项纵向排列；三板块 + 左下角设置仍可达；收起后名称用 Tooltip |
+| 主区 | `min-w-0 flex-1` | 吃剩余宽度；切页只用 `motion-enter` 缓动刷新 |
 | 分隔 | `border-r border-line` 或 1px 拖条 | 不要 `gap-*` 当列分隔 |
 | 设置 | 侧栏底部打开 Dialog | **不是**主区第四页；冒烟 `nav-settings` 留在左下角按钮 |
 | 选中项 | `bg-surface text-ink-strong` | 与列表选中同一套 |

@@ -10,7 +10,7 @@ export function Table({ className, ...props }: HTMLAttributes<HTMLTableElement>)
 }
 
 export function TableHead({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>): React.JSX.Element {
-  return <thead className={cn("bg-surface text-left text-xs text-ink-faint", className)} {...props} />;
+  return <thead className={cn("bg-surface text-left text-xs tracking-wide text-ink-faint", className)} {...props} />;
 }
 
 export function TableBody({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>): React.JSX.Element {
@@ -18,7 +18,15 @@ export function TableBody({ className, ...props }: HTMLAttributes<HTMLTableSecti
 }
 
 export function TableRow({ className, ...props }: HTMLAttributes<HTMLTableRowElement>): React.JSX.Element {
-  return <tr className={cn("h-10", className)} {...props} />;
+  return (
+    <tr
+      className={cn(
+        "h-10 motion-fill",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function TableTh({ className, ...props }: ThHTMLAttributes<HTMLTableCellElement>): React.JSX.Element {

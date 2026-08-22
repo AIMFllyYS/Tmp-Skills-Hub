@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { usePanelRef } from "react-resizable-panels";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { cn } from "@/lib/utils";
 import { OverviewPage } from "./features/shell/OverviewPage.js";
 import { SettingsDialog } from "./features/shell/SettingsDialog.js";
 import { Sidebar } from "./features/shell/Sidebar.js";
@@ -27,12 +29,35 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(prefs.collapsed);
   const [sidebarWidth, setSidebarWidth] = useState(prefs.width);
+  const [sidebarMotion, setSidebarMotion] = useState(false);
+  const [sidebarDragging, setSidebarDragging] = useState(false);
   const sidebarPanelRef = usePanelRef();
+  const widthRaf = useRef<number | null>(null);
+  const motionTimer = useRef<number | null>(null);
+  const sidebarMotionRef = useRef(false);
   const catalog = useCatalog({ loadClientStates: page === "skills" && skillsTab === "apps" });
 
   useEffect(() => {
     writeShellPrefs({ collapsed, width: sidebarWidth });
   }, [collapsed, sidebarWidth]);
+
+  useEffect(() => {
+    return () => {
+      if (widthRaf.current !== null) cancelAnimationFrame(widthRaf.current);
+      if (motionTimer.current !== null) window.clearTimeout(motionTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarDragging) return;
+    const stop = (): void => setSidebarDragging(false);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [sidebarDragging]);
 
   const appliedCollapse = useRef(false);
   useEffect(() => {
@@ -52,33 +77,60 @@ export default function App() {
     if (target.hash !== undefined) catalog.setFocusedHash(target.hash);
   };
 
+  const armSidebarMotion = useCallback((): void => {
+    sidebarMotionRef.current = true;
+    flushSync(() => setSidebarMotion(true));
+    if (motionTimer.current !== null) window.clearTimeout(motionTimer.current);
+    motionTimer.current = window.setTimeout(() => {
+      motionTimer.current = null;
+      sidebarMotionRef.current = false;
+      setSidebarMotion(false);
+    }, 320);
+  }, []);
+
   const toggleCollapsed = (): void => {
     const next = !collapsed;
+    armSidebarMotion();
     setCollapsed(next);
-    if (next) sidebarPanelRef.current?.collapse();
-    else {
-      sidebarPanelRef.current?.expand();
-      sidebarPanelRef.current?.resize(sidebarWidth);
+    if (next) {
+      sidebarPanelRef.current?.resize(SIDEBAR_ICON_PX);
+      sidebarPanelRef.current?.collapse();
+      return;
     }
+    const width = Math.max(sidebarWidth, SIDEBAR_MIN_PX);
+    sidebarPanelRef.current?.expand();
+    sidebarPanelRef.current?.resize(width);
   };
 
   return (
     <div className="h-dvh overflow-hidden bg-white">
       <Toaster />
-      <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className={cn("h-full w-full", sidebarMotion && "sidebar-motion", sidebarDragging && "sidebar-dragging")}
+      >
         <ResizablePanel
           id="shell-nav"
           panelRef={sidebarPanelRef}
           collapsible
           collapsedSize={SIDEBAR_ICON_PX}
           defaultSize={prefs.collapsed ? SIDEBAR_ICON_PX : prefs.width}
-          minSize={SIDEBAR_MIN_PX}
+          minSize={collapsed || sidebarMotion ? SIDEBAR_ICON_PX : SIDEBAR_MIN_PX}
           maxSize={SIDEBAR_MAX_PX}
           groupResizeBehavior="preserve-pixel-size"
+          className="overflow-hidden"
+          style={{ overflow: "hidden" }}
           onResize={(size) => {
-            const nowCollapsed = size.inPixels <= SIDEBAR_ICON_PX + 8;
+            if (sidebarMotionRef.current) return;
+            const px = Math.round(size.inPixels);
+            const nowCollapsed = px <= SIDEBAR_ICON_PX + 8;
             setCollapsed(nowCollapsed);
-            if (!nowCollapsed) setSidebarWidth(Math.round(size.inPixels));
+            if (nowCollapsed) return;
+            if (widthRaf.current !== null) cancelAnimationFrame(widthRaf.current);
+            widthRaf.current = requestAnimationFrame(() => {
+              widthRaf.current = null;
+              setSidebarWidth(px);
+            });
           }}
         >
           <Sidebar
@@ -92,7 +144,17 @@ export default function App() {
         </ResizablePanel>
         <ResizableHandle
           disabled={collapsed}
-          className="w-1 bg-line transition-colors duration-[150ms] hover:bg-line-strong"
+          className="w-1 bg-line motion-fill hover:bg-line-strong"
+          onPointerDown={() => {
+            setSidebarDragging(true);
+            sidebarMotionRef.current = false;
+            setSidebarMotion(false);
+            if (motionTimer.current !== null) {
+              window.clearTimeout(motionTimer.current);
+              motionTimer.current = null;
+            }
+          }}
+          onPointerUp={() => setSidebarDragging(false)}
         />
         <ResizablePanel id="shell-main" minSize="40%" className="min-w-0">
           <main className="flex h-full min-h-0 min-w-0 flex-col">
@@ -103,7 +165,7 @@ export default function App() {
             )}
             {catalog.status === "loading" && <PageSkeleton />}
             {catalog.status === "ready" && (
-              <div key={page} className="flex min-h-0 flex-1 flex-col animate-page-in">
+              <div key={page} className="motion-enter flex min-h-0 flex-1 flex-col">
                 {page === "overview" && (
                   <OverviewPage
                     skills={catalog.skills}
