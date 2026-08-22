@@ -1,3 +1,4 @@
+import { postSse } from "../../lib/sse.js";
 import { fileResourceKey, loadResource, treeResourceKey } from "./async-resource.js";
 import { hashesByClient, hashesForApply } from "./batch-links.js";
 import type { AdoptResponse, AnalyzeResponse, ArchiveResponse, BackupsListResponse, BackupsPreviewResponse, ClientSkillStatesResponse, ClientsResponse, DoctorResponse, GroupsResponse, LinksApplyResponse, LinksBatchParams, LinksPreviewResponse, ResetResponse, ShareResponse, SkillFileEntry, SkillFileResponse, SkillRecord, SkillsResponse, SkillTreeResponse, StatsResponse } from "./types.js";
@@ -197,17 +198,26 @@ export async function analyzeSkill(target: string): Promise<AnalyzeResponse> {
   return body;
 }
 
-export async function translateText(text: string): Promise<string> {
-  const res = await fetch("/api/translate", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  const body = (await res.json().catch(() => null)) as { ok: boolean; text?: string; message?: string } | null;
-  if (!res.ok || body === null || !body.ok || typeof body.text !== "string") {
-    throw new Error(body?.message ?? "HTTP " + res.status);
-  }
-  return body.text;
+/** 流式翻译:onDelta 渐进回调累积全文;resolve 返回全文;error 事件抛可读 Error。 */
+export async function translateText(text: string, onDelta?: (full: string) => void, signal?: AbortSignal): Promise<string> {
+  let full = "";
+  let failed: string | null = null;
+  await postSse(
+    "/api/translate",
+    { text },
+    {
+      delta: (d) => {
+        full += (JSON.parse(d) as { text: string }).text;
+        onDelta?.(full);
+      },
+      error: (d) => {
+        failed = (JSON.parse(d) as { message: string }).message;
+      },
+    },
+    signal,
+  );
+  if (failed !== null) throw new Error(failed);
+  return full;
 }
 
 export async function fetchArchive(): Promise<ArchiveResponse["archived"]> {

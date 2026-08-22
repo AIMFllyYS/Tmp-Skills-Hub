@@ -50,6 +50,8 @@ export interface SaveParams {
 
 export interface TranslateParams {
   text: string;
+  /** 流式渐进回调:每次收到增量后传当前累积全文 */
+  onDelta?: (full: string) => void;
 }
 
 /**
@@ -97,7 +99,7 @@ export const ACTION_REGISTRY = {
     verb: "翻译",
     destructive: false,
     supportsPreview: false,
-    execute: (p: TranslateParams) => translateText(p.text),
+    execute: (p: TranslateParams) => translateText(p.text, p.onDelta),
   },
   "preview-links": {
     id: "preview-links",
