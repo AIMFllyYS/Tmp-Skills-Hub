@@ -13,6 +13,7 @@ import {
   listDrafts,
   restoreArchivedSkill,
   classifyClientLink,
+  attachVisibleIn,
   createGroup,
   deleteGroup,
   discoverClientRoots,
@@ -33,7 +34,6 @@ import {
   usageRanking,
   writeGroups,
   type ClientLinkState,
-  type LinkEntry,
   type SkillRecord,
   type StoreRootOptions,
 } from "@skills-hub/core";
@@ -114,17 +114,6 @@ function notFoundPage(): string {
   ].join("");
 }
 
-/** 按台账重算 visibleIn(与 syncVisibleIn 同口径:某 dirName 在哪些客户端有链接)。 */
-async function attachVisibleIn(storeRoot: string, skills: SkillRecord[], ledger: LinkEntry[]): Promise<SkillRecord[]> {
-  const byName = new Map<string, string[]>();
-  for (const e of ledger) {
-    const arr = byName.get(e.entryName) ?? [];
-    if (!arr.includes(e.clientId)) arr.push(e.clientId);
-    byName.set(e.entryName, arr);
-  }
-  return skills.map((s) => ({ ...s, visibleIn: [...(byName.get(s.dirName) ?? [])].sort() }));
-}
-
 /** 客户端解析:按注入的 home(沙箱)或真实 home。找不到返回 null。 */
 async function resolveClientSkillsDirAt(
   home: string,
@@ -167,7 +156,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   app.get("/api/skills", (c) =>
     withStore(c, "skills", async (root) => {
-      const skills = await attachVisibleIn(root, await readStoreIndex(root), await readLinksLedger(root));
+      const skills = attachVisibleIn(await readStoreIndex(root), await readLinksLedger(root));
       return c.json({ ok: true, command: "skills", storeRoot: root, total: skills.length, skills });
     }),
   );
@@ -175,7 +164,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   app.get("/api/skills/:hash", (c) =>
     withStore(c, "skill", async (root) => {
       const needle = c.req.param("hash");
-      const skills = await attachVisibleIn(root, await readStoreIndex(root), await readLinksLedger(root));
+      const skills = attachVisibleIn(await readStoreIndex(root), await readLinksLedger(root));
       const hit = resolveSkill(needle, skills);
       if (!hit.ok) return skillLookupErr(c, "skill", hit);
       return c.json({ ok: true, command: "skill", skill: hit.skill });

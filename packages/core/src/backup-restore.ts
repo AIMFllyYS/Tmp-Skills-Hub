@@ -1,6 +1,6 @@
 import { cp, lstat, mkdir, readdir, readFile, rename, rm, symlink, unlink, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { discoverClientRoots } from "./clients.js";
+import { discoverClientRoots, isOwnClientId } from "./clients.js";
 import { readLinkTarget } from "./link-probe.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
 import {
@@ -12,12 +12,6 @@ import {
   type BackupManifest,
   type BackupVerifyIssue,
 } from "./backup.js";
-
-/** 本项目目录(去前导点后)不得写回客户端。与 clients.ts #98 同口径。 */
-function isOwnClientId(id: string): boolean {
-  const n = id.replace(/^\.+/, "").toLowerCase();
-  return n === "skills-hub" || n.startsWith("skills-hub.");
-}
 
 function skillNameOf(rel: string): string {
   const first = rel.split("/").find((s) => s !== "");

@@ -60,13 +60,15 @@ const EXCLUDED_SEGMENTS: readonly string[] = [
 /** 本项目自己的目录名前缀(去前导点后)。带后缀变体如 pre-bootstrap 时间戳也要排除。 */
 const OWN_DIR_PREFIX = "skills-hub";
 
+/** 客户端 id / 路径段是否为本项目目录(skills-hub 及带后缀变体)。大小写不敏感。 */
+export function isOwnClientId(id: string): boolean {
+  const n = id.replace(/^\.+/, "").toLowerCase();
+  return n === OWN_DIR_PREFIX || n.startsWith(OWN_DIR_PREFIX + ".");
+}
+
 export interface DiscoverRootsOptions {
   /** 库存根:其自身及子目录永不作为客户端 root */
   storeRoot?: string;
-}
-
-function isOwnProjectSegment(segment: string): boolean {
-  return segment === OWN_DIR_PREFIX || segment.startsWith(OWN_DIR_PREFIX + ".");
 }
 
 function samePath(a: string, b: string): boolean {
@@ -103,7 +105,7 @@ export function isExcludedRoot(skillsDir: string, home: string, storeRoot?: stri
   const rel = path.relative(home, skillsDir);
   if (rel.startsWith("..") || path.isAbsolute(rel)) return false; // 不在 home 下,无从判定
   const segments = rel.split(/[\\/]/).map((s) => s.replace(/^\.+/, "").toLowerCase());
-  return segments.some((s) => EXCLUDED_SEGMENTS.includes(s) || isOwnProjectSegment(s));
+  return segments.some((s) => EXCLUDED_SEGMENTS.includes(s) || isOwnClientId(s));
 }
 
 /**

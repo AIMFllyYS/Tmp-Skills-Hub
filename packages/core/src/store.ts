@@ -175,7 +175,7 @@ export async function adoptSkillFolder(
     dirName: meta.name,
     meta,
     origins: [origin],
-    visibleIn: [],
+    visibleIn: [], // 权威在台账;JSON 边界 attachVisibleIn
     installedAt: new Date().toISOString(),
   };
 

@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-
-/** 哈希时忽略的目录/文件(它们不属于 skill 的内容本体)。 */
-const IGNORED_ENTRIES = new Set([".git", "node_modules", ".DS_Store", "Thumbs.db"]);
+import { isIgnoredSkillEntry } from "./skill-ignore.js";
 
 /**
  * 计算整个 skill 文件夹的内容哈希(SHA-256)。
@@ -33,7 +31,7 @@ async function collectFiles(root: string, prefix = ""): Promise<string[]> {
   const entries = await readdir(path.join(root, prefix), { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
-    if (IGNORED_ENTRIES.has(entry.name)) continue;
+    if (isIgnoredSkillEntry(entry.name)) continue;
     const relPath = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
     if (entry.isDirectory()) {
       files.push(...(await collectFiles(root, relPath)));

@@ -34,8 +34,9 @@ export interface SkillRecord {
    */
   origins: SkillSource[];
   /**
-   * 在哪些客户端可见(由链接台账维护,与 origins 是两个独立概念:
-   * 来源 = 从哪收录来的,visibleIn = 链接挂在了哪些客户端目录)。
+   * 在哪些客户端可见。权威来源是链接台账(某 dirName 出现在哪些 clientId);
+   * index.json 只写空数组,不缓存。CLI list / HTTP GET 在 JSON 边界按台账推导后填入。
+   * 与 origins 独立:来源 = 从哪收录,visibleIn = 链接挂在了哪些客户端目录。
    */
   visibleIn: string[];
   installedAt: string;

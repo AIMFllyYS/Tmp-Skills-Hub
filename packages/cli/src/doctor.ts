@@ -5,9 +5,11 @@ import {
   discoverClientRoots,
   findDanglingLinks,
   probeLinkTypes,
+  readLinksLedger,
   readStoreIndex,
   resolveStoreRoot,
   type DanglingLink,
+  type LinkEntry,
   type LinkTypeProbe,
   type StoreRootOptions,
 } from "@skills-hub/core";
@@ -66,6 +68,13 @@ export async function collectDoctorReport(
   const probeDir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-linkprobe-"));
   const linkTypes = await probeLinkTypes(probeDir);
   await rm(probeDir, { recursive: true, force: true });
-  const danglingLinks = await findDanglingLinks(roots.map((r) => r.skillsDir));
+  let ledger: LinkEntry[] = [];
+  if (store.reachable && storeRoot !== null && storeRoot !== "") {
+    ledger = await readLinksLedger(storeRoot).catch(() => []);
+  }
+  const danglingLinks = await findDanglingLinks(
+    roots.map((r) => r.skillsDir),
+    ledger,
+  );
   return { store, roots: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })), linkTypes, danglingLinks };
 }

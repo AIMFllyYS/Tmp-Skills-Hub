@@ -1,8 +1,8 @@
-import { link, lstat, mkdir, readdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * 链接能力探测与悬空链接检测(doctor 命令的数据来源,只读语义)。
+ * 链接能力探测与落点磁盘形态(只读)。悬空/占用/受管的分类在 link-status.classifyClientLink。
  * 探测在调用方给定的临时目录内进行,绝不触碰真实客户端目录。
  */
 
@@ -78,36 +78,34 @@ export interface DanglingLink {
   root: string;
   /** 链接绝对路径 */
   linkPath: string;
-  /** 链接指向的目标(已失效) */
+  /** 链接指向的目标(已失效);落点本身缺失时为空串 */
   target: string;
 }
 
-/**
- * 扫描各客户端 skills 根目录,找出目标已不存在的链接(symlink 与 junction)。
- * 只读:不删除、不修改任何内容。
- */
-export async function findDanglingLinks(roots: string[]): Promise<DanglingLink[]> {
-  const dangling: DanglingLink[] = [];
-  for (const root of roots) {
-    const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-      const linkPath = path.join(root, entry.name);
-      const target = await readLinkTarget(linkPath);
-      if (target === null) continue;
-      const targetOk = await statOk(target);
-      if (!targetOk) {
-        dangling.push({ root, linkPath, target });
-      }
-    }
-  }
-  return dangling;
+/** 落点磁盘形态。classifyClientLink / checkLinksLedger / 悬空扫描共用,避免两套判型。 */
+export type ClientPathKind = "missing" | "not-link" | "dead-link" | "live-link";
+
+export interface ClientPathInspect {
+  kind: ClientPathKind;
+  target: string | null;
 }
 
-async function statOk(p: string): Promise<boolean> {
+/**
+ * 只读探测客户端落点:不存在 / 用户真目录或文件 / 死链 / 活链。
+ * 不查台账;台账由 classifyClientLink 叠加上去。
+ */
+export async function inspectClientPath(dest: string): Promise<ClientPathInspect> {
   try {
-    await lstat(p);
-    return true;
+    await lstat(dest);
   } catch {
-    return false;
+    return { kind: "missing", target: null };
+  }
+  const target = await readLinkTarget(dest);
+  if (target === null) return { kind: "not-link", target: null };
+  try {
+    await lstat(target);
+    return { kind: "live-link", target };
+  } catch {
+    return { kind: "dead-link", target };
   }
 }

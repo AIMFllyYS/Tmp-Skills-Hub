@@ -6,7 +6,7 @@ export type { GitHubUrlParts } from "./github-url.js";
 export { isSafeRelativePath, writeGitHubEntries } from "./github-files.js";
 export type { GitHubFileEntry } from "./github-files.js";
 export { parseSkillMeta, readSkillMeta } from "./skill-md.js";
-export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot } from "./clients.js";
+export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot, isOwnClientId } from "./clients.js";
 export type { ClientRoot, DiscoverRootsOptions } from "./clients.js";
 export { resolveStoreRoot, readPointerStoreRoot } from "./store-location.js";
 export type { StoreRootOptions, StoreRootResolution, StoreRootSource } from "./store-location.js";
@@ -64,17 +64,17 @@ export { migrateVersionedData } from "./migrate.js";
 export type { MigrationStep, MigrateOptions } from "./migrate.js";
 export { allocateDraft, commitDraft, discardDraft, listDrafts, createAndCommit } from "./create.js";
 export type { AllocateOutcome, CommitOutcome, DiscardOutcome } from "./create.js";
-export { findDanglingLinks, probeLinkTypes, readLinkTarget } from "./link-probe.js";
-export { classifyClientLink } from "./link-status.js";
+export { probeLinkTypes, readLinkTarget } from "./link-probe.js";
+export { classifyClientLink, findDanglingLinks } from "./link-status.js";
 export type { ClientLinkState, ClientLinkStatus } from "./link-status.js";
 export type { DanglingLink, LinkTypeProbe } from "./link-probe.js";
 export {
+  attachVisibleIn,
   checkLinksLedger,
   LINKS_LEDGER_VERSION,
   queryLinksByClient,
   readLinksLedger,
-  removeLinkEntries,
-  upsertLinkEntries,
+  visibleInFromLedger,
   writeLinksLedger,
 } from "./links.js";
 export type { LinkEntry, LinkEntryCheck, LinkEntryKind, LinkEntryState, LinksLedgerFile } from "./links.js";

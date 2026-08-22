@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isSafeRelativePath } from "./github-files.js";
+import { isIgnoredSkillEntry } from "./skill-ignore.js";
 
 /**
  * 最小 ZIP 写入器(store 模式,无压缩):归档用,零依赖。
@@ -86,12 +87,13 @@ export async function zipDirectory(dir: string, mtime: Date = new Date()): Promi
   return out;
 }
 
-/** 递归收集目录下全部文件(跳过目录本身;忽略无权限/损坏项)。 */
+/** 递归收集目录下全部文件(跳过目录本身与 IGNORED_SKILL_ENTRIES;忽略无权限/损坏项)。 */
 async function collectFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
   const walk = async (d: string): Promise<void> => {
     const entries = await readdir(d, { withFileTypes: true });
     for (const e of entries) {
+      if (isIgnoredSkillEntry(e.name)) continue;
       const p = path.join(d, e.name);
       if (e.isDirectory()) {
         await walk(p);

@@ -158,7 +158,7 @@ export async function restoreArchivedSkill(storeRoot: string, name: string): Pro
       dirName: pick.name,
       meta,
       origins: [{ kind: "archive-restore", reference: pick.file }],
-      visibleIn: [],
+      visibleIn: [], // 权威在台账;JSON 边界 attachVisibleIn
       installedAt: new Date().toISOString(),
     });
     await writeStoreIndex(storeRoot, index);
