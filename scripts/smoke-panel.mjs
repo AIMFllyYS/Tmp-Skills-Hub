@@ -115,6 +115,53 @@ function line(name, measured, threshold, ok, hint) {
   return ok;
 }
 
+/** 等到表达式为 true;超时返回 false。 */
+async function waitUntil(evalJs, expression, attempts, delayMs) {
+  for (let i = 0; i < attempts; i++) {
+    if ((await evalJs(expression)) === true) return true;
+    await sleep(delayMs);
+  }
+  return false;
+}
+
+/**
+ * 点 Skills → 等目录加载完(内容 tab 出现) → 切到内容页并确认面板已挂上。
+ * 失败返回原因;成功返回 null。
+ */
+async function openSkillsContentTab(evalJs) {
+  if (!(await waitUntil(evalJs, '!!document.querySelector("[data-testid=nav-skills]")', 80, 250))) {
+    return "找不到 Skills 导航";
+  }
+  await evalJs(`(() => { const n = document.querySelector("[data-testid=nav-skills]"); if (n) n.click(); return true; })()`);
+  if (
+    !(await waitUntil(
+      evalJs,
+      '!document.querySelector("[data-testid=page-skeleton]") && !!document.querySelector("[data-testid=skills-tab-content]")',
+      80,
+      250,
+    ))
+  ) {
+    return "Skills 内容 tab 未出现(主区仍在加载)";
+  }
+  await evalJs(`(() => { const t = document.querySelector("[data-testid=skills-tab-content]"); if (t) t.click(); return true; })()`);
+  if (
+    !(await waitUntil(
+      evalJs,
+      `(() => {
+        const tab = document.querySelector("[data-testid=skills-tab-content]");
+        const pane = document.querySelector("[data-testid=skills-content-pane]");
+        const apps = document.querySelector("[data-testid=skills-apps-pane]");
+        return !!(tab && tab.getAttribute("aria-selected") === "true" && pane && !apps);
+      })()`,
+      40,
+      100,
+    ))
+  ) {
+    return "未能切到内容 tab(仍停在应用页)";
+  }
+  return null;
+}
+
 async function waitHttp(url, timeoutMs) {
   const end = Date.now() + timeoutMs;
   let last = "";
@@ -336,21 +383,11 @@ async function main() {
       console.error("找不到左侧三板块 + 设置导航。");
       return 1;
     }
-    const openedSkills = await evalJs(`(() => {
-      const nav = document.querySelector("[data-testid=nav-skills]");
-      if (!nav) return false;
-      nav.click();
-      return true;
-    })()`);
-    if (openedSkills !== true) {
-      console.error("点不开 Skills 管理。");
+    const tabErr = await openSkillsContentTab(evalJs);
+    if (tabErr !== null) {
+      console.error(tabErr);
       return 1;
     }
-    await evalJs(`(() => {
-      const tab = document.querySelector("[data-testid=skills-tab-content]");
-      if (tab) tab.click();
-      return true;
-    })()`);
     let cards = 0;
     for (let i = 0; i < 80; i++) {
       cards = await evalJs("document.querySelectorAll('[data-testid=skill-card]').length");
@@ -371,18 +408,22 @@ async function main() {
       return 1;
     }
 
-    let view = { hasMd: false, mdText: "", loadingText: "", snippet: "" };
+    let view = { hasMd: false, mdText: "", loadingText: "", snippet: "", onApps: false, onContent: false };
     for (let i = 0; i < 40; i++) {
       view = JSON.parse(
         await evalJs(`JSON.stringify((() => {
           const md = document.querySelector('[data-testid=skill-md]');
           const loading = document.querySelector('[data-testid=skill-loading]');
-          const card = document.querySelector('[data-testid=skill-card]');
+          const pane = document.querySelector('[data-testid=skills-content-pane]');
+          const apps = document.querySelector('[data-testid=skills-apps-pane]');
+          const mdText = md && md.innerText ? md.innerText : "";
           return {
-            hasMd: !!(md && md.childElementCount > 0),
-            mdText: (md && md.innerText ? md.innerText : "").slice(0, 240),
+            hasMd: !!(md && (md.childElementCount > 0 || mdText !== "")),
+            mdText: mdText.slice(0, 240),
             loadingText: loading ? (loading.innerText || "") : "",
-            snippet: card ? card.innerText.slice(0, 240) : "",
+            onApps: !!apps,
+            onContent: !!pane,
+            snippet: mdText !== "" ? mdText.slice(0, 240) : (pane && pane.innerText ? pane.innerText.slice(0, 240) : ""),
           };
         })())`),
       );
@@ -424,12 +465,14 @@ async function main() {
     const longMax = Math.max(clickLongMax, idleLongMax);
 
     const loadingStuck = view.loadingText.includes("加载中") || view.snippet.includes("加载中…");
-    const bodyOk = view.hasMd && view.mdText.includes(BODY_MARKER) && !loadingStuck;
+    const bodyOk = view.hasMd && view.mdText.includes(BODY_MARKER) && !loadingStuck && view.onContent && !view.onApps;
     let bodyHint = "";
     if (!bodyOk) {
-      bodyHint = loadingStuck
-        ? "内容区仍为「加载中…」(B7-2 类回归)"
-        : "内容区未出现正文(仍为「加载中…」或空白)";
+      bodyHint = view.onApps
+        ? "仍在应用 tab,内容查看器未打开"
+        : loadingStuck
+          ? "内容区仍为「加载中…」(B7-2 类回归)"
+          : "内容区未出现正文(仍为「加载中…」或空白)";
     }
 
     console.log("--- 功能 ---");
@@ -501,18 +544,11 @@ async function main() {
     }
     await writeStoreIndex(storeRoot, scaleRecords);
     await send("Page.reload", { ignoreCache: true }, sessionId);
-    for (let i = 0; i < 80; i++) {
-      const ready = await evalJs("!!document.querySelector('[data-testid=nav-skills]')");
-      if (ready === true) break;
-      await sleep(250);
+    const scaleTabErr = await openSkillsContentTab(evalJs);
+    if (scaleTabErr !== null) {
+      console.error(scaleTabErr);
+      return 1;
     }
-    await evalJs(`(() => {
-      const nav = document.querySelector("[data-testid=nav-skills]");
-      if (nav) nav.click();
-      const tab = document.querySelector("[data-testid=skills-tab-content]");
-      if (tab) tab.click();
-      return true;
-    })()`);
     let scaleCards = 0;
     for (let i = 0; i < 80; i++) {
       scaleCards = await evalJs("document.querySelectorAll('[data-testid=skill-card]').length");
