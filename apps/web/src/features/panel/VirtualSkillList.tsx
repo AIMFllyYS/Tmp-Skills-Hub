@@ -6,24 +6,18 @@ import { ensureRowVisible, stepIndex, virtualWindow } from "./virtual-window.js"
 interface VirtualSkillListProps {
   skills: SkillRecord[];
   clientTotal: number;
-  checked: ReadonlySet<string>;
   focusedHash: string | null;
-  onToggleCheck: (hash: string, next: boolean) => void;
   onFocus: (hash: string) => void;
   clientViewOf?: ((skill: SkillRecord) => SkillRowClientView | undefined) | undefined;
-  selectable?: boolean;
 }
 
-/** 固定行高虚拟列表:只挂可见窗口 + overscan,选中态由数据驱动不随卸载丢失。 */
+/** 固定行高虚拟列表:只挂可见窗口 + overscan,焦点态由数据驱动不随卸载丢失。 */
 export function VirtualSkillList({
   skills,
   clientTotal,
-  checked,
   focusedHash,
-  onToggleCheck,
   onFocus,
   clientViewOf,
-  selectable = true,
 }: VirtualSkillListProps): React.JSX.Element {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -55,13 +49,6 @@ export function VirtualSkillList({
     const current = focusedHash === null ? null : skills.findIndex((s) => s.hash === focusedHash);
     const idx = current === -1 ? null : current;
     let next: number | null = null;
-    if (e.key === " " || e.key === "Spacebar") {
-      if (focusedHash !== null) {
-        e.preventDefault();
-        onToggleCheck(focusedHash, !checked.has(focusedHash));
-      }
-      return;
-    }
     if (e.key === "ArrowDown") next = stepIndex(idx, 1, skills.length);
     else if (e.key === "ArrowUp") next = stepIndex(idx, -1, skills.length);
     else if (e.key === "Home") next = 0;
@@ -92,12 +79,9 @@ export function VirtualSkillList({
             key={skill.hash}
             skill={skill}
             clientTotal={clientTotal}
-            checked={checked.has(skill.hash)}
             focused={focusedHash === skill.hash}
-            onToggleCheck={onToggleCheck}
             onFocus={onFocus}
             clientView={clientViewOf?.(skill)}
-            selectable={selectable}
           />
         ))}
         {win.bottomPad > 0 && <li aria-hidden style={{ height: win.bottomPad }} />}

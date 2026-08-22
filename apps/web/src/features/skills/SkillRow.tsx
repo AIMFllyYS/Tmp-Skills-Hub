@@ -14,24 +14,18 @@ export interface SkillRowClientView {
 interface SkillRowProps {
   skill: SkillRecord;
   clientTotal: number;
-  checked: boolean;
   focused: boolean;
-  onToggleCheck: (hash: string, next: boolean) => void;
   onFocus: (hash: string) => void;
   clientView?: SkillRowClientView | undefined;
-  selectable?: boolean;
 }
 
 /** 集合列的一行:名称 + 启用聚合或该应用的开关。 */
 export const SkillRow = memo(function SkillRow({
   skill,
   clientTotal,
-  checked,
   focused,
-  onToggleCheck,
   onFocus,
   clientView,
-  selectable = true,
 }: SkillRowProps): React.JSX.Element {
   const on = skill.visibleIn.length;
   const blocked = clientView !== undefined && (clientView.state === "unregistered-conflict" || clientView.state === "dangling");
@@ -43,21 +37,11 @@ export const SkillRow = memo(function SkillRow({
       aria-selected={focused}
       className={cn(
         "box-border overflow-hidden",
-        checked && "bg-surface",
         focused && "bg-surface outline outline-1 outline-offset-[-1px] outline-line-strong",
       )}
       style={{ height: SKILL_ROW_HEIGHT_PX }}
     >
       <div className="flex h-full items-center gap-2 px-4">
-        {selectable && (
-          <input
-            type="checkbox"
-            checked={checked}
-            aria-label={"选择 " + skill.dirName}
-            onChange={(e) => onToggleCheck(skill.hash, e.target.checked)}
-            className="shrink-0"
-          />
-        )}
         <button
           type="button"
           data-testid="skill-card-open"

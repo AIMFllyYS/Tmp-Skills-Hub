@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getAction, listActions, type ActionId } from "./registry.js";
+import { ACTION_REGISTRY, getAction, type ActionId } from "./registry.js";
 
 const CORE: ActionId[] = ["enable", "disable", "archive", "save", "translate"];
 
 describe("ACTION_REGISTRY", () => {
   it("现有写动作都在表里,id 与动词稳定", () => {
-    const ids = listActions().map((a) => a.id);
+    const ids = Object.keys(ACTION_REGISTRY);
     for (const id of CORE) expect(ids).toContain(id);
     expect(getAction("enable").verb).toBe("启用");
     expect(getAction("disable").verb).toBe("停用");

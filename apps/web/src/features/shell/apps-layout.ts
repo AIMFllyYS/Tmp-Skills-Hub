@@ -30,14 +30,6 @@ export function appsCoverageHint(enabled: number, total: number): string {
   return "已启用 " + String(enabled) + " / " + String(total) + "。未启用是还没挂链接。系统目录不在此列。";
 }
 
-export function filterSkillsByQuery(skills: readonly SkillRecord[], query: string): SkillRecord[] {
-  const q = query.trim().toLowerCase();
-  const rows = q === ""
-    ? [...skills]
-    : skills.filter((s) => s.dirName.toLowerCase().includes(q) || s.meta.description.toLowerCase().includes(q));
-  return rows.sort((a, b) => a.dirName.localeCompare(b.dirName));
-}
-
 export type ClientIdGroup = { key: "cursor" | "claude" | "other"; label: string; ids: string[] };
 
 /** 设置折叠卡：cursor / claude 各一组，其余进「其他」。不改发现规则。 */
