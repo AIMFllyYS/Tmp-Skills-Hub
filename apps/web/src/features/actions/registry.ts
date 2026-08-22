@@ -52,6 +52,8 @@ export interface TranslateParams {
   text: string;
   /** 流式渐进回调:每次收到增量后传当前累积全文 */
   onDelta?: (full: string) => void;
+  /** 译文留存目标(#208):服务端解析 target 后按记录哈希落盘 */
+  save?: { target: string; path: string };
 }
 
 /**
@@ -99,7 +101,7 @@ export const ACTION_REGISTRY = {
     verb: "翻译",
     destructive: false,
     supportsPreview: false,
-    execute: (p: TranslateParams) => translateText(p.text, p.onDelta),
+    execute: (p: TranslateParams) => translateText(p.text, p.onDelta, undefined, p.save),
   },
   "preview-links": {
     id: "preview-links",
