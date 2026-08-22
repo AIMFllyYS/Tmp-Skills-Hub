@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
+import { streamSSE } from "hono/streaming";
 import {
   archiveSkill,
   restoreArchivedSkill,
@@ -24,7 +25,10 @@ import { resolveSkill } from "./resolve-skill.js";
 import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze } from "./analyze.js";
 import { performShare } from "./share.js";
-import { chatCompletion } from "./deepseek.js";
+import { chatCompletion, chatCompletionStream, type LlmMessage } from "./llm.js";
+import { parseWireMessages, runAgentTurn, type AgentTurnOptions } from "./agent/loop.js";
+import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
+import { executeAgentTool } from "./agent/tools.js";
 import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, withStore, type UiRouteContext } from "./ui-http.js";
 import { registerGroupRoutes } from "./ui-groups.js";
 import { registerDraftRoutes } from "./ui-drafts.js";
@@ -33,7 +37,7 @@ import { registerLinkRoutes } from "./ui-links.js";
 
 export const DEFAULT_UI_PORT = 4321;
 
-/** 翻译代理(#38)常量:超时 60s(长文本),单次截断上限防滥用。 */
+/** 翻译代理(#38)常量:单次截断上限防滥用;流式下发,空闲超时由 llm.ts 管。 */
 export const MAX_TRANSLATE_CHARS = 200_000;
 
 /** 翻译系统提示:保留代码块与 frontmatter 原文,只译说明性文字。 */
@@ -57,12 +61,16 @@ export interface UiAppOptions {
   home?: string;
   /** web 静态产物根(缺省 apps/web/dist;测试注入临时目录) */
   webRoot?: string;
-  /** 翻译实现注入(测试替身隔离网络;缺省 chatCompletion) */
-  translateImpl?: typeof chatCompletion;
+  /** 翻译流式实现注入(测试替身隔离网络;缺省 chatCompletionStream) */
+  translateStream?: typeof chatCompletionStream;
   /** 分析用的 chat 替身(测试隔离真实网络;缺省 chatCompletion) */
   analyzeChat?: typeof chatCompletion;
   /** GitHub/skills.sh 拉取用的 fetch 替身(测试隔离真实网络) */
   fetchImpl?: typeof fetch;
+  /** Agent 对话流式实现注入(测试替身;缺省 chatCompletionStream) */
+  agentChatStream?: typeof chatCompletionStream;
+  /** Agent 工具执行注入(测试替身;缺省 executeAgentTool) */
+  agentExecTool?: typeof executeAgentTool;
 }
 
 /** 默认静态根:编译后位于 packages/cli/dist/,上三级到仓库根,再进 apps/web/dist。 */
@@ -101,7 +109,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const app = new Hono();
   const storeRoot = opts.storeRoot === undefined ? null : opts.storeRoot;
   const home = opts.home ?? resolveHome();
-  const translate = opts.translateImpl ?? chatCompletion;
+  const translateStream = opts.translateStream ?? chatCompletionStream;
   const analyzeChat = opts.analyzeChat ?? chatCompletion;
   const fetchImpl = opts.fetchImpl;
   const webRoot = opts.webRoot ?? defaultWebRoot();
@@ -172,15 +180,44 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     if (body === null || typeof body?.text !== "string" || body.text === "") {
       return err(c, "translate", "bad-usage", "body 需要 { text: string }");
     }
-    const res = await translate(
-      [
-        { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
-        { role: "user", content: body.text.slice(0, MAX_TRANSLATE_CHARS) },
-      ],
-      { timeoutMs: 60_000 },
-    );
-    if (!res.ok) return err(c, "translate", res.code, res.message, res.code === "not-configured" ? 503 : 502);
-    return c.json({ ok: true, command: "translate", text: res.content });
+    const messages: LlmMessage[] = [
+      { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
+      { role: "user", content: body.text.slice(0, MAX_TRANSLATE_CHARS) },
+    ];
+    return streamSSE(c, async (stream) => {
+      for await (const ev of translateStream(messages, { signal: c.req.raw.signal })) {
+        if (ev.type === "text") {
+          await stream.writeSSE({ event: "delta", data: JSON.stringify({ text: ev.delta }) });
+        } else if (ev.type === "error") {
+          await stream.writeSSE({ event: "error", data: JSON.stringify({ code: ev.code, message: ev.message }) });
+          return;
+        } else if (ev.type === "done") {
+          await stream.writeSSE({ event: "done", data: "{}" });
+        }
+      }
+    });
+  });
+
+  app.get("/api/agent/models", (c) =>
+    c.json({ ok: true, command: "agent-models", defaultModel: DEFAULT_AGENT_MODEL, models: AGENT_MODELS }),
+  );
+
+  // Agent 对话(agent-v0.md):不包 withStore——库存未配置时仍可对话,工具返回可读文本。
+  app.post("/api/agent/chat", async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as { messages?: unknown; model?: unknown } | null;
+    const messages = parseWireMessages(raw?.messages);
+    if (messages === null) return err(c, "agent-chat", "bad-usage", "body 需要 { messages: WireMessage[] }(不含 system)");
+    const model = resolveAgentModel(raw?.model);
+    const clients = (await discoverClientRoots(home, clientDiscoverOpts(storeRoot))).map((r) => r.clientId);
+    return streamSSE(c, async (stream) => {
+      const turnOpts: AgentTurnOptions = { messages, model, env: { home, storeRoot }, clients };
+      turnOpts.signal = c.req.raw.signal;
+      if (opts.agentChatStream !== undefined) turnOpts.chatStream = opts.agentChatStream;
+      if (opts.agentExecTool !== undefined) turnOpts.execTool = opts.agentExecTool;
+      for await (const ev of runAgentTurn(turnOpts)) {
+        await stream.writeSSE({ event: ev.event, data: JSON.stringify(ev.data) });
+      }
+    });
   });
 
   app.post("/api/analyze", (c) =>

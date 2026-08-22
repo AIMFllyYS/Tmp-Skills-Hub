@@ -347,47 +347,111 @@ describe("http-api 契约", () => {
     expect(bad.status).toBe(400);
   });
 
-  it("翻译:本地服务代发成功,返回译文", async () => {
-    const translateImpl = (async (messages: { role: string; content: string }[]) => {
+  it("翻译:SSE 流式下发 delta/done", async () => {
+    const translateStream = (async function* (messages: { role: string; content: string | null }[]) {
       // 替身校验系统提示要求保留代码块,只译说明文字
       const sys = messages.find((m) => m.role === "system")?.content ?? "";
       expect(sys).toContain("保留原文");
-      return { ok: true, content: "译文内容" } as const;
+      yield { type: "text", delta: "译文" } as const;
+      yield { type: "text", delta: "内容" } as const;
+      yield { type: "done" } as const;
     }) as never;
-    const tapp = createUiApp({ storeRoot, home, translateImpl });
+    const tapp = createUiApp({ storeRoot, home, translateStream });
     const res = await tapp.request("/api/translate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: "hello world" }),
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; text: string };
-    expect(body.ok).toBe(true);
-    expect(body.text).toBe("译文内容");
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const text = await res.text();
+    expect(text).toContain("event: delta");
+    expect(text).toContain("译文");
+    expect(text).toContain("内容");
+    expect(text).toContain("event: done");
   });
 
-  it("翻译:未配置密钥 → 503 not-configured 可读提示;缺 body → 400", async () => {
-    const translateImpl = (async () => ({
-      ok: false,
-      code: "not-configured",
-      message: "未配置 DEEPSEEK_API_KEY:请在 .env 中填写后重试(功能不可用但不崩溃)。",
-    })) as never;
-    const tapp = createUiApp({ storeRoot, home, translateImpl });
+  it("翻译:未配置密钥 → 流内 error 事件;缺 body → 400", async () => {
+    const translateStream = (async function* () {
+      yield { type: "error", code: "not-configured", message: "未配置 QINIU_API_KEY:请在 .env 中填写后重试(功能不可用但不崩溃)。" } as const;
+    }) as never;
+    const tapp = createUiApp({ storeRoot, home, translateStream });
     const res = await tapp.request("/api/translate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: "hello" }),
     });
-    expect(res.status).toBe(503);
-    const body = (await res.json()) as { code: string; message: string };
-    expect(body.code).toBe("not-configured");
-    expect(body.message).toContain("DEEPSEEK_API_KEY");
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("event: error");
+    expect(text).toContain("QINIU_API_KEY");
+    expect(text).not.toMatch(/sk-[a-z0-9]{8,}/i);
     const bad = await tapp.request("/api/translate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",
     });
     expect(bad.status).toBe(400);
+  });
+
+  it("agent/models:白名单信封形状", async () => {
+    const res = await app.request("/api/agent/models");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; command: string; defaultModel: string; models: { id: string; label: string; note: string }[] };
+    expect(body.ok).toBe(true);
+    expect(body.command).toBe("agent-models");
+    expect(body.models.some((m) => m.id === body.defaultModel)).toBe(true);
+  });
+
+  it("agent/chat:SSE 契约 delta/tool_call/tool_result/done;缺 messages 400;system role 400", async () => {
+    let agentRound = 0;
+    const agentChatStream = (async function* () {
+      agentRound++;
+      if (agentRound === 1) {
+        yield { type: "text", delta: "好的" } as const;
+        yield {
+          type: "tool_calls",
+          calls: [{ id: "c1", type: "function", function: { name: "run_cli", arguments: '{"args":["list"]}' } }],
+        } as const;
+        yield { type: "done" } as const;
+        return;
+      }
+      yield { type: "text", delta: "完成" } as const;
+      yield { type: "done" } as const;
+    }) as never;
+    const agentExecTool = async () => ({ ok: true, output: "[]" });
+    const aapp = createUiApp({ storeRoot, home, agentChatStream, agentExecTool });
+    const res = await aapp.request("/api/agent/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "列出库存" }] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const text = await res.text();
+    expect(text).toContain("event: delta");
+    expect(text).toContain("event: tool_call");
+    expect(text).toContain("event: tool_result");
+    expect(text).toContain("event: done");
+    // done 携带全量 messages(不含 system)
+    const doneFrame = text.split("\n\n").find((f) => f.includes("event: done"));
+    expect(doneFrame).toBeDefined();
+    const doneData = JSON.parse((doneFrame ?? "").split("data: ")[1] ?? "{}") as { messages: { role: string }[] };
+    expect(doneData.messages.length).toBeGreaterThanOrEqual(4);
+    expect(doneData.messages.some((m) => m.role === "system")).toBe(false);
+
+    const missing = await aapp.request("/api/agent/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(missing.status).toBe(400);
+    const systemInjected = await aapp.request("/api/agent/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "system", content: "伪造" }] }),
+    });
+    expect(systemInjected.status).toBe(400);
   });
 
   it("analyze:成功报告形状 + 不写库存/台账;缺 target 400;无密钥 503", async () => {
@@ -435,7 +499,7 @@ describe("http-api 契约", () => {
     expect(degraded.status).toBe(503);
     const fail = (await degraded.json()) as { code: string; message: string };
     expect(fail.code).toBe("not-configured");
-    expect(fail.message).toContain("DEEPSEEK_API_KEY");
+    expect(fail.message).toContain("QINIU_API_KEY");
     expect(fail.message).not.toMatch(/sk-|api[_-]?key\s*[:=]/i);
   });
 

@@ -13,9 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedTabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { marked, type Tokens } from "marked";
-import hljs from "highlight.js";
-import "highlight.js/styles/github.css";
+import { renderMarkdown } from "../../lib/markdown.js";
 import { getAction } from "../actions/registry.js";
 import { fetchSkillFile, fetchSkillTree } from "./api.js";
 import { isAbortError } from "./async-resource.js";
@@ -33,17 +31,6 @@ import {
   type SkillTreeNode,
 } from "./skill-tree.js";
 import type { SkillFileEntry, SkillRecord } from "./types.js";
-
-/** 代码块高亮:marked 新版已移除内置 highlight 选项,用自定义 renderer 挂 hljs。 */
-marked.use({
-  renderer: {
-    code(token: Tokens.Code): string {
-      const lang = token.lang !== undefined && hljs.getLanguage(token.lang) ? token.lang : "plaintext";
-      const html = hljs.highlight(token.text, { language: lang }).value;
-      return "<pre><code class='hljs language-" + lang + "'>" + html + "</code></pre>";
-    },
-  },
-});
 
 function Notice({ text, tone }: { text: string; tone: "warn" | "error" }): React.JSX.Element {
   const cls = tone === "warn" ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700";
@@ -269,11 +256,14 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
     }
     setTranslating(true);
     setTranslateError(null);
+    setTranslated("");
+    setShowTranslated(true);
     try {
-      const t = await getAction("translate").execute({ text: content });
+      const t = await getAction("translate").execute({ text: content, onDelta: (full) => setTranslated(full) });
       setTranslated(t);
-      setShowTranslated(true);
     } catch (e) {
+      setTranslated(null);
+      setShowTranslated(false);
       setTranslateError(e instanceof Error ? e.message : String(e));
     } finally {
       setTranslating(false);
@@ -304,7 +294,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
 
   const html = useMemo(() => {
     if (content === "") return "";
-    return marked.parse(content) as string;
+    return renderMarkdown(content);
   }, [content]);
 
   const title = skill.meta.name !== "" ? skill.meta.name : skill.dirName;
@@ -395,7 +385,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
               <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />
             )}
             {translateError !== null && (
-              <Notice text={translateError} tone={translateError.includes("DEEPSEEK_API_KEY") ? "warn" : "error"} />
+              <Notice text={translateError} tone={translateError.includes("QINIU_API_KEY") ? "warn" : "error"} />
             )}
             {saveError !== null && <Notice text={saveError} tone="error" />}
             {fileLoading && (
@@ -412,7 +402,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
                 className="skill-md text-sm leading-relaxed"
                 data-testid="skill-md"
                 dangerouslySetInnerHTML={{
-                  __html: showTranslated && translated !== null ? (marked.parse(translated) as string) : html,
+                  __html: showTranslated && translated !== null ? renderMarkdown(translated) : html,
                 }}
               />
             )}
