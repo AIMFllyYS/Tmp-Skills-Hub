@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  ChevronDown,
   ChevronRight,
   File,
   FileCode,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { SegmentedTabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { marked, type Tokens } from "marked";
 import hljs from "highlight.js";
@@ -89,11 +89,15 @@ function TreeRows({
                 type="button"
                 onClick={() => onToggle(node.path)}
                 style={{ paddingLeft: pad }}
-                className="flex w-full items-center gap-1 rounded-lg py-1 pr-2 text-left text-sm text-ink-mid transition-colors duration-[150ms] hover:bg-surface hover:text-ink-strong"
+                className="motion-row flex w-full items-center gap-1 rounded-lg py-1 pr-2 text-left text-sm text-ink-mid hover:bg-surface hover:text-ink-strong"
               >
-                {open
-                  ? <ChevronDown className="size-3.5 shrink-0 text-ink-faint" aria-hidden />
-                  : <ChevronRight className="size-3.5 shrink-0 text-ink-faint" aria-hidden />}
+                <ChevronRight
+                  className={cn(
+                    "size-3.5 shrink-0 text-ink-faint transition-transform duration-normal ease-spring motion-reduce:transition-none",
+                    open && "rotate-90",
+                  )}
+                  aria-hidden
+                />
                 <TreeGlyph node={node} open={open} />
                 <span className="truncate">{node.name}</span>
               </button>
@@ -117,7 +121,7 @@ function TreeRows({
               onClick={() => onOpenFile(node.path)}
               style={{ paddingLeft: pad + 14 }}
               className={cn(
-                "flex w-full items-center gap-1.5 rounded-lg py-1 pr-2 text-left text-sm transition-colors duration-[150ms]",
+                "motion-row flex w-full items-center gap-1.5 rounded-lg py-1 pr-2 text-left text-sm",
                 selected === node.path ? "bg-surface text-ink-strong" : "text-ink-mid hover:bg-surface hover:text-ink-strong",
               )}
             >
@@ -336,9 +340,22 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h2 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight text-ink-strong">{title}</h2>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {actions}
               {canPreview && (
                 <>
+                  <SegmentedTabs
+                    size="sm"
+                    ariaLabel="预览或编辑"
+                    disabled={saving}
+                    value={editing ? "edit" : "preview"}
+                    onChange={(id) => {
+                      if (id === "preview") setEditing(false);
+                      else if (!editing) startEdit();
+                    }}
+                    items={[
+                      { id: "preview", label: "预览" },
+                      { id: "edit", label: "编辑" },
+                    ]}
+                  />
                   {!editing && (
                     <Button
                       type="button"
@@ -350,26 +367,6 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
                       {translating ? "翻译中…" : showTranslated ? "原文" : "译成中文"}
                     </Button>
                   )}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={editing ? "outline" : "default"}
-                    disabled={saving}
-                    onClick={() => setEditing(false)}
-                  >
-                    预览
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={editing ? "default" : "outline"}
-                    disabled={saving}
-                    onClick={() => {
-                      if (!editing) startEdit();
-                    }}
-                  >
-                    编辑
-                  </Button>
                   {editing && (
                     <Button type="button" size="sm" disabled={saving} onClick={() => void save()}>
                       {saving ? "保存中…" : "保存"}
@@ -377,6 +374,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
                   )}
                 </>
               )}
+              {actions}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 rounded-xl border border-line p-3 sm:grid-cols-4">
@@ -403,7 +401,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
             {fileLoading && (
               <div data-testid="skill-loading">
                 <span className="sr-only">加载中…</span>
-                <div className="h-24 rounded-lg bg-surface motion-safe:animate-pulse" />
+                <div className="h-24 rounded-lg bg-surface motion-safe:animate-skeleton" />
               </div>
             )}
             {!fileLoading && selected === "" && fileError === null && treeError === null && !loading && (

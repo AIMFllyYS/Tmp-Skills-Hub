@@ -36,7 +36,7 @@ export const SkillRow = memo(function SkillRow({
       role="option"
       aria-selected={focused}
       className={cn(
-        "box-border overflow-hidden",
+        "box-border overflow-hidden motion-fill",
         focused && "bg-surface outline outline-1 outline-offset-[-1px] outline-line-strong",
       )}
       style={{ height: SKILL_ROW_HEIGHT_PX }}
@@ -46,7 +46,7 @@ export const SkillRow = memo(function SkillRow({
           type="button"
           data-testid="skill-card-open"
           onClick={() => onFocus(skill.hash)}
-          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+          className="motion-row flex min-w-0 flex-1 items-center justify-between gap-3 text-left hover:bg-surface"
         >
           <span className="truncate text-sm font-medium text-ink-strong">{skill.dirName}</span>
           {clientView === undefined ? (

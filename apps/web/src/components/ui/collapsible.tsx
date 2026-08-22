@@ -34,7 +34,7 @@ export function CollapsibleTrigger({
   return (
     <CollapsiblePrimitive.Trigger
       className={cn(
-        "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-left text-sm text-ink-strong outline-none transition-colors duration-[150ms] hover:bg-surface",
+        "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-left text-sm text-ink-strong outline-none motion-fill hover:bg-surface focus-visible:ring-1 focus-visible:ring-line-strong",
         className,
       )}
       {...props}
@@ -47,6 +47,6 @@ export function CollapsiblePanel({
   ...props
 }: ComponentProps<typeof CollapsiblePrimitive.Panel>): React.JSX.Element {
   return (
-    <CollapsiblePrimitive.Panel className={cn("flex flex-col overflow-hidden", className)} {...props} />
+    <CollapsiblePrimitive.Panel className={cn("collapsible-panel flex flex-col", className)} {...props} />
   );
 }

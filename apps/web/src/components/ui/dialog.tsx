@@ -34,13 +34,13 @@ export function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop
         className={cn(
-          "fixed inset-0 bg-ink-strong/40 transition-opacity duration-[150ms]",
+          "dialog-backdrop fixed inset-0 bg-ink-strong/40",
           nested ? "z-[60]" : "z-50",
         )}
       />
       <DialogPrimitive.Popup
         className={cn(
-          "fixed top-1/2 left-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-white p-4 outline-none",
+          "dialog-popup fixed top-1/2 left-1/2 w-full max-w-md rounded-lg border border-line bg-white p-4 outline-none",
           nested ? "z-[61]" : "z-50",
           className,
         )}

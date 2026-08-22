@@ -2,9 +2,10 @@ import { useMemo, useState } from "react";
 import { Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { tabTriggerClass } from "@/components/ui/tabs";
+import { SegmentedTabs, type SegmentedTabItem } from "@/components/ui/tabs";
 import { TruncateTip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getAction } from "../actions/registry.js";
@@ -22,6 +23,11 @@ import type { ArchivedSkill, ClientInfo, ClientSkillStatesResponse, GroupDef, Sk
 import { appsCoverageHint, enabledCountForClient, sortClientsForApps } from "./apps-layout.js";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { SkillsTab } from "./page.js";
+
+const SKILLS_TABS: SegmentedTabItem<SkillsTab>[] = [
+  { id: "apps", label: "应用", testId: "skills-tab-apps" },
+  { id: "content", label: "内容", testId: "skills-tab-content" },
+];
 
 interface SkillsPageProps {
   tab: SkillsTab;
@@ -141,34 +147,15 @@ export function SkillsPage({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="skills-page">
-      <header className="shrink-0 border-b border-line px-6 pt-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">Skills 管理</h1>
-        <nav className="mt-3 flex" role="tablist" aria-label="Skills 管理页签">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "apps"}
-            data-testid="skills-tab-apps"
-            className={tabTriggerClass(tab === "apps")}
-            onClick={() => onTab("apps")}
-          >
-            应用
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "content"}
-            data-testid="skills-tab-content"
-            className={tabTriggerClass(tab === "content")}
-            onClick={() => onTab("content")}
-          >
-            内容
-          </button>
-        </nav>
+      <header className="shrink-0 border-b border-line px-6 py-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">Skills 管理</h1>
+          <SegmentedTabs ariaLabel="Skills 管理页签" value={tab} onChange={onTab} items={SKILLS_TABS} />
+        </div>
       </header>
 
       {tab === "apps" && (
-        <div className="flex min-h-0 flex-1" data-testid="skills-apps-pane">
+        <div className="motion-enter flex min-h-0 flex-1" data-testid="skills-apps-pane">
           <div className="flex w-52 shrink-0 flex-col border-r border-line">
             <ScrollArea className="min-h-0 flex-1 py-2">
               {orderedClients.length === 0 && <p className="px-4 py-3 text-sm text-ink-mid">未发现应用</p>}
@@ -181,12 +168,17 @@ export function SkillsPage({
                     type="button"
                     onClick={() => onSelectClient(c.clientId)}
                     className={cn(
-                      "flex w-full items-center justify-between gap-2 px-3 py-2 text-left",
-                      "transition-[background-color,transform] duration-[150ms] active:scale-[0.98] motion-reduce:active:scale-100",
+                      "motion-row mx-2 mb-0.5 flex w-[calc(100%-1rem)] items-center justify-between gap-2 rounded-lg px-3 py-2 text-left",
                       selected ? "bg-surface text-ink-strong" : "text-ink-mid hover:bg-surface",
                     )}
                   >
-                    <TruncateTip text={c.clientId} className="min-w-0 flex-1 text-sm" />
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={cn("size-1.5 shrink-0 rounded-full", n > 0 ? "bg-green-700" : "bg-line")}
+                        aria-hidden
+                      />
+                      <TruncateTip text={c.clientId} className="min-w-0 flex-1 text-sm" />
+                    </span>
                     <Badge>{String(n)}</Badge>
                   </button>
                 );
@@ -265,7 +257,7 @@ export function SkillsPage({
       )}
 
       {tab === "content" && (
-        <div className="flex min-h-0 flex-1 flex-col" data-testid="skills-content-pane" role="tabpanel">
+        <div className="motion-enter flex min-h-0 flex-1 flex-col" data-testid="skills-content-pane" role="tabpanel">
           <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-4 py-3">
             <Input
               value={query}
@@ -328,15 +320,17 @@ export function SkillsPage({
             </div>
           </div>
           <div className="shrink-0 border-t border-line px-4 py-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowArchive((v) => !v)}>
-              <Archive className="size-4 text-ink-mid" aria-hidden />
-              {showArchive ? "收起归档" : archived.length > 0 ? "归档区（" + String(archived.length) + "）" : "归档区"}
-            </Button>
-            {showArchive && (
-              <div className="mt-2">
+            <Collapsible open={showArchive} onOpenChange={setShowArchive}>
+              <CollapsibleTrigger>
+                <span className="flex items-center gap-2">
+                  <Archive className="size-4 text-ink-mid" aria-hidden />
+                  {showArchive ? "收起归档" : archived.length > 0 ? "归档区（" + String(archived.length) + "）" : "归档区"}
+                </span>
+              </CollapsibleTrigger>
+              <CollapsiblePanel className="mt-2">
                 <ArchivePanel archived={archived} onRestore={onRestore} />
-              </div>
-            )}
+              </CollapsiblePanel>
+            </Collapsible>
           </div>
         </div>
       )}

@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/chart";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableHead, TableRow, TableTd, TableTh } from "@/components/ui/table";
-import { tabTriggerClass } from "@/components/ui/tabs";
+import { SegmentedTabs, type SegmentedTabItem } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import type { ClientInfo, SkillRecord, UsageCounters, UsageRankEntry } from "../skills/types.js";
 import type { ShellNav, StatsTab } from "./page.js";
 import {
@@ -35,6 +36,8 @@ import {
   usageRows,
   usageSum,
 } from "./stats-model.js";
+
+const CHART_DURATION_MS = 600;
 
 interface StatsPageProps {
   skills: SkillRecord[];
@@ -55,6 +58,35 @@ function Empty({ onGo }: { onGo: (target: ShellNav) => void }): React.JSX.Elemen
       <Button type="button" variant="outline" onClick={() => onGo({ page: "overview" })}>
         回总览
       </Button>
+    </div>
+  );
+}
+
+function RankMark({ n }: { n: number }): React.JSX.Element {
+  if (n > 3) return <span className="font-mono text-ink-faint">{String(n)}</span>;
+  return (
+    <span
+      className={cn(
+        "inline-flex size-5 items-center justify-center rounded-full bg-surface font-mono text-xs font-medium",
+        n === 1 ? "text-ink-strong" : "text-ink-mid",
+      )}
+    >
+      {String(n)}
+    </span>
+  );
+}
+
+function MicroBar({ part, all }: { part: number; all: number }): React.JSX.Element {
+  const pct = all <= 0 ? 0 : Math.min(100, Math.round((part / all) * 100));
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface">
+        <div
+          className="h-full rounded-full bg-ink-mid/80 motion-safe:animate-bar-in"
+          style={{ width: String(pct) + "%" }}
+        />
+      </div>
+      <span>{formatShare(part, all)}</span>
     </div>
   );
 }
@@ -106,7 +138,8 @@ function UsageChart({
           fill={CHART_COLOR.show}
           radius={[4, 0, 0, 4]}
           isAnimationActive={animate}
-          animationDuration={150}
+          animationDuration={CHART_DURATION_MS}
+          animationEasing="ease-out"
           onClick={open}
         />
         <Bar
@@ -116,7 +149,8 @@ function UsageChart({
           fill={CHART_COLOR.enable}
           radius={[0, 4, 4, 0]}
           isAnimationActive={animate}
-          animationDuration={150}
+          animationDuration={CHART_DURATION_MS}
+          animationEasing="ease-out"
           onClick={open}
         >
           <LabelList dataKey="total" position="right" fill={CHART_INK.mid} fontSize={12} />
@@ -167,7 +201,8 @@ function AppsChart({
           fill={CHART_COLOR.enable}
           radius={4}
           isAnimationActive={animate}
-          animationDuration={150}
+          animationDuration={CHART_DURATION_MS}
+          animationEasing="ease-out"
           onClick={(d: unknown) => {
             if (typeof d !== "object" || d === null) return;
             const payload = (d as { payload?: { id?: unknown } }).payload;
@@ -196,7 +231,8 @@ function SourceChart({ rows }: { rows: { kind: string; count: number }[] }): Rea
           innerRadius={48}
           outerRadius={80}
           isAnimationActive={animate}
-          animationDuration={150}
+          animationDuration={CHART_DURATION_MS}
+          animationEasing="ease-out"
           label={(props) => {
             const name = "name" in props && typeof props.name === "string" ? props.name : "";
             const value = "value" in props ? String(props.value ?? "") : "";
@@ -227,6 +263,15 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
   }));
   const allUsage = usageSum(usage);
   const noData = usage.length === 0 && apps.length === 0;
+  const tabs = useMemo((): SegmentedTabItem<StatsTab>[] => {
+    const items: SegmentedTabItem<StatsTab>[] = [
+      { id: "overview", label: "总览", testId: "stats-tab-overview" },
+      { id: "usage", label: "用量", testId: "stats-tab-usage" },
+      { id: "apps", label: "应用分布", testId: "stats-tab-apps" },
+    ];
+    if (sources.length > 0) items.push({ id: "sources", label: "来源", testId: "stats-tab-sources" });
+    return items;
+  }, [sources.length]);
 
   const openSkill = (hash: string): void => {
     onGo({ page: "skills", tab: "content", hash });
@@ -238,27 +283,16 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="shrink-0 border-b border-line px-6 py-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">统计</h1>
-        <p className="mt-1 text-sm text-ink-mid">本机用量与各应用的分布。</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">统计</h1>
+            <p className="mt-1 text-sm text-ink-mid">本机用量与各应用的分布。</p>
+          </div>
+          <SegmentedTabs ariaLabel="统计页签" value={tab} onChange={setTab} items={tabs} />
+        </div>
       </header>
-      <nav className="flex shrink-0 border-b border-line px-4" aria-label="统计页签">
-        <button type="button" data-testid="stats-tab-overview" className={tabTriggerClass(tab === "overview")} onClick={() => setTab("overview")}>
-          总览
-        </button>
-        <button type="button" data-testid="stats-tab-usage" className={tabTriggerClass(tab === "usage")} onClick={() => setTab("usage")}>
-          用量
-        </button>
-        <button type="button" data-testid="stats-tab-apps" className={tabTriggerClass(tab === "apps")} onClick={() => setTab("apps")}>
-          应用分布
-        </button>
-        {sources.length > 0 && (
-          <button type="button" data-testid="stats-tab-sources" className={tabTriggerClass(tab === "sources")} onClick={() => setTab("sources")}>
-            来源
-          </button>
-        )}
-      </nav>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-6 p-6">
+        <div key={tab} className="motion-enter space-y-6 p-6">
           {tab === "overview" && (
             noData ? <Empty onGo={onGo} /> : (
               <div className="grid gap-4 lg:grid-cols-2">
@@ -316,15 +350,15 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
                       {usage.map((row, i) => (
                         <TableRow
                           key={row.hash}
-                          className="cursor-pointer transition-colors duration-[150ms] hover:bg-surface"
+                          className="motion-row cursor-pointer hover:bg-surface"
                           onClick={() => openSkill(row.hash)}
                         >
-                          <TableTd className="text-ink-faint">{String(i + 1)}</TableTd>
+                          <TableTd><RankMark n={i + 1} /></TableTd>
                           <TableTd className="font-medium text-ink-strong">{row.name}</TableTd>
                           <TableTd className="text-right">{String(row.show)}</TableTd>
                           <TableTd className="text-right">{String(row.enable)}</TableTd>
                           <TableTd className="text-right">{String(row.total)}</TableTd>
-                          <TableTd className="text-right">{formatShare(row.total, allUsage)}</TableTd>
+                          <TableTd className="text-right"><MicroBar part={row.total} all={allUsage} /></TableTd>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -356,14 +390,14 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
                       {apps.map((row, i) => (
                         <TableRow
                           key={row.id}
-                          className="cursor-pointer transition-colors duration-[150ms] hover:bg-surface"
+                          className="motion-row cursor-pointer hover:bg-surface"
                           onClick={() => openApp(row.id)}
                         >
-                          <TableTd className="text-ink-faint">{String(i + 1)}</TableTd>
+                          <TableTd><RankMark n={i + 1} /></TableTd>
                           <TableTd className="font-medium text-ink-strong">{row.id}</TableTd>
                           <TableTd className="text-right">{String(row.enabled)}</TableTd>
                           <TableTd className="text-right">{String(row.total)}</TableTd>
-                          <TableTd className="text-right">{formatShare(row.enabled, row.total)}</TableTd>
+                          <TableTd className="text-right"><MicroBar part={row.enabled} all={row.total} /></TableTd>
                         </TableRow>
                       ))}
                     </TableBody>
