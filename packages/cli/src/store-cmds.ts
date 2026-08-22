@@ -26,6 +26,10 @@ import { isSkillsShUrl, SkillsShSourceProvider } from "./skills-sh-source.js";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { performLinkChange } from "./link-actions.js";
+import { resolveNames } from "./resolve-skill.js";
+
+export { resolveNames, resolveSkill } from "./resolve-skill.js";
+export type { ResolveSkillFailure, ResolveSkillResult } from "./resolve-skill.js";
 
 export const POINTER_REL = path.join(".skills-hub", "config.json");
 
@@ -379,18 +383,6 @@ export async function resolveClientSkillsDir(args: LinkCmdArgs): Promise<{ clien
     return null;
   }
   return { clientId: root.clientId, skillsDir: root.skillsDir };
-}
-
-/** 名称解析:dirName 精确,否则哈希前缀(与 show 同口径)。解析失败抛错。 */
-export function resolveNames(needle: string, skills: SkillRecord[]): string[] {
-  const exact = skills.find((s) => s.dirName === needle);
-  if (exact !== undefined) return [exact.dirName];
-  const byHash = skills.filter((s) => s.hash.startsWith(needle.toLowerCase()));
-  if (byHash.length === 1) return [byHash[0]!.dirName];
-  if (byHash.length > 1) {
-    throw new Error("哈希前缀不唯一: " + needle + " 命中 " + byHash.length + " 个,请用完整哈希或目录名。");
-  }
-  throw new Error("库存中没有 " + needle + "(名字或哈希前缀都不匹配)。先 skills-hub list 看有哪些。");
 }
 
 /** 解析操作目标:按名或按分组(二选一,互斥校验)。返回 dirName 列表。 */
