@@ -203,15 +203,23 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 | draft-not-found | new commit / new discard 目标不在 drafts[] 中 |
 | draft-incomplete | new commit 时 SKILL.md 缺 name 或 description |
 | io-error | 文件系统故障 |
+| not-configured | 分析/翻译缺 DEEPSEEK_API_KEY（HTTP 503；CLI `analyze` 当前可能映射为 analyze-failed，对齐见工程债） |
+| github-fetch-failed | adopt 拉 GitHub/skills.sh 失败 |
+| analyze-failed | 分析模型调用失败 |
 
-## 4. ui-server 的 /api/skills(实时扫描视图)
+HTTP 另有文件读取 code：`binary` / `too-large`（422）、`outside`（400），见 [http-api-v0.md](http-api-v0.md) §4。
+
+## 4. ui-server 的 GET /api/skills（库存视图）
+
+与 CLI `list --json` 同形的库存 `SkillRecord`，不是扫描视图：
 
 ```json
-{ "skills": [ { "hash": "...", "name": "...", "description": "...", "clientId": "claude" } ] }
+{ "ok": true, "command": "skills", "storeRoot": "...", "total": 2, "skills": [SkillRecord] }
 ```
 
-- 这是**扫描视图**(现扫现报),不是库存视图:字段名与契约一致,但**不含 origins/visibleIn**——需要来源与可见性请用 `list --json`。
-- `clientId` 表示"这份内容当前在哪个客户端目录发现",与 `origins`(收录来源)是两回事,禁止改名为 `source`。
+- 字段见 §2.2：含 `origins` 与 `visibleIn`，**禁止** `source` / 顶层 `clientId`。
+- 扫描视图（现扫现报、按客户端目录列出）只存在于 CLI `scan --json`，不走 `/api/skills`。
+- HTTP 完整端点表见 [http-api-v0.md](http-api-v0.md)。
 
 ## 5. 测试
 

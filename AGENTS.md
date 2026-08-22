@@ -57,7 +57,7 @@
 ## Project Structure
 
 ```
-packages/core/  确定性内核（纯 TS 库）：类型、四接口抽象、哈希、SKILL.md 解析、客户端目录约定
+packages/core/  确定性内核（纯 TS 库）：类型、函数内核（库存/哈希/链接/归档）、SKILL.md 解析、客户端发现
 packages/cli/   终端入口：scan / ui 等命令 + Hono 本地查看服务（App 壳的数据源）
 apps/web/       人用壳（Vite SPA）：总览 / 统计 / Skills 管理 / 设置；只消费 CLI 的 /api
 docs/           项目内部文档（规范/设计/计划/会议/后置项）
@@ -125,7 +125,7 @@ scripts/        辅助脚本（setup/build/dev）
 - `pnpm-workspace.yaml` — workspace 定义
 - `tsconfig.base.json` — 全仓共享编译选项（strict 全开）
 - `eslint.config.mjs` — 全仓统一 flat config
-- `packages/core/src/interfaces.ts` — 四个接口抽象点（架构规范 §5 的代码落点）
+- `packages/core/src/interfaces.ts` — 换介质时的类型登记（架构规范 §5；当前无 `implements`，运行时是函数内核）
 - `packages/cli/src/index.ts` — CLI 入口
 - `apps/web/vite.config.ts` — Web 壳构建与 `/api` 代理配置
 
@@ -148,7 +148,7 @@ scripts/        辅助脚本（setup/build/dev）
 
 ### docs/plans/ — 计划
 
-- [plan-batches-v1.md](docs/plans/plan-batches-v1.md) — **分批执行计划（当前执行依据）**：批 0–6 已完成；当前从批 7（P0 修复）起
+- [plan-batches-v1.md](docs/plans/plan-batches-v1.md) — **分批执行计划（当前执行依据）**：批 0–15 已合入 `dev`；当前工程债见 #189
 - [plan-first-shippable.md](docs/plans/plan-first-shippable.md) — 第一版工程计划（决策甬道 1–6 落地，里程碑划分已被上文取代，保留作背景）
 
 ### docs/updates/ — 会议与变更
@@ -167,4 +167,4 @@ scripts/        辅助脚本（setup/build/dev）
 - [code-style.md](docs/conventions/code-style.md) — 代码风格（TypeScript、core 纯净性、CLI、React/Tailwind）
 - [code-size-and-organization.md](docs/conventions/code-size-and-organization.md) — 代码长度与文件组织（colocation 原则、拆分判断方法）
 - [code-review.md](docs/conventions/code-review.md) — Code review 检查清单
-- [ui-design-v1.md](docs/conventions/ui-design-v1.md) — UI 设计规范：克制灰阶、统一组件、UX 铁律、反馈动效 150–200ms、Skeleton、侧栏收起/拖宽、统计图/文件树系列色例外、禁用清单（v0 已并入；批 15 修订）
+- [ui-design-v1.md](docs/conventions/ui-design-v1.md) — UI 设计规范：克制灰阶、统一组件、UX 铁律、Skeleton、侧栏收起/拖宽、统计图/文件树系列色例外、禁用清单（v0 已并入；批 15 修订）

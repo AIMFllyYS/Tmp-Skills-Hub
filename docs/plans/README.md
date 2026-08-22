@@ -12,7 +12,8 @@
 
 ## 现有文档
 
-- [plan-first-shippable.md](./plan-first-shippable.md) — 第一版工程计划（决策甬道 1–6 落地）
+- [plan-batches-v1.md](./plan-batches-v1.md) — **现行分批执行计划**（批 0–15 已合入；当前工程债 #189）
+- [plan-first-shippable.md](./plan-first-shippable.md) — 第一版工程计划（决策甬道 1–6 落地；里程碑划分已被上文取代，保留作背景）
 
 ## 文件命名
 

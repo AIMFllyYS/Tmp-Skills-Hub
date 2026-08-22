@@ -33,7 +33,7 @@
 
 一批 = 一个父 issue + 一群 sub-issue = 一个分支族。按 [issue-to-pr](../../AGENTS.md) 规范，**每个 sub-issue 单独出一个 PR**，PR 打向 `dev`，正文末尾唯一一条 `Closes #N`。
 
-> 批 0–6 已于 2026-08-16 完成（43 个 issue 全关）。批 7–13 已合入 `dev`。当前执行从批 14（人用壳交互）起。设计依据：[panel-ia-v1.md](../designs/panel-ia-v1.md)、[app-shell-v2.md](../designs/app-shell-v2.md)、[ui-design-v1.md](../conventions/ui-design-v1.md)。
+> 批 0–6 已于 2026-08-16 完成（43 个 issue 全关）。批 7–15 已合入 `dev`（批 14 = #187，批 15 = #188）。当前执行是工程债收口 [\#189](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/189)（规范与代码对齐、去掉已废弃 IA、统一解析与编排）。设计依据：[panel-ia-v1.md](../designs/panel-ia-v1.md)、[app-shell-v2.md](../designs/app-shell-v2.md)、[ui-design-v1.md](../conventions/ui-design-v1.md)。
 
 ## 各批内容与验收
 

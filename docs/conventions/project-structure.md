@@ -10,26 +10,37 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 ```
 .
 ├── packages/
-│   ├── core/                       # 应用逻辑层:确定性内核
+│   ├── core/                       # 确定性内核（纯 TS，零框架依赖）
 │   │   └── src/
-│   │       ├── types.ts            # 资产模型(SkillMeta / SkillRecord / …)
-│   │       ├── interfaces.ts       # 四个接口抽象点(架构规范 §5)
+│   │       ├── types.ts            # 资产模型（SkillMeta / SkillRecord / …）
+│   │       ├── interfaces.ts       # 换介质时的类型登记（无 implements；见架构 §5）
 │   │       ├── hash.ts             # 文件夹内容哈希
 │   │       ├── skill-md.ts         # SKILL.md 通用层解析
-│   │       ├── clients.ts          # 各客户端目录约定
+│   │       ├── clients.ts          # 按目录形状发现客户端 root
+│   │       ├── store.ts            # 库存 index + 收录
+│   │       ├── store-layout.ts     # 目录布局
+│   │       ├── store-location.ts   # 指针 / 库存根解析
+│   │       ├── create.ts           # 创建：占位 / 定稿 / 丢弃
+│   │       ├── links.ts / link-switch.ts / link-status.ts / link-probe.ts
+│   │       ├── archive.ts / zip.ts
+│   │       ├── backup.ts / backup-restore.ts
+│   │       ├── groups.ts / stats.ts / skill-files.ts / migrate.ts
 │   │       └── index.ts            # 唯一公共出口
-│   └── cli/                        # 终端外衣
+│   └── cli/                        # 终端外衣 + 本地 HTTP
 │       └── src/
-│           ├── index.ts            # citty 入口,只做命令注册与参数解析
-│           ├── scan.ts             # 命令实现(编排 core 的能力)
-│           └── ui-server.ts        # Hono 本地查看服务(App 壳的数据源)
+│           ├── index.ts            # citty 入口，只做命令注册与参数解析
+│           ├── store-cmds.ts / link-actions.ts / group-cmds.ts / create-cmds.ts
+│           ├── scan.ts / bootstrap.ts / backup-cmds.ts / reset-cmds.ts
+│           ├── github-source.ts / skills-sh-source.ts / share.ts
+│           ├── analyze.ts / deepseek.ts / doctor.ts
+│           └── ui-server.ts        # Hono 本地查看服务（App 壳的数据源）
 ├── apps/
-│   └── web/                        # 人用壳(Vite + React SPA:总览/统计/Skills；设置走 Dialog)
+│   └── web/                        # 人用壳（Vite + React SPA:总览/统计/Skills；设置走 Dialog）
 │       └── src/
 │           ├── main.tsx
 │           ├── App.tsx
 │           ├── components/ui/      # 跨页控件（button / dialog / chart / table…）
-│           └── features/           # 按领域聚合(见第三节)
+│           └── features/           # 按领域聚合（shell / skills / actions；见第三节）
 ├── docs/                           # designs / plans / conventions / updates / issues / specs / audits / ops
 ├── scripts/                        # setup / build / dev 辅助脚本
 ├── pnpm-workspace.yaml
@@ -37,6 +48,8 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 ├── tsconfig.json                   # 根 project references(core, cli)
 └── eslint.config.mjs               # 全仓统一 flat config
 ```
+
+上表列的是**领域模块**，不是「每个新文件都必须出现在这份树里」。放置仍走第三节决策树。
 
 ## 二、分层与依赖方向（硬规则）
 
@@ -68,6 +81,7 @@ core 的能力（扫描、哈希、symlink）依赖本机文件系统，浏览�
 ├─ 只在 Web 壳的一个页面/领域内使用
 │   └─ apps/web/src/features/<domain>/(组件、hooks、类型放一起)
 │      ※ 单处使用的组件不要提前抽到共享目录
+│      ※ 人用 IA 是 shell（总览/统计/Skills）+ skills；不要往已退役的三栏 panel IA 加新代码
 │
 ├─ Web 壳跨领域复用的纯展示组件
 │   └─ apps/web/src/components/

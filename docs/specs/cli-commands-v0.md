@@ -23,7 +23,7 @@
 > - 想让日常命令免带参数：`init` 不带 `--home`（交互输入库存根，指针落在真实 home），或先 `$env:SKILLS_HUB_HOME="<X>"` 再 `init --yes`。
 | `scan` | 只读发现各客户端目录里的 skill，不入库 | 人 / AI |
 | `adopt <来源>` | 收录进库存。来源 = 本地路径 / GitHub 链接 / skills.sh 链接 | 人 / AI |
-| `list` | 列库存，可按分组、来源、启用状态过滤 | 人 / AI / 面板 |
+| `list` | 列库存。已实现：`--source`、`--enabled`。**`--group` 未实现**，分组过滤走 `group` 命令与面板，不要把文档当已交付 | 人 / AI / 面板 |
 | `show <name>` | 看单个 skill 的元信息与 description | AI / 面板 |
 | `enable <name...>` | 建立链接，让指定 skill 对客户端可见 | AI / 面板 |
 | `disable <name...>` | 移除链接，让 skill 对客户端不可见（原件保留） | AI / 面板 |
@@ -40,7 +40,7 @@
 | `share <name>` | 把库存 skill 推到授信仓库 `skills/<name>/`，返回可被 `adopt` 再拉回的 GitHub tree 链接 | 人 / 面板 |
 | `ui` | 起本地服务与面板 | 人 |
 | `new <name>` | 在库存内分配目录、写模板（`drafts[]` 占名）。内容留给 AI 或人后续填写。**库存内写操作，不要求 `--yes`**（见 §2.1 授权分级） | AI |
-| `new commit <name>` | 校验 `SKILL.md` 达标后定稿：算哈希、从 `drafts[]` 移入 `skills[]`。同样不要求 `--yes`，除非带 `--enable` 挂链 | AI / 面板 |
+| `new commit <name>` | 校验 `SKILL.md` 达标后定稿：算哈希、从 `drafts[]` 移入 `skills[]`。不要求 `--yes`。**`--enable` 未实现**（§2.1 表格是授权分级草案，不是已交付参数）；挂链走独立的 `enable` 或面板 | AI / 面板 |
 | `new discard <name>` | 放弃草稿：目录移入 `archive/drafts/`，从 `drafts[]` 清除。不引入真删除——半成品原样保留 | AI |
 | `new list` | 列出当前草稿（`drafts[]`），只读 | AI / 面板 |
 | `bootstrap` | 一键体验：交互确认（库存位置/备份/迁移）→ 自动备份 → 收录全部本机 skills → 收录并启用自身 skill → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
@@ -61,7 +61,7 @@
 |---|---|---|
 | `new`（库存内开目录、写模板） | 只碰库存 `skills/` 与 `index.json`，不碰用户任何客户端目录 | **否** |
 | `new commit`（定稿入清单） | 同上 | **否** |
-| `new commit --enable <client>`（定稿后挂链回客户端） | 碰用户客户端目录 | **是**，沿用 `requireWriteAuth` |
+| `new commit --enable <client>`（**未实现**；定稿后挂链回客户端） | 碰用户客户端目录 | 若将来交付：**是**，沿用 `requireWriteAuth` |
 | `new discard`（移入归档区） | 只碰库存 | **否** |
 
 分级只对 `new` 系列生效，不回头改 `adopt` 等既有命令的授权强度，避免行为回归。面板调用 HTTP 端点时无需额外确认（面板按钮即用户显式操作，与现有写端点一致）。
@@ -83,7 +83,7 @@
 
 所有 skill 的真身都在库存里，客户端目录下只有链接。**skill 对 AI 是否可见，由链接集合决定**。于是流程是：
 
-1. AI 用 `list --json` 或 `list --group design --json` 看有哪些 skill、各自的 description
+1. AI 用 `list --json` 看有哪些 skill、各自的 description（按分组请先 `group list`，不要调用未实现的 `list --group`）
 2. AI 判断本次任务需要哪些
 3. AI 执行 `enable <name...>`，对应 skill 被链接进客户端目录
 4. 客户端随即发现并可调用
