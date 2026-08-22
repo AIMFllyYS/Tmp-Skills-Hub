@@ -1,8 +1,8 @@
 # 项目架构初始规范
 
 > Created: 2026-08-16
-> Updated: 2026-08-16
-> Status: review（待团队过一遍后转 accepted）
+> Updated: 2026-08-22
+> Status: accepted
 > Source: [第一次同步会：原文与全景路线图](../updates/meeting-2026-08-15-first-sync.md)
 > 定位: 本文是 skill-hub 在**宏观架构层面的最高约束**。后续所有 specs/、designs/、issue 拆解不得与本文冲突；要推翻本文结论，必须先按第 1 章的方法重新走一遍决策，并更新本文。
 
@@ -123,18 +123,22 @@
 
 ## 5. 接口抽象点（走到这里停下，把接口抽出来）
 
-会上的原则：可能会走到某一步，所以**先把接口抽象了**，但不实现。第一版必须按接口写、按最简单实现落地：
+会上的原则：可能会走到某一步，所以**先把接口抽象了**，但不实现。这些是**换介质 / 换来源时才落地的登记**，不是当前运行时合同。
 
-| 接口 | 第一版实现 | 已预见的未来实现（只登记，不做） |
-|---|---|---|
-| **存储介质接口**（存取 skill 文件夹、哈希索引） | 文件系统目录 | 1000+ 时换数据库/其他介质 |
-| **收录来源接口**（一个来源 → 一个标准化的 skill 文件夹） | 本地目录扫描；GitHub 链接 | 浏览器插件（十秒收录）、Agent 对话代存、市场页面 |
-| **客户端适配接口**（统一库 → 某个 Agent 的目录约定） | Claude、Codex/`.agents`（通用层 + symlink） | 各家 YAML 精致适配、更多客户端 |
-| **身份接入接口**（谁在写共享仓库） | 授信成员名单（全员授信） | 账号系统 / 统一登录；接入必须**幂等**，不假设能直接复用上一项目的登录 |
+**当前第一版是函数内核**，不要按 `implements StorageProvider` 一类对象模型写新代码：
+
+| 能力 | 当前运行时缝（以此为准） | `interfaces.ts` 类型 | 已预见的未来（只登记，不做） |
+|---|---|---|---|
+| **存储** | `adoptSkillFolder` / `readStoreIndex` / `archiveSkill` / `allocateDraft` / `commitDraft` / `discardDraft`（文件系统目录） | `StorageProvider`：**无实现**。其 `add`/`archive` 签名已与函数内核不一致，不得当施工合同 | 1000+ 时换数据库或其他介质 |
+| **收录来源** | 本地扫描 = `scan` + `adopt`；GitHub / skills.sh = CLI 上鸭子类型的 `canHandle`/`fetch`（网络留在 cli） | `SourceProvider`：仅 GitHub 收录类形状相近，**没有 `implements`** | 浏览器插件、Agent 对话代存、市场页面 |
+| **客户端** | 按目录形状发现 `discoverClientRoots` + 集合切换 `applyLinkSet`（不维护品牌名单，不按单条 `link/unlink`） | `ClientAdapter`：**无实现**，且是 #21 之前的单条挂链模型，与现行原子集合切换冲突。禁止按它写新代码 | 各家 YAML 精致适配 |
+| **身份** | 分享推送读 `GITHUB_TOKEN`；无授信对象、无 `canWrite()` | `IdentityProvider`：**无实现**。D 块账号系统到来之前不要补一层恒真包装 | 账号 / 统一登录；接入必须**幂等** |
 
 兼容性要求：在我们提供收录入口之前，用户已经在用「对 Agent 说」和「手动 clone」。新入口**兼容**这些路径，不拦截、不接管。
 
-> **§5 修订记录（2026-08-19，#169）**：创建操作不引入第五个接口。`allocate`（占位）和 `commit`（定稿）补在**存储介质接口**上——创建的产出仍是库存中的一条记录，形态相同、介质相同。新开第五个接口会让「收录来源」与「创建来源」长期打架。创建不走 `SourceProvider` 是因为它没有 input 可以 fetch。
+> **§5 修订记录（2026-08-19，#169）**：创建操作不引入第五个接口。`allocate`（占位）和 `commit`（定稿）落在存储函数上——创建的产出仍是库存中的一条记录，形态相同、介质相同。新开第五个接口会让「收录来源」与「创建来源」长期打架。创建不走来源 `fetch` 是因为它没有 input 可以拉取。
+>
+> **§5 修订记录（2026-08-22，#192）**：第一版并未按四个接口对象落地。真实缝是上表「当前运行时缝」。类型文件保留作未来换实现时的登记，施工以函数内核为准。状态由 `review` 转为 `accepted`。
 
 ---
 
@@ -166,7 +170,7 @@
 ## 8. 与其他文档的关系
 
 - 「对谁 / 管什么 / 甬道 1–6」的全景路线图与会议原文：[meeting-2026-08-15-first-sync.md](../updates/meeting-2026-08-15-first-sync.md)
-- 第一版工程计划（范围与顺序）：[plan-first-shippable.md](../plans/plan-first-shippable.md)
+- 现行分批计划：[plan-batches-v1.md](../plans/plan-batches-v1.md)（取代 [plan-first-shippable.md](../plans/plan-first-shippable.md) 的里程碑划分）
 - 后置项登记：[backlog-from-first-sync.md](../issues/backlog-from-first-sync.md)
 
 本文与上述文档冲突时，**以本文为准**；修订本文需重走第 1 章方法论。

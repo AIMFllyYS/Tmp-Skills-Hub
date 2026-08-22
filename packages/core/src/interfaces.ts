@@ -1,14 +1,16 @@
 /**
- * 四个接口抽象点:与 docs/designs/architecture-initial-spec.md 第 5 章一一对应。
- * 原则:走到可以停的地方停下来,把接口先抽象出来;第一版只做最简实现。
+ * 换介质 / 换来源时的类型登记(架构规范 §5)。
+ * 当前运行时是函数内核,全仓没有任何 implements。
+ * 不要按这些对象写新代码;存储走 adopt/allocate/commit/archive,
+ * 客户端走 discoverClientRoots + applyLinkSet,来源网络留在 cli。
  */
 
 import type { LinkScope, SkillHash, SkillRecord, SkillSource } from "./types.js";
 import type { DraftRecord } from "./store.js";
 
 /**
- * 存储介质接口。第一版实现:文件系统目录。
- * 未来(只登记不做):1000+ skill 时换数据库或其他介质。
+ * 存储介质——未来换实现时的形状草稿,不是现行合同。
+ * 现行函数:readStoreIndex / adoptSkillFolder / archiveSkill / allocateDraft / commitDraft。
  */
 export interface StorageProvider {
   /** 列出库存中的全部 skill 记录。 */
@@ -34,9 +36,8 @@ export interface StorageProvider {
 }
 
 /**
- * 收录来源接口:一个来源 → 一个标准化的 skill 文件夹(落在临时目录)。
- * 第一版实现:本地目录扫描、GitHub 链接。
- * 未来(只登记不做):浏览器插件、Agent 对话代存、市场页面。
+ * 收录来源——未来换实现时的形状草稿。
+ * 现行:本地扫描走 scan+adopt;GitHub/skills.sh 在 cli 里鸭子类型 canHandle/fetch。
  */
 export interface SourceProvider {
   /** 该来源能否处理这个输入(路径 / URL / 其他)。 */
@@ -46,9 +47,8 @@ export interface SourceProvider {
 }
 
 /**
- * 客户端适配接口:统一库 → 某个 Agent 的目录约定。
- * 第一版实现:Claude、Codex/.agents、Cursor(通用层 + symlink)。
- * 未来(只登记不做):各家 YAML 精致适配、更多客户端。
+ * 按品牌单条挂链的旧模型,与现行 applyLinkSet 冲突。无实现。不要按它写代码。
+ * 现行:discoverClientRoots(按目录形状) + applyLinkSet(集合切换)。
  */
 export interface ClientAdapter {
   /** 客户端标识,如 "claude" | "codex" | "cursor"。 */
@@ -62,9 +62,7 @@ export interface ClientAdapter {
 }
 
 /**
- * 身份接入接口:谁在写共享仓库。
- * 第一版实现:授信成员名单(全员授信)。
- * 未来(只登记不做):账号系统 / 统一登录;接入必须幂等。
+ * 身份接入——D 块账号到来之前不要实现。现行分享只读 GITHUB_TOKEN。
  */
 export interface IdentityProvider {
   /** 当前用户是否可写共享仓库。第一版恒真(全员授信)。 */

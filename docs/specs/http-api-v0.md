@@ -2,6 +2,7 @@
 
 > 状态:生效 | 适用范围:packages/cli/src/ui-server.ts ↔ apps/web | 对应 issue:#31
 > 信封、错误 code 与 SkillRecord 字段一律复用 [json-contract-v0.md](json-contract-v0.md),不重复发明。
+> **#192 修订（2026-08-22）**：字段名与状态码以 `ui-server.ts` + `http-api.test.ts` + web `types.ts` 为准回写；不再保留已废弃的 `files` / `translated` / raw PUT body。`:hash` 匹配的实现漂移见 #190，本契约仍以 CLI `resolveNames`（dirName 精确，否则唯一哈希前缀）为口径。
 
 ## 1. 基础
 
@@ -25,11 +26,11 @@
 | GET /api/skills/:hash/links | { ok, command: "skill-links", hash, links: { clientId, state, detail }[] }(检查器客户端页,按需拉取) | 404 not-found;503 |
 | GET /api/clients/:clientId/skill-states | { ok, command: "client-skill-states", clientId, skillsDir, enabled, total, rows: { hash, state, detail }[] }(客户端视角全集行状态) | 404 not-found;503 |
 | GET /api/verify | { ok, command: "verify", storeRoot, checked, passed, drifted, missing }(只读;CLI --json 的 ok 数组在此改名为 passed,避开信封 ok) | 503 |
-| GET /api/doctor | { ok, command: "doctor", store, roots, linkTypes, danglingLinks }(与 CLI --json 同形) | 503 store-not-configured |
+| GET /api/doctor | { ok, command: "doctor", store, roots, linkTypes, danglingLinks } | 503 store-not-configured（HTTP 与 CLI 不同：CLI `doctor --json` 在库存未配置时仍 `ok:true`，用 `store.resolved` 表达；HTTP 走 withStore → 503） |
 | GET /api/backups | { ok, command: "backup", verb: "list", storeRoot, latest, snapshots }(与 CLI backup list --json 同形) | 503 |
-| GET /api/drafts | { ok, command: "drafts", drafts: DraftRecord[] }(当前草稿列表) | 503 |
-| GET /api/skills/:hash/tree | { ok, command: "skill-tree", hash, files: SkillFileEntry[] }(文件树) | 404 not-found;503 |
-| GET /api/skills/:hash/file?path= | { ok, command: "skill-file", hash, path, content, binary }(单文件内容) | 400 bad-usage;404;413;503 |
+| GET /api/drafts | { ok, command: "drafts", drafts: DraftRecord[] }（无 verb；与 CLI `new list` 的 `command:"new"` 不同） | 503 |
+| GET /api/skills/:hash/tree | { ok, command: "skill-tree", dirName, entries: SkillFileEntry[], truncated } | 404 not-found;503 |
+| GET /api/skills/:hash/file?path= | { ok, command: "skill-file", dirName, path, content, sizeBytes } | 400 bad-usage（缺 path / outside）;404;422 binary\|too-large;503 |
 
 ### SkillRecord(与 json-contract §2 同定义)
 
@@ -58,11 +59,11 @@
 | POST /api/skills/:hash/archive | —(无 body) | { ok, command: "archive", dirName, archiveFile, sizeBytes, removedLinks } | 404 not-found;409(归档失败);503 |
 | POST /api/skills/:hash/restore | —(无 body;:hash 为归档名) | { ok, command: "restore", dirName, hash, archiveFile } | 404 not-found;409 conflict;500;503 |
 | POST /api/adopt | { source }(本地路径或 GitHub / skills.sh URL) | { ok, command: "adopt", adopted, duplicates, conflicts, invalid, outcomes } | 400 bad-usage;502 github-fetch-failed;503 |
-| POST /api/drafts | { dirName, description? }(面板一步到位:allocate + commit) | { ok, command: "new", verb: "create", dirName, hash, storeDir } | 400 bad-usage;409 draft-exists;503 |
-| POST /api/drafts/:dirName/commit | —(无 body) | { ok, command: "new", verb: "commit", dirName, hash } | 404 draft-not-found;400 draft-incomplete;409 conflict;503 |
-| POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 404 draft-not-found;503 |
-| PUT /api/skills/:hash/file?path= | raw body(文件内容) | { ok, command: "skill-save", hash, path, newHash } | 400 bad-usage;404;413;503 |
-| POST /api/translate | { text, from?, to? } | { ok, command: "translate", translated } | 400;502 |
+| POST /api/drafts | { dirName, description? } | description 非空：allocate+commit，`{ ok, command: "new", verb: "create", dirName, hash, storeDir }`；description 空：只 allocate，无 hash | 400 bad-usage;409 draft-exists;503 |
+| POST /api/drafts/:dirName/commit | —(无 body) | { ok, command: "new", verb: "commit", dirName, hash } | 实现里草稿不存在走 `not-found`(404)，SKILL.md 不达标走 `bad-usage`(400)；与 CLI `draft-not-found` / `draft-incomplete` 的对齐见 #193 |
+| POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 实现里不存在走 `not-found`(404)；对齐见 #193 |
+| PUT /api/skills/:hash/file?path= | JSON `{ content: string }` | { ok, command: "skill-file-save", dirName, path, hash }（`hash` 为写回后的新内容哈希） | 400 bad-usage（缺 path / 缺 content / outside）;404;422 too-large;503 |
+| POST /api/translate | { text } | { ok, command: "translate", text }（译文在 `text`，没有 `translated`；不读 from/to） | 400;503 not-configured;502 |
 | POST /api/groups | { id, name?, description? } | { ok, command: "group", verb: "create", id, name, description } | 400 bad-usage;409 group-exists;503 |
 | PATCH /api/groups/:id | { name?, description? }(至少一项) | { ok, command: "group", verb: "rename", id, name, description } | 400;404 group-not-found;503 |
 | DELETE /api/groups/:id | — | { ok, command: "group", verb: "delete", id, memberCount }(只删分组定义,不删 skill) | 404 group-not-found;503 |
@@ -72,7 +73,8 @@
 | POST /api/backups/preview | { snapshotId? } | { ok, command: "backups-preview", snapshotId, dryRun: true, clients, skills, files, links, wouldRestore, skippedOwnDirs, asideStore, asidePointer }(不写盘) | 400;404 not-found;409 verify-failed;503 |
 | POST /api/reset | { snapshotId?, confirm: "reset" } | { ok, command: "reset", storeRoot, snapshotId, asideStore, asidePointer, adopted }(本请求内跑完还原,与 CLI `reset --json` 同形) | 400 bad-usage(缺确认短语);404;409 verify-failed\|restore-failed;500 io-error;503 |
 
-- `:hash` 匹配规则与 CLI 的 resolveNames 同口径:dirName 精确,否则哈希前缀
+- `:hash` **口径**与 CLI `resolveNames` 相同:dirName 精确,否则唯一哈希前缀。实现漂移（部分 GET 哈希前缀优先且不检查唯一）见 #190，修齐前不得把漂移写成新契约
+- `SkillFileEntry`:`{ path, kind: "file"|"dir", sizeBytes }`
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
 - 写操作复用 link-actions.ts 的 performLinkChange/archiveSkill(与 CLI enable/disable/archive 同一实现,行为不漂移)
 - unregistered-conflict(落点被用户目录占据)与 not-link-conflict 以 409 + link-failed 返回,message 给出人工处理指引,绝不覆盖
@@ -99,6 +101,9 @@
 | draft-exists | 409 |
 | draft-not-found | 404 |
 | draft-incomplete | 400 |
+| binary | 422 |
+| too-large | 422 |
+| outside | 400 |
 
 > 注:auth-required / group-empty / invalid-skill 是 CLI 专属 code(交互授权、按空组 enable)。分组写操作走 HTTP,code 与 CLI 同口径。
 
