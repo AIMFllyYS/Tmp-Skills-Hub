@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { SkillRow, type SkillRowClientView } from "../skills/SkillRow.js";
-import type { SkillRecord } from "../skills/types.js";
+import { SkillRow, type SkillRowClientView } from "./SkillRow.js";
+import type { SkillRecord } from "./types.js";
 import { ensureRowVisible, stepIndex, virtualWindow } from "./virtual-window.js";
 
 interface VirtualSkillListProps {

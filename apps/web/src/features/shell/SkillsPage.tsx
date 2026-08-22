@@ -8,11 +8,11 @@ import { tabTriggerClass } from "@/components/ui/tabs";
 import { TruncateTip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getAction } from "../actions/registry.js";
-import { AdoptForm } from "../panel/AdoptForm.js";
-import { CreateForm } from "../panel/CreateForm.js";
-import { fallbackClientState } from "../panel/client-view.js";
-import { VirtualSkillList } from "../panel/VirtualSkillList.js";
+import { AdoptForm } from "../skills/AdoptForm.js";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
+import { CreateForm } from "../skills/CreateForm.js";
+import { fallbackClientState } from "../skills/client-view.js";
+import { VirtualSkillList } from "../skills/VirtualSkillList.js";
 import { formatBatchResult } from "../skills/batch-links.js";
 import { ALL_GROUP, applyFilters } from "../skills/filters.js";
 import { GroupManager } from "../skills/GroupManager.js";
@@ -38,12 +38,10 @@ interface SkillsPageProps {
   onSelectClient: (id: string) => void;
   onToggle: (skill: SkillRecord, clientId: string, enable: boolean) => void;
   onSaved: (oldHash: string, newHash: string) => void;
-  onAdopted: () => void;
+  onRefresh: () => void;
   onRestore: (name: string) => void;
   onArchive: (hash: string) => void;
-  onGroupsChanged: () => void;
   onNotice: (text: string) => void;
-  onBulkDone: () => void;
 }
 
 /** Skills 管理:应用 / 内容两个全幅 tab。 */
@@ -62,12 +60,10 @@ export function SkillsPage({
   onSelectClient,
   onToggle,
   onSaved,
-  onAdopted,
+  onRefresh,
   onRestore,
   onArchive,
-  onGroupsChanged,
   onNotice,
-  onBulkDone,
 }: SkillsPageProps): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [groupId, setGroupId] = useState(ALL_GROUP);
@@ -135,7 +131,7 @@ export function SkillsPage({
       });
       setConfirm(null);
       onNotice(formatBatchResult(confirm.action, result.created.length, result.removed.length, result.skipped));
-      onBulkDone();
+      onRefresh();
     } catch (e) {
       onNotice(e instanceof Error ? e.message : String(e));
     } finally {
@@ -274,9 +270,9 @@ export function SkillsPage({
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </NativeSelect>
-            <GroupManager groups={groups} onChanged={onGroupsChanged} onNotice={onNotice} />
-            <AdoptForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
-            <CreateForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
+            <GroupManager groups={groups} onChanged={onRefresh} onNotice={onNotice} />
+            <AdoptForm clientIds={allClientIds} onDone={onRefresh} onNotice={onNotice} />
+            <CreateForm clientIds={allClientIds} onDone={onRefresh} onNotice={onNotice} />
           </div>
           <div className="flex min-h-0 flex-1">
             <div className="flex w-64 shrink-0 flex-col border-r border-line">
@@ -292,8 +288,8 @@ export function SkillsPage({
                 <div className="flex flex-col items-start gap-3 px-6 py-6">
                   <p className="text-sm text-ink-mid">从左侧选一个 skill 查看内容。</p>
                   <div className="flex flex-wrap gap-2">
-                    <AdoptForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
-                    <CreateForm clientIds={allClientIds} onDone={onAdopted} onNotice={onNotice} />
+                    <AdoptForm clientIds={allClientIds} onDone={onRefresh} onNotice={onNotice} />
+                    <CreateForm clientIds={allClientIds} onDone={onRefresh} onNotice={onNotice} />
                   </div>
                 </div>
               ) : (
@@ -307,7 +303,7 @@ export function SkillsPage({
                         skill={focused}
                         groups={groups}
                         onArchive={onArchive}
-                        onGroupsChanged={onGroupsChanged}
+                        onGroupsChanged={onRefresh}
                         onNotice={onNotice}
                       />
                     }
