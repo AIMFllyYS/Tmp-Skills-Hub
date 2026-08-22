@@ -1,5 +1,7 @@
 # DeepSeek 集成(v0)——调用封装与密钥管理
 
+> 状态:已废止 —— 被 [ai-integration-v1.md](ai-integration-v1.md) 取代(供应商切换为七牛云)。正文保留作历史记录。
+
 > 状态:已实现(#42)。依据 DeepSeek 官方文档(2026-08 查证),来源:
 > - Chat Completions API: https://api-docs.deepseek.com/api/create-chat-completion/
 > - 快速开始(curl 示例): https://api-docs.deepseek.com/

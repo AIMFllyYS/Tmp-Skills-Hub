@@ -29,6 +29,7 @@
 | GET /api/doctor | { ok, command: "doctor", store, roots, linkTypes, danglingLinks } | 503 store-not-configured（HTTP 与 CLI 不同：CLI `doctor --json` 在库存未配置时仍 `ok:true`，用 `store.resolved` 表达；HTTP 走 withStore → 503） |
 | GET /api/backups | { ok, command: "backup", verb: "list", storeRoot, latest, snapshots }(与 CLI backup list --json 同形) | 503 |
 | GET /api/drafts | { ok, command: "drafts", drafts: DraftRecord[] }（无 verb；与 CLI `new list` 的 `command:"new"` 不同） | 503 |
+| GET /api/agent/models | { ok, command: "agent-models", defaultModel, models: { id, label, note }[] }（Agent 模型白名单，见 agent-v0.md §7） | — |
 | GET /api/skills/:hash/tree | { ok, command: "skill-tree", dirName, entries: SkillFileEntry[], truncated } | 404 not-found;503 |
 | GET /api/skills/:hash/file?path= | { ok, command: "skill-file", dirName, path, content, sizeBytes } | 400 bad-usage（缺 path / outside）;404;422 binary\|too-large;503 |
 
@@ -63,7 +64,8 @@
 | POST /api/drafts/:dirName/commit | —(无 body) | { ok, command: "new", verb: "commit", dirName, hash } | 404 draft-not-found;400 draft-incomplete;409 draft-exists;503（#193：与 CLI `new commit` 同 code） |
 | POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 404 draft-not-found;503（#193：与 CLI `new discard` 同 code） |
 | PUT /api/skills/:hash/file?path= | JSON `{ content: string }` | { ok, command: "skill-file-save", dirName, path, hash }（`hash` 为写回后的新内容哈希） | 400 bad-usage（缺 path / 缺 content / outside）;404;422 too-large;503 |
-| POST /api/translate | { text } | { ok, command: "translate", text }（译文在 `text`，没有 `translated`；不读 from/to） | 400;503 not-configured;502 |
+| POST /api/translate | { text } | **SSE 流**（`text/event-stream`，事件契约见 [agent-v0.md](agent-v0.md) §4：delta/done/error） | 进流前：400 bad-usage JSON 信封 |
+| POST /api/agent/chat | { messages: WireMessage[], model? }（WireMessage 见 agent-v0.md §5） | **SSE 流**（delta/tool_call/tool_result/done/error，契约见 agent-v0.md §4；done 携带全量 messages） | 400 bad-usage（缺 messages / 含 system role） |
 | POST /api/groups | { id, name?, description? } | { ok, command: "group", verb: "create", id, name, description } | 400 bad-usage;409 group-exists;503 |
 | PATCH /api/groups/:id | { name?, description? }(至少一项) | { ok, command: "group", verb: "rename", id, name, description } | 400;404 group-not-found;503 |
 | DELETE /api/groups/:id | — | { ok, command: "group", verb: "delete", id, memberCount }(只删分组定义,不删 skill) | 404 group-not-found;503 |
@@ -78,6 +80,7 @@
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
 - 写操作复用同一套 perform*:链接 `performLinkChange` / `previewLinkChange`,分组 `performCreateGroup` / `performUpdateGroup` / `performDeleteGroup` / `performGroupMembers`,草稿 `performAllocate` / `performCreate` / `performCommit` / `performDiscard`(与 CLI 同一实现,行为不漂移)
 - unregistered-conflict(落点被用户目录占据)与 not-link-conflict 以 409 + link-failed 返回,message 给出人工处理指引,绝不覆盖
+- `/api/translate` 与 `/api/agent/chat` 的 SSE 流式响应不受 withStore 守卫;库存未配置时 Agent 仍可对话(工具返回可读文本)
 
 ## 4. HTTP 状态码映射
 
