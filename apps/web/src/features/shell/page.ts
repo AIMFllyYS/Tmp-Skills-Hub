@@ -1,4 +1,4 @@
-export type AppPage = "overview" | "stats" | "skills";
+export type AppPage = "overview" | "stats" | "skills" | "agent";
 export type SkillsTab = "apps" | "content";
 export type StatsTab = "overview" | "usage" | "apps" | "sources";
 

@@ -1,4 +1,4 @@
-import { BarChart3, Blocks, LayoutDashboard, PanelLeft, PanelLeftClose, Settings } from "lucide-react";
+import { BarChart3, Blocks, Bot, LayoutDashboard, PanelLeft, PanelLeftClose, Settings } from "lucide-react";
 import type { CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -11,6 +11,7 @@ const NAV: { id: AppPage; label: string; testId: string; icon: typeof LayoutDash
   { id: "overview", label: "总览", testId: "nav-overview", icon: LayoutDashboard },
   { id: "stats", label: "统计", testId: "nav-stats", icon: BarChart3 },
   { id: "skills", label: "Skills 管理", testId: "nav-skills", icon: Blocks },
+  { id: "agent", label: "Agent", testId: "nav-agent", icon: Bot },
 ];
 
 /** 图标列固定 48px；文案在第二列。收起只裁切第二列，图标中心始终在 24px。 */

@@ -6,6 +6,7 @@ import { PageSkeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { cn } from "@/lib/utils";
+import { AgentPage } from "./features/agent/AgentPage.js";
 import { OverviewPage } from "./features/shell/OverviewPage.js";
 import { SettingsDialog } from "./features/shell/SettingsDialog.js";
 import { Sidebar } from "./features/shell/Sidebar.js";
@@ -206,6 +207,7 @@ export default function App() {
                     onNotice={(text) => toast(text)}
                   />
                 )}
+                {page === "agent" && <AgentPage />}
               </div>
             )}
           </main>
