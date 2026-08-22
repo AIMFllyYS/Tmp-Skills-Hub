@@ -40,12 +40,21 @@
 ├── archive/          # 软删除归档，<name>-<ISO时间戳>.zip
 │   ├── versions/      # 编辑写回前的旧内容快照（<name>-<ISO>/<relPath>，版本历史）
 │   └── drafts/        # 被 discard 的草稿（<name>-<ISO时间戳>/，原样保留不 zip，不算真删除）
+├── translations/     # 译文缓存（#208）：<skillHash>/<relPath>，派生产物，不入 skill 内容
 └── tmp/              # 原子操作暂存，操作结束即清空
 ```
 
 ### 2.1 编辑写回的版本历史（#37）
 
 面板保存编辑时，改动前的旧文件副本先落入 `archive/versions/<name>-<ISO时间戳>/<relPath>`（原子写），再原子写回原件并更新 `index.json` 的哈希。回滚 = 从 versions 取回。与软删除归档（zip）并存：软删除收拢整份 skill，版本快照只留被改动的文件。
+
+### 2.1.1 译文缓存（#208）
+
+翻译是派生产物，一律存 `translations/<skillHash>/<relPath>`，**绝不写回 `skills/<name>/` 原件**——写回会改内容哈希并经链接泄漏给客户端。铁律：
+
+- 键是记录哈希（index.json）：编辑写回/verify 更新哈希后，旧译文自然失效（孤儿清理另行立项）
+- 哈希目录名只认十六进制，relPath 复用 skill-files 的同款防穿越口径（越界即拒绝）
+- 备份内核只走客户端 skillsDir，不快照本目录；客户端发现排除本子树
 
 ### 2.2 为什么活跃态是目录、归档态是 zip
 
@@ -86,7 +95,7 @@
 
 **排除**（只判定 home 之下的相对段，命中即跳过）：名为 `builtin_skills` 的目录、插件/市场缓存（`plugins`、`cache`）、扩展目录（`extensions`）、浏览器 profile（`google-chrome`、`firefox` 等）、临时目录（`tmp`、`temp`）、**本项目自己的目录**（段名去前导点后等于 `skills-hub` 或以 `skills-hub.` 开头，覆盖 `.skills-hub`、`.skills-hub.pre-bootstrap-*`、`.skills-hub.bak` 等）。这些归客户端所有或由本项目自己产生，不应再被当成客户端。
 
-**库存根**：调用方若已知库存根，必须把它传给 `discoverClientRoots`。排除的是库存自己的 `skills/`（以及 `backups/`、`archive/`、`tmp/` 子树），不是库存根下面的一切——`--home` 双重语义下库存根等于 home，`.claude` 等客户端必须继续被发现。默认库存 `~/.skills-hub` 一旦建出 `skills/`，形状扫描会把它当成客户端，自我备份、自我收录；前缀排除与库存根声明一起挡住这件事。
+**库存根**：调用方若已知库存根，必须把它传给 `discoverClientRoots`。排除的是库存自己的 `skills/`（以及 `backups/`、`archive/`、`tmp/`、`translations/` 子树），不是库存根下面的一切——`--home` 双重语义下库存根等于 home，`.claude` 等客户端必须继续被发现。默认库存 `~/.skills-hub` 一旦建出 `skills/`，形状扫描会把它当成客户端，自我备份、自我收录；前缀排除与库存根声明一起挡住这件事。
 
 **系统级目录**（`/etc/<client>/skills`、`/Library/Application Support/...`、`ProgramData` 等）**不在 home 扫描范围**，留给 `doctor` 提权检测。
 
