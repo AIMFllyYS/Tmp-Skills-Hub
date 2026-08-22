@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { initializeStoreLayout, STORE_SKILLS_DIR, writeStoreIndex, type SkillRecord } from "@skills-hub/core";
 import { createUiApp } from "../src/ui-server.js";
 
 /** HTTP 契约测试:createUiApp 注入沙箱 storeRoot/home,app.request() 直测(不占真实端口)。 */
@@ -925,5 +926,152 @@ describe("http-api 契约", () => {
     const body = (await res.json()) as { ok: boolean; command: string; code: string };
     expect(body.ok).toBe(false);
     expect(body.code).toBe("store-not-configured");
+  });
+});
+
+describe("skill 解析口径(#190)", () => {
+  let rapp: ReturnType<typeof createUiApp>;
+  const pad = (p: string) => p.padEnd(64, "0");
+  const hashes = {
+    other: pad("cafe9999"),
+    bravo: pad("abcd2222"),
+    cafe: pad("1111aaaa"),
+    alpha: pad("abcd1111"),
+  };
+
+  beforeAll(async () => {
+    const isolated = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-190-"));
+    tempRoots.push(isolated);
+    const store = path.join(isolated, "store");
+    await initializeStoreLayout(store);
+    const rec = (dirName: string, hash: string): SkillRecord => ({
+      hash,
+      dirName,
+      meta: { name: dirName, description: dirName + " desc" },
+      origins: [{ kind: "authored", reference: dirName }],
+      visibleIn: [],
+      installedAt: "2026-01-01T00:00:00.000Z",
+    });
+    // other 放第一:旧 GET skill 用 Array.find 会先命中 cafe 前缀
+    await writeStoreIndex(store, [
+      rec("other", hashes.other),
+      rec("bravo", hashes.bravo),
+      rec("cafe", hashes.cafe),
+      rec("alpha", hashes.alpha),
+    ]);
+    for (const name of ["other", "bravo", "cafe", "alpha"] as const) {
+      const dir = path.join(store, STORE_SKILLS_DIR, name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "SKILL.md"),
+        "---\nname: " + name + "\ndescription: " + name + " desc\n---\n# " + name + "\n",
+        "utf8",
+      );
+    }
+    rapp = createUiApp({ storeRoot: store, home: isolated });
+  });
+
+  type FailBody = { ok: boolean; code?: string; message?: string; skill?: { dirName: string } };
+  type SkillBody = { ok: boolean; skill: { dirName: string; hash: string } };
+  type TreeBody = { ok: boolean; dirName: string };
+  type LinksBody = { ok: boolean; hash: string };
+
+  function expectAmbiguous(status: number, body: FailBody): void {
+    expect(body.ok).toBe(false);
+    expect([400, 404]).toContain(status);
+    expect(body.message ?? "").toMatch(/不唯一/);
+    expect(body.skill).toBeUndefined();
+  }
+
+  it("GET skill:exact dirName", async () => {
+    const res = await rapp.request("/api/skills/bravo");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SkillBody;
+    expect(body.ok).toBe(true);
+    expect(body.skill.dirName).toBe("bravo");
+    expect(body.skill.hash).toBe(hashes.bravo);
+  });
+
+  it("GET skill:唯一哈希前缀(大小写不敏感)", async () => {
+    const res = await rapp.request("/api/skills/ABCD1111");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SkillBody;
+    expect(body.skill.dirName).toBe("alpha");
+  });
+
+  it("GET skill:歧义哈希前缀不静默取第一条", async () => {
+    const res = await rapp.request("/api/skills/abcd");
+    expectAmbiguous(res.status, (await res.json()) as FailBody);
+  });
+
+  it("GET skill:dirName 与他人哈希前缀冲突时 dirName 胜出", async () => {
+    const res = await rapp.request("/api/skills/cafe");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SkillBody;
+    expect(body.skill.dirName).toBe("cafe");
+    expect(body.skill.hash).toBe(hashes.cafe);
+  });
+
+  it("GET tree / links:exact dirName、唯一前缀、dirName 优先", async () => {
+    const treeName = await rapp.request("/api/skills/bravo/tree");
+    expect(treeName.status).toBe(200);
+    expect(((await treeName.json()) as TreeBody).dirName).toBe("bravo");
+
+    const treePrefix = await rapp.request("/api/skills/abcd1111/tree");
+    expect(treePrefix.status).toBe(200);
+    expect(((await treePrefix.json()) as TreeBody).dirName).toBe("alpha");
+
+    const treeCafe = await rapp.request("/api/skills/cafe/tree");
+    expect(treeCafe.status).toBe(200);
+    expect(((await treeCafe.json()) as TreeBody).dirName).toBe("cafe");
+
+    const linksCafe = await rapp.request("/api/skills/cafe/links");
+    expect(linksCafe.status).toBe(200);
+    expect(((await linksCafe.json()) as LinksBody).hash).toBe(hashes.cafe);
+  });
+
+  it("GET tree / links:歧义哈希前缀报错", async () => {
+    const tree = await rapp.request("/api/skills/abcd/tree");
+    expectAmbiguous(tree.status, (await tree.json()) as FailBody);
+    const links = await rapp.request("/api/skills/abcd/links");
+    expectAmbiguous(links.status, (await links.json()) as FailBody);
+  });
+
+  it("group members:与 resolveNames 同口径", async () => {
+    const created = await rapp.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "issue-190", name: "190" }),
+    });
+    expect(created.status).toBe(200);
+
+    const add = async (id: string, needles: string[]) =>
+      rapp.request("/api/groups/" + id + "/members", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hashes: needles, action: "add" }),
+      });
+
+    const byName = await add("issue-190", ["bravo"]);
+    expect(byName.status).toBe(200);
+    expect(((await byName.json()) as { hashes: string[] }).hashes).toEqual([hashes.bravo]);
+
+    const byPrefix = await add("issue-190", ["ABCD1111"]);
+    expect(byPrefix.status).toBe(200);
+    expect(((await byPrefix.json()) as { hashes: string[] }).hashes).toEqual([hashes.alpha]);
+
+    const byCafe = await add("issue-190", ["cafe"]);
+    expect(byCafe.status).toBe(200);
+    expect(((await byCafe.json()) as { hashes: string[] }).hashes).toEqual([hashes.cafe]);
+
+    const amb = await add("issue-190", ["abcd"]);
+    const ambBody = (await amb.json()) as FailBody;
+    expectAmbiguous(amb.status, ambBody);
+    const listed = (await (await rapp.request("/api/groups")).json()) as {
+      groups: { id: string; memberHashes: string[] }[];
+    };
+    const g = listed.groups.find((x) => x.id === "issue-190")!;
+    expect(g.memberHashes).toEqual([hashes.bravo, hashes.alpha, hashes.cafe]);
+    expect(g.memberHashes).not.toContain(hashes.other);
   });
 });

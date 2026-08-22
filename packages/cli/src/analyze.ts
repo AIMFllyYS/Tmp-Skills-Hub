@@ -13,6 +13,7 @@ import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/cor
 import path from "node:path";
 import { chatCompletion, type ChatOptions, type DeepSeekMessage, type DeepSeekResult } from "./deepseek.js";
 import { emitError, emitOk } from "./json-out.js";
+import { resolveSkill } from "./resolve-skill.js";
 
 /** 单个目标最多喂给模型的 description 字符数(防超大 skill 撑爆上下文)。 */
 export const MAX_TARGET_DESC_CHARS = 4_000;
@@ -101,21 +102,18 @@ export type AnalyzeOutcome =
   | { ok: true; target: string; similar: AnalyzeReportItem[]; conflict: AnalyzeReportItem[] }
   | { ok: false; code: AnalyzeFailureCode; message: string };
 
-function resolveInventoryTarget(records: SkillRecord[], input: string): { dirName: string; description: string } | null {
-  const byName = records.find((s) => s.dirName === input);
-  if (byName !== undefined) return { dirName: byName.dirName, description: byName.meta.description };
-  const lower = input.toLowerCase();
-  const byHash = records.find((s) => s.hash === input || s.hash.startsWith(lower));
-  if (byHash !== undefined) return { dirName: byHash.dirName, description: byHash.meta.description };
-  return null;
-}
-
 /** CLI 与 POST /api/analyze 共用:只读建议,不写库存或链接。 */
 export async function performAnalyze(storeRoot: string, input: string, opts: RunAnalyzeOptions = {}): Promise<AnalyzeOutcome> {
   const needle = input.trim();
   if (needle === "") return { ok: false, code: "bad-usage", message: "需要 target(hash 前缀或 dirName)" };
   const records = await readStoreIndex(storeRoot);
-  let target = resolveInventoryTarget(records, needle);
+  const hit = resolveSkill(needle, records);
+  let target: { dirName: string; description: string } | null = null;
+  if (hit.ok) {
+    target = { dirName: hit.skill.dirName, description: hit.skill.meta.description };
+  } else if (hit.code === "ambiguous") {
+    return { ok: false, code: "bad-usage", message: hit.message };
+  }
   if (target === null && opts.allowLocalPath === true) {
     const meta = await readSkillMeta(path.resolve(needle)).catch(() => null);
     if (meta !== null) target = { dirName: meta.name, description: meta.description };

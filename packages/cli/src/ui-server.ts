@@ -38,7 +38,8 @@ import {
   type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
-import { performAdopt, performVerify, POINTER_REL, resolveNames } from "./store-cmds.js";
+import { performAdopt, performVerify, POINTER_REL } from "./store-cmds.js";
+import { resolveSkill, type ResolveSkillFailure } from "./resolve-skill.js";
 import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze } from "./analyze.js";
 import { performShare } from "./share.js";
@@ -150,6 +151,11 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const err = (c: Context, command: string, code: string, message: string, status: 400 | 404 | 409 | 422 | 500 | 502 | 503) =>
     c.json({ ok: false, command, code, message }, status);
 
+  const skillLookupErr = (c: Context, command: string, hit: ResolveSkillFailure) =>
+    hit.code === "ambiguous"
+      ? err(c, command, "bad-usage", hit.message, 400)
+      : err(c, command, "not-found", hit.message, 404);
+
   const withStore = (c: Context, command: string, fn: (root: string) => Promise<Response>): Promise<Response> =>
     storeRoot === null
       ? Promise.resolve(err(c, command, "store-not-configured", "库存未配置。先运行 skills-hub init --home <path> --yes。", 503))
@@ -170,9 +176,9 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     withStore(c, "skill", async (root) => {
       const needle = c.req.param("hash");
       const skills = await attachVisibleIn(root, await readStoreIndex(root), await readLinksLedger(root));
-      const hit = skills.find((s) => s.hash.startsWith(needle.toLowerCase())) ?? skills.find((s) => s.dirName === needle);
-      if (hit === undefined) return err(c, "skill", "not-found", "未找到: " + needle, 404);
-      return c.json({ ok: true, command: "skill", skill: hit });
+      const hit = resolveSkill(needle, skills);
+      if (!hit.ok) return skillLookupErr(c, "skill", hit);
+      return c.json({ ok: true, command: "skill", skill: hit.skill });
     }),
   );
 
@@ -180,17 +186,17 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     withStore(c, "skill-links", async (root) => {
       const needle = c.req.param("hash");
       const skills = await readStoreIndex(root);
-      const hit = skills.find((s) => s.hash.startsWith(needle.toLowerCase())) ?? skills.find((s) => s.dirName === needle);
-      if (hit === undefined) return err(c, "skill-links", "not-found", "未找到: " + needle, 404);
+      const hit = resolveSkill(needle, skills);
+      if (!hit.ok) return skillLookupErr(c, "skill-links", hit);
       const ledger = await readLinksLedger(root);
       const roots = await discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined);
       const links = [];
       for (const r of roots) {
-        const inLedger = ledger.some((e) => e.clientId === r.clientId && e.entryName === hit.dirName);
-        const status = await classifyClientLink(path.join(r.skillsDir, hit.dirName), inLedger);
+        const inLedger = ledger.some((e) => e.clientId === r.clientId && e.entryName === hit.skill.dirName);
+        const status = await classifyClientLink(path.join(r.skillsDir, hit.skill.dirName), inLedger);
         links.push({ clientId: r.clientId, state: status.state, detail: status.detail });
       }
-      return c.json({ ok: true, command: "skill-links", hash: hit.hash, links });
+      return c.json({ ok: true, command: "skill-links", hash: hit.skill.hash, links });
     }),
   );
 
@@ -203,17 +209,14 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   const GROUP_ID_RE = /^[a-z][a-z0-9-]*$/;
 
-  const resolveMemberHashes = (needles: string[], skills: SkillRecord[]): { hashes: string[] } | { message: string } => {
+  const resolveMemberHashes = (needles: string[], skills: SkillRecord[]): { hashes: string[] } | ResolveSkillFailure => {
     const hashes: string[] = [];
     for (const n of needles) {
       const needle = n.trim();
-      if (needle === "") return { message: "hashes 含空项" };
-      const hit =
-        skills.find((s) => s.hash === needle) ??
-        skills.find((s) => s.hash.startsWith(needle.toLowerCase())) ??
-        skills.find((s) => s.dirName === needle);
-      if (hit === undefined) return { message: "未找到: " + needle };
-      hashes.push(hit.hash);
+      if (needle === "") return { ok: false, code: "not-found", message: "hashes 含空项" };
+      const hit = resolveSkill(needle, skills);
+      if (!hit.ok) return hit;
+      hashes.push(hit.skill.hash);
     }
     return { hashes };
   };
@@ -277,7 +280,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const current = await readGroups(root);
       if (!current.groups.some((g) => g.id === id)) return err(c, "group", "group-not-found", "分组不存在: " + id, 404);
       const resolved = resolveMemberHashes(hashesIn, await readStoreIndex(root));
-      if ("message" in resolved) return err(c, "group", "not-found", resolved.message, 404);
+      if ("message" in resolved) return skillLookupErr(c, "group", resolved);
       const changed =
         action === "add"
           ? await addSkillToGroups(root, resolved.hashes, [id])
@@ -479,22 +482,21 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     return { clientId, scope: body?.scope === "project" ? "project" : "global" };
   };
 
-  /** 解析 skill 与客户端;任一缺失返回 null(统一 not-found)。 */
+  /** 解析 skill 与客户端。skill 未命中/歧义走 ResolveSkillFailure;客户端缺失走 null。 */
   const resolveLinkTarget = async (
     root: string,
     needle: string,
     body: LinkBody,
-  ): Promise<{ dirName: string; clientId: string; scope: "global" | "project"; skillsDir: string } | null> => {
+  ): Promise<
+    | { ok: true; dirName: string; clientId: string; scope: "global" | "project"; skillsDir: string }
+    | { ok: false; kind: "client" }
+    | ResolveSkillFailure
+  > => {
     const client = await resolveClientSkillsDirAt(home, body.clientId, body.scope, storeRoot);
-    if (client === null) return null;
-    const skills = await readStoreIndex(root);
-    try {
-      const dirName = resolveNames(needle, skills)[0];
-      if (dirName === undefined) return null;
-      return { dirName, clientId: client.clientId, scope: body.scope, skillsDir: client.skillsDir };
-    } catch {
-      return null;
-    }
+    if (client === null) return { ok: false, kind: "client" };
+    const hit = resolveSkill(needle, await readStoreIndex(root));
+    if (!hit.ok) return hit;
+    return { ok: true, dirName: hit.skill.dirName, clientId: client.clientId, scope: body.scope, skillsDir: client.skillsDir };
   };
 
   const linkEndpoint = (action: "enable" | "disable") =>
@@ -503,7 +505,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
         const body = await parseLinkBody(c);
         if (body === null) return err(c, action, "bad-usage", "缺少 clientId(JSON body 需 { clientId: string, scope?: string })。", 400);
         const target = await resolveLinkTarget(root, c.req.param("hash") ?? "", body);
-        if (target === null) return err(c, action, "not-found", "未找到客户端或 skill: " + c.req.param("hash"), 404);
+        if (!target.ok) {
+          if ("kind" in target) return err(c, action, "not-found", "未找到客户端或 skill: " + c.req.param("hash"), 404);
+          return skillLookupErr(c, action, target);
+        }
         const result = await performLinkChange(
           { storeRoot: root, clientId: target.clientId, scope: target.scope, skillsDir: target.skillsDir, dirNames: [target.dirName] },
           action,
@@ -522,62 +527,58 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   // ---- 内容查看端点(#36) ----
 
-  /** 按 hash 前缀或 dirName 解析到 skill 目录;找不到返回 null。 */
-  const resolveSkillDir = async (root: string, needle: string): Promise<string | null> => {
-    const skills = await readStoreIndex(root);
-    let dirName: string;
-    try {
-      const hit = resolveNames(needle, skills)[0];
-      if (hit === undefined) return null;
-      dirName = hit;
-    } catch {
-      return null;
-    }
-    return path.join(root, "skills", dirName);
+  /** 按 dirName 精确或唯一哈希前缀解析到 skill 目录。 */
+  const resolveSkillDir = async (
+    root: string,
+    needle: string,
+  ): Promise<{ ok: true; skillDir: string } | ResolveSkillFailure> => {
+    const hit = resolveSkill(needle, await readStoreIndex(root));
+    if (!hit.ok) return hit;
+    return { ok: true, skillDir: path.join(root, "skills", hit.skill.dirName) };
   };
 
   app.get("/api/skills/:hash/tree", (c) =>
     withStore(c, "skill-tree", async (root) => {
-      const skillDir = await resolveSkillDir(root, c.req.param("hash") ?? "");
-      if (skillDir === null) return err(c, "skill-tree", "not-found", "未找到: " + c.req.param("hash"), 404);
-      const res = await listSkillFiles(skillDir);
+      const found = await resolveSkillDir(root, c.req.param("hash") ?? "");
+      if (!found.ok) return skillLookupErr(c, "skill-tree", found);
+      const res = await listSkillFiles(found.skillDir);
       if (!res.ok) return err(c, "skill-tree", res.code, res.message, 500);
-      return c.json({ ok: true, command: "skill-tree", dirName: path.basename(skillDir), entries: res.entries, truncated: res.truncated });
+      return c.json({ ok: true, command: "skill-tree", dirName: path.basename(found.skillDir), entries: res.entries, truncated: res.truncated });
     }),
   );
 
   app.get("/api/skills/:hash/file", (c) =>
     withStore(c, "skill-file", async (root) => {
-      const skillDir = await resolveSkillDir(root, c.req.param("hash") ?? "");
-      if (skillDir === null) return err(c, "skill-file", "not-found", "未找到: " + c.req.param("hash"), 404);
+      const found = await resolveSkillDir(root, c.req.param("hash") ?? "");
+      if (!found.ok) return skillLookupErr(c, "skill-file", found);
       const rel = c.req.query("path") ?? "";
       if (rel === "") return err(c, "skill-file", "bad-usage", "缺少 path 查询参数(?path=SKILL.md)", 400);
-      const res = await readSkillFile(skillDir, rel);
+      const res = await readSkillFile(found.skillDir, rel);
       if (!res.ok) {
         const status = res.code === "outside" ? 400 : res.code === "not-found" ? 404 : res.code === "binary" || res.code === "too-large" ? 422 : 500;
         return err(c, "skill-file", res.code, res.message, status);
       }
-      return c.json({ ok: true, command: "skill-file", dirName: path.basename(skillDir), path: rel, content: res.content, sizeBytes: res.sizeBytes });
+      return c.json({ ok: true, command: "skill-file", dirName: path.basename(found.skillDir), path: rel, content: res.content, sizeBytes: res.sizeBytes });
     }),
   );
 
   /** 编辑写回(#37):PUT body { content },原子写 + 版本追溯 + 哈希更新。 */
   app.put("/api/skills/:hash/file", (c) =>
     withStore(c, "skill-file-save", async (root) => {
-      const skillDir = await resolveSkillDir(root, c.req.param("hash") ?? "");
-      if (skillDir === null) return err(c, "skill-file-save", "not-found", "未找到: " + c.req.param("hash"), 404);
+      const found = await resolveSkillDir(root, c.req.param("hash") ?? "");
+      if (!found.ok) return skillLookupErr(c, "skill-file-save", found);
       const rel = c.req.query("path") ?? "";
       if (rel === "") return err(c, "skill-file-save", "bad-usage", "缺少 path 查询参数(?path=SKILL.md)", 400);
       const body = (await c.req.json().catch(() => null)) as { content?: unknown } | null;
       if (body === null || typeof body?.content !== "string") {
         return err(c, "skill-file-save", "bad-usage", "body 需要 { content: string }", 400);
       }
-      const res = await saveSkillFile({ storeRoot: root, skillDir, relPath: rel, content: body.content });
+      const res = await saveSkillFile({ storeRoot: root, skillDir: found.skillDir, relPath: rel, content: body.content });
       if (!res.ok) {
         const status = res.code === "outside" ? 400 : res.code === "too-large" ? 422 : 500;
         return err(c, "skill-file-save", res.code, res.message, status);
       }
-      return c.json({ ok: true, command: "skill-file-save", dirName: path.basename(skillDir), path: rel, hash: res.newHash });
+      return c.json({ ok: true, command: "skill-file-save", dirName: path.basename(found.skillDir), path: rel, hash: res.newHash });
     }),
   );
 
@@ -606,17 +607,22 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const resolveBatchRequests = async (
     root: string,
     body: LinksBatchBody,
-  ): Promise<{ ok: true; action: "enable" | "disable"; items: LinkChangeRequest[] } | { ok: false; code: "not-found"; message: string }> => {
+  ): Promise<
+    | { ok: true; action: "enable" | "disable"; items: LinkChangeRequest[] }
+    | { ok: false; code: "not-found" | "bad-usage"; message: string }
+  > => {
     const skills = await readStoreIndex(root);
     const dirNames: string[] = [];
     for (const needle of body.hashes) {
-      try {
-        const name = resolveNames(needle, skills)[0];
-        if (name === undefined) return { ok: false, code: "not-found", message: "未找到 skill: " + needle };
-        if (!dirNames.includes(name)) dirNames.push(name);
-      } catch {
-        return { ok: false, code: "not-found", message: "未找到 skill: " + needle };
+      const hit = resolveSkill(needle, skills);
+      if (!hit.ok) {
+        return {
+          ok: false,
+          code: hit.code === "ambiguous" ? "bad-usage" : "not-found",
+          message: hit.message,
+        };
       }
+      if (!dirNames.includes(hit.skill.dirName)) dirNames.push(hit.skill.dirName);
     }
     const items: LinkChangeRequest[] = [];
     for (const clientId of body.clientIds) {
@@ -632,7 +638,9 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const parsed = await parseLinksBatch(c);
       if ("error" in parsed) return err(c, "links-preview", "bad-usage", parsed.error, 400);
       const resolved = await resolveBatchRequests(root, parsed);
-      if (!resolved.ok) return err(c, "links-preview", resolved.code, resolved.message, 404);
+      if (!resolved.ok) {
+        return err(c, "links-preview", resolved.code, resolved.message, resolved.code === "bad-usage" ? 400 : 404);
+      }
       const wouldCreate: LinkDiffItem[] = [];
       const wouldRemove: LinkDiffItem[] = [];
       const conflicts: LinkConflictItem[] = [];
@@ -661,7 +669,9 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const parsed = await parseLinksBatch(c);
       if ("error" in parsed) return err(c, "links-apply", "bad-usage", parsed.error, 400);
       const resolved = await resolveBatchRequests(root, parsed);
-      if (!resolved.ok) return err(c, "links-apply", resolved.code, resolved.message, 404);
+      if (!resolved.ok) {
+        return err(c, "links-apply", resolved.code, resolved.message, resolved.code === "bad-usage" ? 400 : 404);
+      }
       const result = await applyLinkBatch(resolved.items, resolved.action);
       if (!result.ok) {
         return c.json(
@@ -758,15 +768,9 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   app.post("/api/skills/:hash/archive", (c) =>
     withStore(c, "archive", async (root) => {
       const needle = c.req.param("hash");
-      const skills = await readStoreIndex(root);
-      let dirName: string;
-      try {
-        const hit = resolveNames(needle, skills)[0];
-        if (hit === undefined) return err(c, "archive", "not-found", "未找到: " + needle, 404);
-        dirName = hit;
-      } catch (e) {
-        return err(c, "archive", "not-found", e instanceof Error ? e.message : String(e), 404);
-      }
+      const hit = resolveSkill(needle, await readStoreIndex(root));
+      if (!hit.ok) return skillLookupErr(c, "archive", hit);
+      const dirName = hit.skill.dirName;
       const res = await archiveSkill(root, dirName);
       if (!res.ok) return err(c, "archive", res.code, res.message, 409);
       return c.json({ ok: true, command: "archive", dirName, archiveFile: res.archiveFile, sizeBytes: res.sizeBytes, removedLinks: res.removedLinks });
