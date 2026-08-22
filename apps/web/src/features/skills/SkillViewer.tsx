@@ -14,8 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { SegmentedTabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { renderMarkdown } from "../../lib/markdown.js";
-import { getAction } from "../actions/registry.js";
-import { fetchSkillFile, fetchSkillTree } from "./api.js";
+import { getAction, type TranslateParams } from "../actions/registry.js";
+import { fetchSkillFile, fetchSkillTranslation, fetchSkillTree } from "./api.js";
 import { isAbortError } from "./async-resource.js";
 import { loadSkillView } from "./skill-view-load.js";
 import {
@@ -256,10 +256,19 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
     }
     setTranslating(true);
     setTranslateError(null);
-    setTranslated("");
-    setShowTranslated(true);
     try {
-      const t = await getAction("translate").execute({ text: content, onDelta: (full) => setTranslated(full) });
+      // 译文留存复用(#208):命中缓存直接用,不再调模型;绝不写库存原件
+      const cached = selected === "" ? null : await fetchSkillTranslation(skill.hash, selected);
+      if (cached !== null) {
+        setTranslated(cached);
+        setShowTranslated(true);
+        return;
+      }
+      setTranslated("");
+      setShowTranslated(true);
+      const params: TranslateParams = { text: content, onDelta: (full) => setTranslated(full) };
+      if (selected !== "") params.save = { target: skill.dirName, path: selected };
+      const t = await getAction("translate").execute(params);
       setTranslated(t);
     } catch (e) {
       setTranslated(null);
@@ -268,7 +277,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
     } finally {
       setTranslating(false);
     }
-  }, [showTranslated, translated, content]);
+  }, [showTranslated, translated, content, selected, skill]);
 
   const startEdit = useCallback(() => {
     setDraft(content);

@@ -198,13 +198,29 @@ export async function analyzeSkill(target: string): Promise<AnalyzeResponse> {
   return body;
 }
 
-/** 流式翻译:onDelta 渐进回调累积全文;resolve 返回全文;error 事件抛可读 Error。 */
-export async function translateText(text: string, onDelta?: (full: string) => void, signal?: AbortSignal): Promise<string> {
+/** 译文留存目标(#208):服务端按 target 解析记录哈希落盘,绝不写库存原件。 */
+export interface TranslateSaveTarget {
+  target: string;
+  path: string;
+}
+
+/** 流式翻译:onDelta 渐进回调累积全文;resolve 返回全文;error 事件抛可读 Error。带 save 时服务端成功后留盘。 */
+export async function translateText(
+  text: string,
+  onDelta?: (full: string) => void,
+  signal?: AbortSignal,
+  save?: TranslateSaveTarget,
+): Promise<string> {
+  const body: { text: string; target?: string; path?: string } = { text };
+  if (save !== undefined) {
+    body.target = save.target;
+    body.path = save.path;
+  }
   let full = "";
   let failed: string | null = null;
   await postSse(
     "/api/translate",
-    { text },
+    body,
     {
       delta: (d) => {
         full += (JSON.parse(d) as { text: string }).text;
@@ -218,6 +234,15 @@ export async function translateText(text: string, onDelta?: (full: string) => vo
   );
   if (failed !== null) throw new Error(failed);
   return full;
+}
+
+/** 读译文缓存(#208):命中返回全文,未命中/降级一律返回 null(调用方回退到重新翻译)。 */
+export async function fetchSkillTranslation(hash: string, relPath: string): Promise<string | null> {
+  const res = await fetch("/api/skills/" + encodeURIComponent(hash) + "/translation?path=" + encodeURIComponent(relPath)).catch(() => null);
+  if (res === null || res.status === 404 || !res.ok) return null;
+  const body = (await res.json().catch(() => null)) as { ok: boolean; translated?: string } | null;
+  if (body === null || !body.ok || typeof body.translated !== "string") return null;
+  return body.translated;
 }
 
 export async function fetchArchive(): Promise<ArchiveResponse["archived"]> {

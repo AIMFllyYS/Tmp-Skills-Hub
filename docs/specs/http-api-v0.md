@@ -32,6 +32,7 @@
 | GET /api/agent/models | { ok, command: "agent-models", defaultModel, models: { id, label, note }[] }（Agent 模型白名单，见 agent-v0.md §7） | — |
 | GET /api/skills/:hash/tree | { ok, command: "skill-tree", dirName, entries: SkillFileEntry[], truncated } | 404 not-found;503 |
 | GET /api/skills/:hash/file?path= | { ok, command: "skill-file", dirName, path, content, sizeBytes } | 400 bad-usage（缺 path / outside）;404;422 binary\|too-large;503 |
+| GET /api/skills/:hash/translation?path= | { ok, command: "skill-translation", hash, path, translated }（译文缓存命中，见 store-and-paths-v0.md §2.1.1） | 400 bad-usage（缺 path / outside）;404 translation-not-found;503 |
 
 ### SkillRecord(与 json-contract §2 同定义)
 
@@ -64,7 +65,7 @@
 | POST /api/drafts/:dirName/commit | —(无 body) | { ok, command: "new", verb: "commit", dirName, hash } | 404 draft-not-found;400 draft-incomplete;409 draft-exists;503（#193：与 CLI `new commit` 同 code） |
 | POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 404 draft-not-found;503（#193：与 CLI `new discard` 同 code） |
 | PUT /api/skills/:hash/file?path= | JSON `{ content: string }` | { ok, command: "skill-file-save", dirName, path, hash }（`hash` 为写回后的新内容哈希） | 400 bad-usage（缺 path / 缺 content / outside）;404;422 too-large;503 |
-| POST /api/translate | { text } | **SSE 流**（`text/event-stream`，事件契约见 [agent-v0.md](agent-v0.md) §4：delta/done/error） | 进流前：400 bad-usage JSON 信封 |
+| POST /api/translate | { text, target?, path? }（target/path 可省：纯文本翻译不落盘；两者都带时流式成功结束后 best-effort 存入译文缓存，落盘失败不影响 done） | **SSE 流**（`text/event-stream`，事件契约见 [agent-v0.md](agent-v0.md) §4：delta/done/error） | 进流前：400 bad-usage JSON 信封 |
 | POST /api/agent/chat | { messages: WireMessage[], model? }（WireMessage 见 agent-v0.md §5） | **SSE 流**（delta/tool_call/tool_result/done/error，契约见 agent-v0.md §4；done 携带全量 messages） | 400 bad-usage（缺 messages / 含 system role） |
 | POST /api/groups | { id, name?, description? } | { ok, command: "group", verb: "create", id, name, description } | 400 bad-usage;409 group-exists;503 |
 | PATCH /api/groups/:id | { name?, description? }(至少一项) | { ok, command: "group", verb: "rename", id, name, description } | 400;404 group-not-found;503 |

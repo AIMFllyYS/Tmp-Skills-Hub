@@ -394,6 +394,44 @@ describe("http-api 契约", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("译文留存(#208):translate 带 target/path 成功后落盘 translations/<hash>/,不碰 skills/ 原件", async () => {
+    const skillMd = path.join(storeRoot, "skills", "demo", "SKILL.md");
+    const before = await readFile(skillMd, "utf8");
+    const list = await app.request("/api/skills");
+    const demoHash = ((await list.json()) as { skills: { dirName: string; hash: string }[] }).skills.find((s) => s.dirName === "demo")?.hash ?? "";
+    expect(demoHash).not.toBe("");
+    const translateStream = (async function* () {
+      yield { type: "text", delta: "缓存译文" } as const;
+      yield { type: "done" } as const;
+    }) as never;
+    const tapp = createUiApp({ storeRoot, home, translateStream });
+    const res = await tapp.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello", target: "demo", path: "SKILL.md" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("event: done");
+    // 译文落在 translations/<hash>/ 下,不写回 skills/
+    const cached = await readFile(path.join(storeRoot, "translations", demoHash, "SKILL.md"), "utf8");
+    expect(cached).toBe("缓存译文");
+    expect(await readFile(skillMd, "utf8")).toBe(before);
+
+    // GET 复用端点:命中返回全文
+    const hit = await app.request("/api/skills/demo/translation?path=SKILL.md");
+    expect(hit.status).toBe(200);
+    const hitBody = (await hit.json()) as { ok: boolean; command: string; translated: string };
+    expect(hitBody.command).toBe("skill-translation");
+    expect(hitBody.translated).toBe("缓存译文");
+    // 未命中 404;缺 path 400;穿越路径 400
+    const miss = await app.request("/api/skills/demo/translation?path=NOPE.md");
+    expect(miss.status).toBe(404);
+    const noPath = await app.request("/api/skills/demo/translation");
+    expect(noPath.status).toBe(400);
+    const traversal = await app.request("/api/skills/demo/translation?path=" + encodeURIComponent("../../../evil.md"));
+    expect(traversal.status).toBe(400);
+  });
+
   it("agent/models:白名单信封形状", async () => {
     const res = await app.request("/api/agent/models");
     expect(res.status).toBe(200);
