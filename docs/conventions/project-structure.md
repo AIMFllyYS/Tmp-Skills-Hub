@@ -33,7 +33,7 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 │           ├── scan.ts / bootstrap.ts / backup-cmds.ts / reset-cmds.ts
 │           ├── github-source.ts / skills-sh-source.ts / share.ts
 │           ├── analyze.ts / deepseek.ts / doctor.ts
-│           └── ui-server.ts        # Hono 本地查看服务（App 壳的数据源）
+│           └── ui-server.ts        # Hono 本地查看服务入口（createUiApp 注册器；分组/草稿/内容/链接路由在 ui-*.ts）
 ├── apps/
 │   └── web/                        # 人用壳（Vite + React SPA:总览/统计/Skills；设置走 Dialog）
 │       └── src/

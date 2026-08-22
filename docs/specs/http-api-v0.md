@@ -1,6 +1,6 @@
 # HTTP 契约 v0:本地服务(ui-server)
 
-> 状态:生效 | 适用范围:packages/cli/src/ui-server.ts ↔ apps/web | 对应 issue:#31
+> 状态:生效 | 适用范围:packages/cli/src/ui-server.ts（及 ui-groups / ui-drafts / ui-content / ui-links）↔ apps/web | 对应 issue:#31
 > 信封、错误 code 与 SkillRecord 字段一律复用 [json-contract-v0.md](json-contract-v0.md),不重复发明。
 > **#192 修订（2026-08-22）**：字段名与状态码以 `ui-server.ts` + `http-api.test.ts` + web `types.ts` 为准回写；不再保留已废弃的 `files` / `translated` / raw PUT body。`:hash` 匹配的实现漂移见 #190，本契约仍以 CLI `resolveNames`（dirName 精确，否则唯一哈希前缀）为口径。
 
@@ -60,8 +60,8 @@
 | POST /api/skills/:hash/restore | —(无 body;:hash 为归档名) | { ok, command: "restore", dirName, hash, archiveFile } | 404 not-found;409 conflict;500;503 |
 | POST /api/adopt | { source }(本地路径或 GitHub / skills.sh URL) | { ok, command: "adopt", adopted, duplicates, conflicts, invalid, outcomes } | 400 bad-usage;502 github-fetch-failed;503 |
 | POST /api/drafts | { dirName, description? } | description 非空：allocate+commit，`{ ok, command: "new", verb: "create", dirName, hash, storeDir }`；description 空：只 allocate，无 hash | 400 bad-usage;409 draft-exists;503 |
-| POST /api/drafts/:dirName/commit | —(无 body) | { ok, command: "new", verb: "commit", dirName, hash } | 实现里草稿不存在走 `not-found`(404)，SKILL.md 不达标走 `bad-usage`(400)；与 CLI `draft-not-found` / `draft-incomplete` 的对齐见 #193 |
-| POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 实现里不存在走 `not-found`(404)；对齐见 #193 |
+| POST /api/drafts/:dirName/commit | —(无 body) | { ok, command: "new", verb: "commit", dirName, hash } | 404 draft-not-found;400 draft-incomplete;409 draft-exists;503（#193：与 CLI `new commit` 同 code） |
+| POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 404 draft-not-found;503（#193：与 CLI `new discard` 同 code） |
 | PUT /api/skills/:hash/file?path= | JSON `{ content: string }` | { ok, command: "skill-file-save", dirName, path, hash }（`hash` 为写回后的新内容哈希） | 400 bad-usage（缺 path / 缺 content / outside）;404;422 too-large;503 |
 | POST /api/translate | { text } | { ok, command: "translate", text }（译文在 `text`，没有 `translated`；不读 from/to） | 400;503 not-configured;502 |
 | POST /api/groups | { id, name?, description? } | { ok, command: "group", verb: "create", id, name, description } | 400 bad-usage;409 group-exists;503 |
@@ -73,10 +73,10 @@
 | POST /api/backups/preview | { snapshotId? } | { ok, command: "backups-preview", snapshotId, dryRun: true, clients, skills, files, links, wouldRestore, skippedOwnDirs, asideStore, asidePointer }(不写盘) | 400;404 not-found;409 verify-failed;503 |
 | POST /api/reset | { snapshotId?, confirm: "reset" } | { ok, command: "reset", storeRoot, snapshotId, asideStore, asidePointer, adopted }(本请求内跑完还原,与 CLI `reset --json` 同形) | 400 bad-usage(缺确认短语);404;409 verify-failed\|restore-failed;500 io-error;503 |
 
-- `:hash` **口径**与 CLI `resolveNames` 相同:dirName 精确,否则唯一哈希前缀。实现漂移（部分 GET 哈希前缀优先且不检查唯一）见 #190，修齐前不得把漂移写成新契约
+- `:hash` 与 CLI 共用 `resolveSkill`:dirName 精确,否则唯一哈希前缀;0 命中 404 not-found;前缀不唯一 400 bad-usage
 - `SkillFileEntry`:`{ path, kind: "file"|"dir", sizeBytes }`
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
-- 写操作复用 link-actions.ts 的 performLinkChange/archiveSkill(与 CLI enable/disable/archive 同一实现,行为不漂移)
+- 写操作复用同一套 perform*:链接 `performLinkChange` / `previewLinkChange`,分组 `performCreateGroup` / `performUpdateGroup` / `performDeleteGroup` / `performGroupMembers`,草稿 `performAllocate` / `performCreate` / `performCommit` / `performDiscard`(与 CLI 同一实现,行为不漂移)
 - unregistered-conflict(落点被用户目录占据)与 not-link-conflict 以 409 + link-failed 返回,message 给出人工处理指引,绝不覆盖
 
 ## 4. HTTP 状态码映射
@@ -109,4 +109,4 @@
 
 ## 5. 测试
 
-packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、links preview/apply、分组 CRUD、analyze 只读建议、verify/doctor 只读报告、503 未配置。
+packages/cli/test/http-api.test.ts:createUiApp 注入沙箱 storeRoot/home,`app.request()` 直测(不占真实端口),覆盖信封形状、origins/visibleIn 分离、写端点成功与结构化失败、links preview/apply、分组 CRUD、`/api/drafts*`（含 draft-not-found / draft-incomplete）、analyze 只读建议、verify/doctor 只读报告、503 未配置。
