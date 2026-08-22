@@ -929,6 +929,109 @@ describe("http-api 契约", () => {
   });
 });
 
+describe("drafts HTTP(#193)", () => {
+  let dhome = "";
+  let droot = "";
+  let dapp: ReturnType<typeof createUiApp>;
+
+  beforeAll(async () => {
+    dhome = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-drafts-"));
+    tempRoots.push(dhome);
+    await mkdir(path.join(dhome, ".claude", "skills"), { recursive: true });
+    expect(runCli(["init", "--home", dhome, "--yes", "--json"]).code).toBe(0);
+    const raw = await readFile(path.join(dhome, ".skills-hub", "config.json"), "utf8");
+    droot = (JSON.parse(raw) as { storeRoot: string }).storeRoot;
+    dapp = createUiApp({ storeRoot: droot, home: dhome });
+  });
+
+  it("GET 空列表;POST 缺 dirName → 400;未配置 → 503", async () => {
+    const listed = await dapp.request("/api/drafts");
+    expect(listed.status).toBe(200);
+    const body = (await listed.json()) as { command: string; drafts: unknown[] };
+    expect(body.command).toBe("drafts");
+    expect(body.drafts).toEqual([]);
+
+    const bad = await dapp.request("/api/drafts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { code: string }).code).toBe("bad-usage");
+
+    const bare = createUiApp({ storeRoot: null, home: dhome });
+    const unconf = await bare.request("/api/drafts");
+    expect(unconf.status).toBe(503);
+    expect(((await unconf.json()) as { code: string }).code).toBe("store-not-configured");
+  });
+
+  it("allocate / list / draft-exists / commit / discard 错误码与 CLI 同口径", async () => {
+    const created = await dapp.request("/api/drafts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dirName: "http-draft" }),
+    });
+    expect(created.status).toBe(200);
+    const cb = (await created.json()) as { verb: string; dirName: string; hash?: string };
+    expect(cb.verb).toBe("allocate");
+    expect(cb.dirName).toBe("http-draft");
+    expect(cb.hash).toBeUndefined();
+
+    const listed = (await (await dapp.request("/api/drafts")).json()) as { drafts: { dirName: string }[] };
+    expect(listed.drafts.map((d) => d.dirName)).toContain("http-draft");
+
+    const dup = await dapp.request("/api/drafts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dirName: "http-draft" }),
+    });
+    expect(dup.status).toBe(409);
+    expect(((await dup.json()) as { code: string }).code).toBe("draft-exists");
+
+    const committed = await dapp.request("/api/drafts/http-draft/commit", { method: "POST" });
+    expect(committed.status).toBe(200);
+    const cmt = (await committed.json()) as { verb: string; hash: string };
+    expect(cmt.verb).toBe("commit");
+    expect(cmt.hash).toMatch(/^[0-9a-f]{64}$/);
+
+    const missingCommit = await dapp.request("/api/drafts/no-such-draft/commit", { method: "POST" });
+    expect(missingCommit.status).toBe(404);
+    expect(((await missingCommit.json()) as { code: string }).code).toBe("draft-not-found");
+
+    const missingDiscard = await dapp.request("/api/drafts/no-such-draft/discard", { method: "POST" });
+    expect(missingDiscard.status).toBe(404);
+    expect(((await missingDiscard.json()) as { code: string }).code).toBe("draft-not-found");
+  });
+
+  it("commit 不达标 → draft-incomplete;description 非空走 performCreate", async () => {
+    const alloc = await dapp.request("/api/drafts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dirName: "http-incomplete" }),
+    });
+    expect(alloc.status).toBe(200);
+    await writeFile(path.join(droot, "skills", "http-incomplete", "SKILL.md"), "---\nname: http-incomplete\n---\n", "utf8");
+    const incomplete = await dapp.request("/api/drafts/http-incomplete/commit", { method: "POST" });
+    expect(incomplete.status).toBe(400);
+    expect(((await incomplete.json()) as { code: string }).code).toBe("draft-incomplete");
+
+    const discarded = await dapp.request("/api/drafts/http-incomplete/discard", { method: "POST" });
+    expect(discarded.status).toBe(200);
+    expect(((await discarded.json()) as { verb: string }).verb).toBe("discard");
+
+    const oneshot = await dapp.request("/api/drafts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dirName: "http-oneshot", description: "one shot create" }),
+    });
+    expect(oneshot.status).toBe(200);
+    const ob = (await oneshot.json()) as { verb: string; hash: string; storeDir: string };
+    expect(ob.verb).toBe("create");
+    expect(ob.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(ob.storeDir).toContain("http-oneshot");
+  });
+});
+
 describe("skill 解析口径(#190)", () => {
   let rapp: ReturnType<typeof createUiApp>;
   const pad = (p: string) => p.padEnd(64, "0");

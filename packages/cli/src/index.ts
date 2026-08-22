@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { defineCommand, runMain } from "citty";
@@ -13,7 +12,7 @@ import { resolveHome } from "./home.js";
 import { scanKnownClients } from "./scan.js";
 import { collectDoctorReport } from "./doctor.js";
 import { runGroup } from "./group-cmds.js";
-import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
+import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify, writePointerFile } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 import { runAnalyze } from "./analyze.js";
 import { runBootstrap } from "./bootstrap.js";
@@ -22,16 +21,6 @@ import { runReset } from "./reset-cmds.js";
 import { runShare } from "./share.js";
 import { runNew } from "./create-cmds.js";
 import { loadEnvFile } from "./env.js";
-
-/** 写入指针文件(home 下),先建目录再原子写。 */
-async function writePointerFile(home: string, storeRoot: string): Promise<string> {
-  const pointerFile = path.join(home, POINTER_REL);
-  await mkdir(path.dirname(pointerFile), { recursive: true });
-  const tmp = pointerFile + ".tmp-" + process.pid + "-" + Date.now();
-  await writeFile(tmp, JSON.stringify({ storeRoot }, null, 2) + "\n", "utf8");
-  await rename(tmp, pointerFile);
-  return pointerFile;
-}
 
 const scan = defineCommand({
   meta: { name: "scan", description: "扫描各 Agent 全局目录,列出发现的 skill(只读,不入库)" },

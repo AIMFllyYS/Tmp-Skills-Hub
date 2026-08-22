@@ -1,4 +1,4 @@
-import { readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   adoptMany,
@@ -17,7 +17,6 @@ import {
   STORE_ARCHIVE_DIR,
   STORE_SKILLS_DIR,
   type AdoptInput,
-  type LinkEntry,
   type SkillRecord,
   type StoreRootOptions,
 } from "@skills-hub/core";
@@ -26,13 +25,23 @@ import { GitHubSourceProvider } from "./github-source.js";
 import { isSkillsShUrl, SkillsShSourceProvider } from "./skills-sh-source.js";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
-import { performLinkChange } from "./link-actions.js";
+import { performLinkChange, previewLinkChange, type LinkChangeRequest } from "./link-actions.js";
 import { resolveNames } from "./resolve-skill.js";
 
 export { resolveNames, resolveSkill } from "./resolve-skill.js";
 export type { ResolveSkillFailure, ResolveSkillResult } from "./resolve-skill.js";
 
 export const POINTER_REL = path.join(".skills-hub", "config.json");
+
+/** 指针文件:tmp+rename 原子写。init 与 bootstrap 共用。 */
+export async function writePointerFile(home: string, storeRoot: string): Promise<string> {
+  const pointerFile = path.join(home, POINTER_REL);
+  await mkdir(path.dirname(pointerFile), { recursive: true });
+  const tmp = pointerFile + ".tmp-" + process.pid + "-" + Date.now();
+  await writeFile(tmp, JSON.stringify({ storeRoot }, null, 2) + "\n", "utf8");
+  await rename(tmp, pointerFile);
+  return pointerFile;
+}
 
 /** 解析库存位置;未配置时输出契约失败信封并返回 null(退出码 2 由 helper 设置)。 */
 export async function resolveStoreRootOrFail(args: { home: string | undefined; json: boolean | undefined }, command: string): Promise<string | null> {
@@ -439,42 +448,24 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
   const dirNames = await resolveLinkTargets(args, skills, storeRoot, "enable");
   if (dirNames === null) return;
 
-  const ledger = await readLinksLedger(storeRoot);
-  const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
-  const planNames = new Set(dirNames);
-  const added = dirNames.map((name) => {
-    const record = skills.find((s) => s.dirName === name)!;
-    const prev = existing.find((e) => e.entryName === name);
-    return {
-      id: prev?.id ?? client.clientId + ":" + scope + ":" + name,
-      clientId: client.clientId,
-      scope,
-      targetDir: client.skillsDir,
-      entryName: name,
-      skillHash: record.hash,
-      kind: prev?.kind ?? (process.platform === "win32" ? "junction" : "symlink"),
-      createdAt: prev?.createdAt ?? new Date().toISOString(),
-    } satisfies LinkEntry;
-  });
-  const desired = [...existing.filter((e) => !planNames.has(e.entryName)), ...added];
+  const req: LinkChangeRequest = { storeRoot, clientId: client.clientId, scope, skillsDir: client.skillsDir, dirNames };
 
   if (dryRun) {
-    const wouldCreate = added.map((e) => e.entryName);
-    const wouldRemove = existing.filter((e) => !desired.some((d) => d.id === e.id)).map((e) => e.entryName);
+    const preview = await previewLinkChange(req, "enable");
+    const wouldCreate = preview.wouldCreate.map((e) => e.dirName);
+    const wouldRemove = preview.wouldRemove.map((e) => e.dirName);
     if (args.json) emitOk("enable", { dryRun: true, clientId: client.clientId, scope, targetDir: client.skillsDir, wouldCreate, wouldRemove });
     else {
       console.log("预演(不写盘):");
       for (const n of wouldCreate) console.log("  将建立链接: " + n + " → " + client.skillsDir);
       for (const n of wouldRemove) console.log("  将摘除链接: " + n);
-      if (wouldCreate.length === 0 && wouldRemove.length === 0) console.log("  无变更");
+      for (const x of preview.conflicts) console.log("  冲突: " + x.dirName + " — " + x.reason);
+      if (wouldCreate.length === 0 && wouldRemove.length === 0 && preview.conflicts.length === 0) console.log("  无变更");
     }
     return;
   }
 
-  const result = await performLinkChange(
-    { storeRoot, clientId: client.clientId, scope, skillsDir: client.skillsDir, dirNames },
-    "enable",
-  );
+  const result = await performLinkChange(req, "enable");
   if (!result.ok) {
     emitError(args.json === true, "enable", result.code, "enable 失败: " + result.message);
     return;
@@ -501,31 +492,27 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
   const dirNames = await resolveLinkTargets(args, skills, storeRoot, "disable");
   if (dirNames === null) return;
 
-  const ledger = await readLinksLedger(storeRoot);
-  const existing = ledger.filter((e) => e.targetDir === client.skillsDir);
-  const drop = new Set(dirNames);
-  const toRemove = existing.filter((e) => drop.has(e.entryName));
+  const req: LinkChangeRequest = { storeRoot, clientId: client.clientId, scope, skillsDir: client.skillsDir, dirNames };
 
   if (dryRun) {
-    if (args.json) emitOk("disable", { dryRun: true, clientId: client.clientId, scope, targetDir: client.skillsDir, wouldRemove: toRemove.map((e) => e.entryName) });
+    const preview = await previewLinkChange(req, "disable");
+    const wouldRemove = preview.wouldRemove.map((e) => e.dirName);
+    if (args.json) emitOk("disable", { dryRun: true, clientId: client.clientId, scope, targetDir: client.skillsDir, wouldRemove });
     else {
       console.log("预演(不写盘):");
-      for (const e of toRemove) console.log("  将摘除链接: " + e.entryName + "(原件保留在库存)");
-      if (toRemove.length === 0) console.log("  无变更(这些 skill 未在此客户端启用)");
+      for (const n of wouldRemove) console.log("  将摘除链接: " + n + "(原件保留在库存)");
+      for (const x of preview.conflicts) console.log("  冲突: " + x.dirName + " — " + x.reason);
+      if (wouldRemove.length === 0 && preview.conflicts.length === 0) console.log("  无变更(这些 skill 未在此客户端启用)");
     }
     return;
   }
 
-  if (toRemove.length === 0) {
+  const result = await performLinkChange(req, "disable");
+  if (result.ok && result.created.length === 0 && result.removed.length === 0) {
     if (args.json) emitOk("disable", { clientId: client.clientId, scope, targetDir: client.skillsDir, created: [], removed: [], unchanged: dirNames });
     else console.log("未变更:这些 skill 未在 " + client.clientId + " 启用(原件保留在库存)。");
     return;
   }
-
-  const result = await performLinkChange(
-    { storeRoot, clientId: client.clientId, scope, skillsDir: client.skillsDir, dirNames },
-    "disable",
-  );
   if (!result.ok) {
     emitError(args.json === true, "disable", result.code, "disable 失败: " + result.message);
     return;

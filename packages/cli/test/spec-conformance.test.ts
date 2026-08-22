@@ -56,6 +56,18 @@ describe("spec conformance", () => {
     }
   });
 
+  it("enable dry-run 走 previewLinkChange,不手建 LinkEntry[]", async () => {
+    const src = await readFile(path.join(ROOT, "packages", "cli", "src", "store-cmds.ts"), "utf8");
+    const start = src.indexOf("export async function runEnable");
+    const end = src.indexOf("export async function runDisable");
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const fn = src.slice(start, end);
+    expect(fn).toContain("previewLinkChange");
+    expect(fn).not.toContain("satisfies LinkEntry");
+    expect(fn).not.toContain("readLinksLedger");
+  });
+
   it("self-skill is bundled in cli/self-skill/", async () => {
     const skillMd = path.join(ROOT, "packages", "cli", "self-skill", "SKILL.md");
     const content = await readFile(skillMd, "utf8");

@@ -2,7 +2,7 @@ import { createInterface } from "node:readline";
 import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdir, readdir, rename, writeFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { openBrowser } from "./open-console.js";
 import {
   adoptSkillFolder,
@@ -15,7 +15,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { performLinkChange } from "./link-actions.js";
-import { POINTER_REL, runAdopt } from "./store-cmds.js";
+import { POINTER_REL, runAdopt, writePointerFile } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
 
 /**
@@ -55,15 +55,6 @@ async function defaultReadLine(): Promise<(prompt: string) => Promise<string>> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const ask = (prompt: string) => new Promise<string>((resolve) => rl.question(prompt, resolve));
   return ask;
-}
-
-/** 指针文件:tmp+rename 原子写(与 init 同款)。 */
-async function writePointerFile(home: string, storeRoot: string): Promise<void> {
-  const pointerFile = path.join(home, POINTER_REL);
-  await mkdir(path.dirname(pointerFile), { recursive: true });
-  const tmp = pointerFile + ".tmp-" + process.pid + "-" + Date.now();
-  await writeFile(tmp, JSON.stringify({ storeRoot }, null, 2) + "\n", "utf8");
-  await rename(tmp, pointerFile);
 }
 
 /** 发现并收录:扫描 base 下全部客户端 root,收集达标 skill 目录,一次批量 adopt。 */
