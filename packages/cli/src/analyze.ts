@@ -6,12 +6,12 @@
  * 输入:本地 skill 目录路径,或库存中的 skill 名(目录名)。
  * 输出:相近(similar)与可能冲突(conflict)清单,各带理由。
  * 降级:无密钥 → not-configured 可读提示;调用失败/超时 → 可读错误,
- * 绝不编造结论。密钥只从环境变量读取,不进报告与日志(#42 封装保证)。
+ * 绝不编造结论。密钥只从环境变量读,不进报告与日志(封装保证,见 llm.ts)。
  */
 
 import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/core";
 import path from "node:path";
-import { chatCompletion, type ChatOptions, type DeepSeekMessage, type DeepSeekResult } from "./deepseek.js";
+import { chatCompletion, type ChatOptions, type LlmMessage, type LlmResult } from "./llm.js";
 import { emitError, emitOk } from "./json-out.js";
 import { resolveSkill } from "./resolve-skill.js";
 
@@ -90,8 +90,8 @@ export function extractReportJson(text: string): { similar: AnalyzeReportItem[];
 }
 
 export interface RunAnalyzeOptions {
-  /** 测试注入;缺省走 #42 chatCompletion(读 DEEPSEEK_API_KEY) */
-  chat?: (messages: DeepSeekMessage[], opts?: ChatOptions) => Promise<DeepSeekResult>;
+  /** 测试注入;缺省走 chatCompletion(读 QINIU_API_KEY,见 ai-integration-v1.md) */
+  chat?: (messages: LlmMessage[], opts?: ChatOptions) => Promise<LlmResult>;
   /** HTTP 只认库存 hash/dirName;CLI 默认可再回退本地目录 */
   allowLocalPath?: boolean | undefined;
 }
@@ -142,7 +142,7 @@ export async function performAnalyze(storeRoot: string, input: string, opts: Run
   );
   if (!result.ok) {
     if (result.code === "not-configured") {
-      return { ok: false, code: "not-configured", message: "未配置 DEEPSEEK_API_KEY,无法分析 — 请配置密钥后重试(不会编造结论)" };
+      return { ok: false, code: "not-configured", message: "未配置 QINIU_API_KEY,无法分析 — 请配置密钥后重试(不会编造结论)" };
     }
     return { ok: false, code: "analyze-failed", message: "分析调用失败(" + result.code + "): " + result.message };
   }

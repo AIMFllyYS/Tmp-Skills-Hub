@@ -279,7 +279,7 @@ const archive = defineCommand({
 });
 
 const analyze = defineCommand({
-  meta: { name: "analyze", description: "相近/冲突分析:对照库存 description,给出相近与可能冲突的清单与理由(只读建议,不写盘;需 DEEPSEEK_API_KEY)" },
+  meta: { name: "analyze", description: "相近/冲突分析:对照库存 description,给出相近与可能冲突的清单与理由(只读建议,不写盘;需 QINIU_API_KEY)" },
   args: {
     home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
     json: { type: "boolean", description: "机器可读输出" },
