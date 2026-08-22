@@ -54,7 +54,7 @@
 
 - 键是记录哈希（index.json）：编辑写回/verify 更新哈希后，旧译文自然失效（孤儿清理另行立项）
 - 哈希目录名只认十六进制，relPath 复用 skill-files 的同款防穿越口径（越界即拒绝）
-- 备份内核只走客户端 skillsDir，不快照本目录；客户端发现排除本子树
+- 备份内核只走客户端 skillsDir，不快照本目录；客户端发现不会误收它（形状扫描只认 home 直接子目录下的 skills/，而 translations/ 下没有这形状）
 
 ### 2.2 为什么活跃态是目录、归档态是 zip
 
@@ -95,7 +95,7 @@
 
 **排除**（只判定 home 之下的相对段，命中即跳过）：名为 `builtin_skills` 的目录、插件/市场缓存（`plugins`、`cache`）、扩展目录（`extensions`）、浏览器 profile（`google-chrome`、`firefox` 等）、临时目录（`tmp`、`temp`）、**本项目自己的目录**（段名去前导点后等于 `skills-hub` 或以 `skills-hub.` 开头，覆盖 `.skills-hub`、`.skills-hub.pre-bootstrap-*`、`.skills-hub.bak` 等）。这些归客户端所有或由本项目自己产生，不应再被当成客户端。
 
-**库存根**：调用方若已知库存根，必须把它传给 `discoverClientRoots`。排除的是库存自己的 `skills/`（以及 `backups/`、`archive/`、`tmp/`、`translations/` 子树），不是库存根下面的一切——`--home` 双重语义下库存根等于 home，`.claude` 等客户端必须继续被发现。默认库存 `~/.skills-hub` 一旦建出 `skills/`，形状扫描会把它当成客户端，自我备份、自我收录；前缀排除与库存根声明一起挡住这件事。
+**库存根**：调用方若已知库存根，必须把它传给 `discoverClientRoots`。排除的是库存自己的 `skills/`（以及 `backups/`、`archive/`、`tmp/` 子树），不是库存根下面的一切——`--home` 双重语义下库存根等于 home，`.claude` 等客户端必须继续被发现。默认库存 `~/.skills-hub` 一旦建出 `skills/`，形状扫描会把它当成客户端，自我备份、自我收录；前缀排除与库存根声明一起挡住这件事。`translations/` 不需单独排除：形状扫描只认直接子目录下的 skills/，而译文缓存里不存在这形状。
 
 **系统级目录**（`/etc/<client>/skills`、`/Library/Application Support/...`、`ProgramData` 等）**不在 home 扫描范围**，留给 `doctor` 提权检测。
 
