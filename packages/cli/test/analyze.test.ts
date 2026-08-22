@@ -15,12 +15,10 @@ function rec(dirName: string, description: string): SkillRecord {
   return {
     dirName,
     hash: "h-" + dirName,
-    meta: { name: dirName, description, version: "0.0.1" },
+    meta: { name: dirName, description },
     origins: [{ kind: "local-scan", reference: dirName }],
-    groups: [],
-    enabled: true,
     visibleIn: [],
-    archived: false,
+    installedAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
@@ -119,7 +117,7 @@ describe("runAnalyze", () => {
     await writeFile(path.join(targetDir, "SKILL.md"), ["---", "name: target", "description: 本地待评估 skill", "---", "", "# target", "", "demo."].join("\n") + "\n", "utf8");
     let sent = "";
     const chat: RunAnalyzeOptions["chat"] = async (messages) => {
-      sent = messages[messages.length - 1]!.content;
+      sent = messages[messages.length - 1]!.content ?? "";
       return { ok: true as const, content: '{"similar":[],"conflict":[]}' };
     };
     const origLog = console.log;
@@ -157,6 +155,6 @@ describe("runAnalyze", () => {
     } finally {
       console.error = origErr;
     }
-    expect(errs.join(" ")).toContain("DEEPSEEK_API_KEY");
+    expect(errs.join(" ")).toContain("QINIU_API_KEY");
   });
 });
