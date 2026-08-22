@@ -140,21 +140,35 @@ export function SkillsPage({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="skills-page">
       <header className="shrink-0 border-b border-line px-6 pt-4">
         <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">Skills 管理</h1>
-        <nav className="mt-3 flex" aria-label="Skills 管理页签">
-          <button type="button" data-testid="skills-tab-apps" className={tabTriggerClass(tab === "apps")} onClick={() => onTab("apps")}>
+        <nav className="mt-3 flex" role="tablist" aria-label="Skills 管理页签">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "apps"}
+            data-testid="skills-tab-apps"
+            className={tabTriggerClass(tab === "apps")}
+            onClick={() => onTab("apps")}
+          >
             应用
           </button>
-          <button type="button" data-testid="skills-tab-content" className={tabTriggerClass(tab === "content")} onClick={() => onTab("content")}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "content"}
+            data-testid="skills-tab-content"
+            className={tabTriggerClass(tab === "content")}
+            onClick={() => onTab("content")}
+          >
             内容
           </button>
         </nav>
       </header>
 
       {tab === "apps" && (
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1" data-testid="skills-apps-pane">
           <div className="flex w-52 shrink-0 flex-col border-r border-line">
             <ScrollArea className="min-h-0 flex-1 py-2">
               {orderedClients.length === 0 && <p className="px-4 py-3 text-sm text-ink-mid">未发现应用</p>}
@@ -251,7 +265,7 @@ export function SkillsPage({
       )}
 
       {tab === "content" && (
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col" data-testid="skills-content-pane" role="tabpanel">
           <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-4 py-3">
             <Input
               value={query}
