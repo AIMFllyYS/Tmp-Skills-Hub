@@ -9,9 +9,13 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TruncateTip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { startReset } from "../skills/api.js";
+import { getAction } from "../actions/registry.js";
+import { formatResetPreview } from "../skills/catalog.js";
 import type { ClientInfo } from "../skills/types.js";
 import { groupClientIds } from "./apps-layout.js";
+
+const RESET_FALLBACK_BODY =
+  "将按最近一份备份还原各应用里的 skills,并旁路旧库存后再收录。此操作不能用撤销按钮收回。";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -34,8 +38,10 @@ export function SettingsDialog({
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [previewBody, setPreviewBody] = useState(RESET_FALLBACK_BODY);
   const groups = groupClientIds(clients.map((c) => c.clientId));
   const path = storeRoot === "" ? "未配置" : storeRoot;
+  const reset = getAction("reset");
 
   const copyPath = (): void => {
     if (storeRoot === "") return;
@@ -123,7 +129,17 @@ export function SettingsDialog({
                 data-testid="reset-button"
                 className="mt-3"
                 disabled={busy || latestSnapshotId === null}
-                onClick={() => setAsk(true)}
+                onClick={() => {
+                  if (latestSnapshotId === null) return;
+                  setBusy(true);
+                  void reset.preview({ snapshotId: latestSnapshotId })
+                    .then((p) => setPreviewBody(formatResetPreview(p)))
+                    .catch(() => setPreviewBody(RESET_FALLBACK_BODY))
+                    .finally(() => {
+                      setBusy(false);
+                      setAsk(true);
+                    });
+                }}
               >
                 重置
               </Button>
@@ -137,14 +153,14 @@ export function SettingsDialog({
       {ask && (
         <ConfirmDialog
           title="请再次确认"
-          body="将按最近一份备份还原各应用里的 skills,并旁路旧库存后再收录。此操作不能用撤销按钮收回。"
+          body={previewBody}
           confirmLabel="确认重置"
           busy={busy}
           onCancel={() => setAsk(false)}
           onConfirm={() => {
             if (latestSnapshotId === null) return;
             setBusy(true);
-            startReset(latestSnapshotId, "reset")
+            void reset.execute({ snapshotId: latestSnapshotId, confirm: "reset" })
               .then((r) => {
                 toast("已重置。重新收录 " + String(r.adopted) + " 份。");
                 setAsk(false);

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getAction } from "../actions/registry.js";
-import { isBuiltinGroup } from "../panel/builtin-groups.js";
+import { isBuiltinGroup } from "./builtin-groups.js";
 import type { GroupDef } from "./types.js";
 
 interface GroupManagerProps {

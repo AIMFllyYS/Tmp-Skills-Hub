@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { SKILL_ROW_HEIGHT_PX } from "../panel/virtual-window.js";
+import { SKILL_ROW_HEIGHT_PX } from "./virtual-window.js";
 import type { ClientLinkState, SkillRecord } from "./types.js";
 
 export interface SkillRowClientView {

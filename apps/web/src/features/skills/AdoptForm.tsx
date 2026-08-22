@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getAction } from "../actions/registry.js";
-import { formatBatchResult } from "../skills/batch-links.js";
-import type { AdoptResponse } from "../skills/types.js";
+import { formatBatchResult } from "./batch-links.js";
+import { SkillFormDialog } from "./SkillFormDialog.js";
+import type { AdoptResponse } from "./types.js";
 
 interface AdoptFormProps {
   clientIds?: string[];
@@ -60,43 +59,29 @@ export function AdoptForm({ clientIds = [], onDone, onNotice }: AdoptFormProps):
       <Button type="button" variant="outline" size="sm" data-testid="adopt-open" onClick={() => setOpen(true)}>
         {adopt.verb}
       </Button>
-      <Dialog open={open} onOpenChange={(next) => { if (!busy) setOpen(next); }}>
-        <DialogContent>
-          <DialogTitle>{adopt.verb}</DialogTitle>
-          <DialogDescription>粘贴本地路径、GitHub 或 skills.sh 链接。</DialogDescription>
-          <form
-            className="mt-3 flex flex-col gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submit();
-            }}
-          >
-            <Input
-              data-testid="adopt-source"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              placeholder="本地路径 / GitHub / skills.sh 链接"
-            />
-            <label className="flex items-center gap-2 text-xs text-ink-mid">
-              <Checkbox
-                data-testid="adopt-enable-all"
-                checked={enableAll}
-                onCheckedChange={setEnableAll}
-              />
-              同时启用到全部已发现应用
-            </label>
-            {error !== null && <p className="text-xs text-red-700">{error}</p>}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>
-                取消
-              </Button>
-              <Button type="submit" data-testid="adopt-submit" disabled={busy || source.trim() === ""}>
-                {busy ? "收录中…" : adopt.verb}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <SkillFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={adopt.verb}
+        description="粘贴本地路径、GitHub 或 skills.sh 链接。"
+        busy={busy}
+        error={error}
+        enableAll={enableAll}
+        onEnableAllChange={setEnableAll}
+        enableTestId="adopt-enable-all"
+        submitTestId="adopt-submit"
+        submitDisabled={source.trim() === ""}
+        idleSubmitLabel={adopt.verb}
+        busySubmitLabel="收录中…"
+        onSubmit={() => void submit()}
+      >
+        <Input
+          data-testid="adopt-source"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          placeholder="本地路径 / GitHub / skills.sh 链接"
+        />
+      </SkillFormDialog>
     </>
   );
 }
