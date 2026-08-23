@@ -23,13 +23,20 @@ import { resolveHome } from "./home.js";
 import { performAdopt, performVerify, POINTER_REL } from "./store-cmds.js";
 import { resolveSkill } from "./resolve-skill.js";
 import { collectDoctorReport } from "./doctor.js";
-import { performAnalyze } from "./analyze.js";
+import { performAnalyze, type AnalyzeGenerate } from "./analyze.js";
 import { performShare } from "./share.js";
-import { chatCompletion, chatCompletionStream, type LlmMessage } from "./llm.js";
+import { createAgentUIStreamResponse, streamText, type LanguageModel } from "ai";
+import { mapLlmError } from "./llm/errors.js";
+import {
+  createQiniuModel,
+  notConfiguredMessage,
+  qiniuApiKey,
+  resolveModel,
+  STREAM_IDLE_TIMEOUT_MS,
+} from "./llm/provider.js";
 import { readTranslation, writeTranslation } from "./translations.js";
-import { parseWireMessages, runAgentTurn, type AgentTurnOptions } from "./agent/loop.js";
+import { createSkillsHubAgent, parseWritePolicy } from "./agent/agent.js";
 import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
-import { executeAgentTool } from "./agent/tools.js";
 import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, withStore, type UiRouteContext } from "./ui-http.js";
 import { registerGroupRoutes } from "./ui-groups.js";
 import { registerDraftRoutes } from "./ui-drafts.js";
@@ -38,7 +45,7 @@ import { registerLinkRoutes } from "./ui-links.js";
 
 export const DEFAULT_UI_PORT = 4321;
 
-/** 翻译代理(#38)常量:单次截断上限防滥用;流式下发,空闲超时由 llm.ts 管。 */
+/** 翻译代理(#38)常量:单次截断上限防滥用;流式下发,空闲超时由 STREAM_IDLE_TIMEOUT_MS 管。 */
 export const MAX_TRANSLATE_CHARS = 200_000;
 
 /** 翻译系统提示:保留代码块与 frontmatter 原文,只译说明性文字。 */
@@ -62,16 +69,48 @@ export interface UiAppOptions {
   home?: string;
   /** web 静态产物根(缺省 apps/web/dist;测试注入临时目录) */
   webRoot?: string;
-  /** 翻译流式实现注入(测试替身隔离网络;缺省 chatCompletionStream) */
-  translateStream?: typeof chatCompletionStream;
-  /** 分析用的 chat 替身(测试隔离真实网络;缺省 chatCompletion) */
-  analyzeChat?: typeof chatCompletion;
+  /** 翻译流式实现注入(测试替身隔离网络) */
+  translateStream?: TranslateStreamFn;
+  /** 分析生成替身(测试隔离真实网络) */
+  analyzeGenerate?: AnalyzeGenerate;
   /** GitHub/skills.sh 拉取用的 fetch 替身(测试隔离真实网络) */
   fetchImpl?: typeof fetch;
-  /** Agent 对话流式实现注入(测试替身;缺省 chatCompletionStream) */
-  agentChatStream?: typeof chatCompletionStream;
-  /** Agent 工具执行注入(测试替身;缺省 executeAgentTool) */
-  agentExecTool?: typeof executeAgentTool;
+  /** Agent / 翻译用的语言模型替身(测试隔离真实网络) */
+  languageModel?: LanguageModel;
+}
+
+export type TranslateStreamEvent =
+  | { type: "text"; delta: string }
+  | { type: "done" }
+  | { type: "error"; code: string; message: string };
+
+export type TranslateStreamFn = (text: string, opts?: { signal?: AbortSignal }) => AsyncIterable<TranslateStreamEvent>;
+
+async function* defaultTranslateStream(
+  text: string,
+  opts: { signal?: AbortSignal; model?: LanguageModel } = {},
+): AsyncGenerator<TranslateStreamEvent> {
+  if (opts.model === undefined && qiniuApiKey() === undefined) {
+    yield { type: "error", code: "not-configured", message: notConfiguredMessage() };
+    return;
+  }
+  try {
+    const streamOpts: Parameters<typeof streamText>[0] = {
+      model: opts.model ?? createQiniuModel(resolveModel()),
+      system: TRANSLATE_SYSTEM_PROMPT,
+      prompt: text,
+      timeout: { chunkMs: STREAM_IDLE_TIMEOUT_MS },
+    };
+    if (opts.signal !== undefined) streamOpts.abortSignal = opts.signal;
+    const result = streamText(streamOpts);
+    for await (const delta of result.textStream) {
+      yield { type: "text", delta };
+    }
+    yield { type: "done" };
+  } catch (e) {
+    const mapped = mapLlmError(e);
+    yield { type: "error", code: mapped.code, message: mapped.message };
+  }
 }
 
 /** 默认静态根:编译后位于 packages/cli/dist/,上三级到仓库根,再进 apps/web/dist。 */
@@ -110,8 +149,15 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const app = new Hono();
   const storeRoot = opts.storeRoot === undefined ? null : opts.storeRoot;
   const home = opts.home ?? resolveHome();
-  const translateStream = opts.translateStream ?? chatCompletionStream;
-  const analyzeChat = opts.analyzeChat ?? chatCompletion;
+  const translateStream: TranslateStreamFn =
+    opts.translateStream ??
+    ((text, streamOpts) => {
+      const pass: { signal?: AbortSignal; model?: LanguageModel } = {};
+      if (streamOpts?.signal !== undefined) pass.signal = streamOpts.signal;
+      if (opts.languageModel !== undefined) pass.model = opts.languageModel;
+      return defaultTranslateStream(text, pass);
+    });
+  const analyzeGenerate = opts.analyzeGenerate;
   const fetchImpl = opts.fetchImpl;
   const webRoot = opts.webRoot ?? defaultWebRoot();
   const ctx: UiRouteContext = { storeRoot, home };
@@ -178,22 +224,19 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   app.post("/api/translate", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { text?: unknown; target?: unknown; path?: unknown } | null;
-    if (body === null || typeof body?.text !== "string" || body.text === "") {
+    if (body === null || typeof body.text !== "string" || body.text === "") {
       return err(c, "translate", "bad-usage", "body 需要 { text: string }");
     }
+    const sourceText = body.text;
     // 译文留存(#208):target+path 都带且能解析时,流式成功结束后 best-effort 落盘;绝不写 skills/ 原件
     let persist: { root: string; hash: string; rel: string } | null = null;
     if (storeRoot !== null && typeof body.target === "string" && body.target.trim() !== "" && typeof body.path === "string" && body.path.trim() !== "") {
       const hit = resolveSkill(body.target.trim(), await readStoreIndex(storeRoot).catch(() => []));
       if (hit.ok) persist = { root: storeRoot, hash: hit.skill.hash, rel: body.path.trim() };
     }
-    const messages: LlmMessage[] = [
-      { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
-      { role: "user", content: body.text.slice(0, MAX_TRANSLATE_CHARS) },
-    ];
     return streamSSE(c, async (stream) => {
       let full = "";
-      for await (const ev of translateStream(messages, { signal: c.req.raw.signal })) {
+      for await (const ev of translateStream(sourceText.slice(0, MAX_TRANSLATE_CHARS), { signal: c.req.raw.signal })) {
         if (ev.type === "text") {
           full += ev.delta;
           await stream.writeSSE({ event: "delta", data: JSON.stringify({ text: ev.delta }) });
@@ -201,7 +244,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
           await stream.writeSSE({ event: "error", data: JSON.stringify({ code: ev.code, message: ev.message }) });
           return;
         } else if (ev.type === "done") {
-          if (persist !== null) await writeTranslation(persist.root, persist.hash, persist.rel, full); // 落盘失败静默,不影响 done
+          if (persist !== null) await writeTranslation(persist.root, persist.hash, persist.rel, full);
           await stream.writeSSE({ event: "done", data: "{}" });
         }
       }
@@ -228,19 +271,34 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   // Agent 对话(agent-v0.md):不包 withStore——库存未配置时仍可对话,工具返回可读文本。
   app.post("/api/agent/chat", async (c) => {
-    const raw = (await c.req.json().catch(() => null)) as { messages?: unknown; model?: unknown } | null;
-    const messages = parseWireMessages(raw?.messages);
-    if (messages === null) return err(c, "agent-chat", "bad-usage", "body 需要 { messages: WireMessage[] }(不含 system)");
-    const model = resolveAgentModel(raw?.model);
+    if (opts.languageModel === undefined && qiniuApiKey() === undefined) {
+      return err(c, "agent-chat", "not-configured", notConfiguredMessage());
+    }
+    const raw = (await c.req.json().catch(() => null)) as { messages?: unknown; model?: unknown; writePolicy?: unknown } | null;
+    const messages = raw?.messages;
+    if (!Array.isArray(messages)) return err(c, "agent-chat", "bad-usage", "body 需要 { messages: UIMessage[] }(不含 system)");
+    if (messages.some((m) => typeof m === "object" && m !== null && (m as { role?: unknown }).role === "system")) {
+      return err(c, "agent-chat", "bad-usage", "body 需要 { messages: UIMessage[] }(不含 system)");
+    }
+    const modelId = resolveAgentModel(raw?.model);
+    const writePolicy = parseWritePolicy(raw?.writePolicy);
     const clients = (await discoverClientRoots(home, clientDiscoverOpts(storeRoot))).map((r) => r.clientId);
-    return streamSSE(c, async (stream) => {
-      const turnOpts: AgentTurnOptions = { messages, model, env: { home, storeRoot }, clients };
-      turnOpts.signal = c.req.raw.signal;
-      if (opts.agentChatStream !== undefined) turnOpts.chatStream = opts.agentChatStream;
-      if (opts.agentExecTool !== undefined) turnOpts.execTool = opts.agentExecTool;
-      for await (const ev of runAgentTurn(turnOpts)) {
-        await stream.writeSSE({ event: ev.event, data: JSON.stringify(ev.data) });
-      }
+    const env: { home: string; storeRoot: string | null; fetchImpl?: typeof fetch; analyzeGenerate?: AnalyzeGenerate } = {
+      home,
+      storeRoot,
+    };
+    if (fetchImpl !== undefined) env.fetchImpl = fetchImpl;
+    if (analyzeGenerate !== undefined) env.analyzeGenerate = analyzeGenerate;
+    const agent = createSkillsHubAgent({
+      model: opts.languageModel ?? createQiniuModel(modelId),
+      env,
+      clients,
+      writePolicy,
+    });
+    return createAgentUIStreamResponse({
+      agent,
+      uiMessages: messages,
+      abortSignal: c.req.raw.signal,
     });
   });
 
@@ -249,7 +307,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const raw = (await c.req.json().catch(() => null)) as { target?: unknown } | null;
       const target = typeof raw?.target === "string" ? raw.target.trim() : "";
       if (target === "") return err(c, "analyze", "bad-usage", "body 需要 { target: string }");
-      const res = await performAnalyze(root, target, { chat: analyzeChat, allowLocalPath: false });
+      const analyzeOpts = analyzeGenerate !== undefined
+        ? { generate: analyzeGenerate, allowLocalPath: false as const }
+        : { allowLocalPath: false as const };
+      const res = await performAnalyze(root, target, analyzeOpts);
       if (!res.ok) return err(c, "analyze", res.code, res.message);
       return c.json({ ok: true, command: "analyze", target: res.target, similar: res.similar, conflict: res.conflict });
     }),

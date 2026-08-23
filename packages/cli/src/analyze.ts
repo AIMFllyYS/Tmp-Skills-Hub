@@ -1,27 +1,20 @@
 /**
- * 相近/冲突分析(#43)。文本判断类任务:按 core-patterns.md §5 交给模型,
- * core 不实现任何相似度算法——分析完全基于 CLI 已有输出(list --json 的
- * description),模型只产出「建议」,本命令不触发任何写操作。
- *
- * 输入:本地 skill 目录路径,或库存中的 skill 名(目录名)。
- * 输出:相近(similar)与可能冲突(conflict)清单,各带理由。
- * 降级:无密钥 → not-configured 可读提示;调用失败/超时 → 可读错误,
- * 绝不编造结论。密钥只从环境变量读,不进报告与日志(封装保证,见 llm.ts)。
+ * 相近/冲突分析(#43)。文本判断交给模型,core 不实现相似度算法。
+ * 只产出建议,不写盘。无密钥时 not-configured,不编造结论。
  */
 
+import { generateText, Output } from "ai";
+import { z } from "zod";
 import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/core";
 import path from "node:path";
-import { chatCompletion, type ChatOptions, type LlmMessage, type LlmResult } from "./llm.js";
 import { emitError, emitOk } from "./json-out.js";
+import { mapLlmError, type LlmFailureCode } from "./llm/errors.js";
+import { createQiniuModel, notConfiguredMessage, qiniuApiKey, resolveModel } from "./llm/provider.js";
 import { resolveSkill } from "./resolve-skill.js";
 
-/** 单个目标最多喂给模型的 description 字符数(防超大 skill 撑爆上下文)。 */
 export const MAX_TARGET_DESC_CHARS = 4_000;
-/** 库存单条 description 截断,避免大库存超上下文。 */
 export const MAX_STOCK_DESC_CHARS = 200;
-/** 库存最多纳入多少条对照。 */
 export const MAX_STOCK_RECORDS = 400;
-/** 分析超时:库存大、推理耗时,比默认 30s 放宽。 */
 export const ANALYZE_TIMEOUT_MS = 90_000;
 
 export interface AnalyzeReportItem {
@@ -47,7 +40,11 @@ interface AnalyzeContext {
   stock: Array<{ name: string; description: string }>;
 }
 
-/** 组装给模型的分析上下文(纯函数,可测)。 */
+const reportSchema = z.object({
+  similar: z.array(z.object({ name: z.string(), reason: z.string() })),
+  conflict: z.array(z.object({ name: z.string(), reason: z.string() })),
+});
+
 export function buildAnalyzeContext(records: SkillRecord[], target: { dirName: string; description: string }): AnalyzeContext {
   const stock = records
     .filter((s) => s.dirName !== target.dirName)
@@ -63,36 +60,42 @@ export function buildAnalyzeContext(records: SkillRecord[], target: { dirName: s
   };
 }
 
-/** 系统提示:角色与输出契约(纯函数,可测)。 */
 export function analyzeSystemPrompt(): string {
   return [
     "你是一个 Agent Skill 库存的分析助手。用户给出一个待评估的 skill 的 name 与 description,以及库存中其他 skill 的 name 与 description 列表。",
     "你的任务:判断库存里哪些 skill 与它功能相近(similar),哪些可能冲突(conflict,如职责重叠、命名易混、互相干扰)。",
-    "只输出一个 JSON 对象,不要任何额外文字,格式:",
-    '{"similar":[{"name":"...","reason":"..."}],"conflict":[{"name":"...","reason":"..."}]}',
-    "要求:1) 只引用库存列表中真实存在的 name;2) 每条给一句具体理由(基于 description 的相似点或冲突点);3) 没有相近或冲突就输出空数组;4) 这是建议,绝不执行任何写操作;5) 不要在理由中编造库存列表之外的信息。",
+    "只引用库存列表中真实存在的 name;每条给一句具体理由;没有相近或冲突就输出空数组。",
+    "这是建议,绝不执行任何写操作;不要编造库存列表之外的信息。",
   ].join("\n");
 }
 
-/** 从模型回复中提取 JSON(容忍 ```json 围栏与前后缀文字)。 */
-export function extractReportJson(text: string): { similar: AnalyzeReportItem[]; conflict: AnalyzeReportItem[] } {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const candidate = fenced?.[1] ?? text;
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("模型回复中没有可解析的 JSON 对象");
-  const parsed = JSON.parse(candidate.slice(start, end + 1)) as { similar?: unknown; conflict?: unknown };
-  const clean = (v: unknown): AnalyzeReportItem[] =>
-    Array.isArray(v)
-      ? v.filter((x): x is AnalyzeReportItem => typeof x === "object" && x !== null && typeof (x as { name?: unknown }).name === "string" && typeof (x as { reason?: unknown }).reason === "string").map((x) => ({ name: (x as { name: string }).name, reason: (x as { reason: string }).reason }))
-      : [];
-  return { similar: clean(parsed.similar), conflict: clean(parsed.conflict) };
+export type AnalyzeGenerateResult =
+  | { ok: true; similar: AnalyzeReportItem[]; conflict: AnalyzeReportItem[] }
+  | { ok: false; code: LlmFailureCode; message: string };
+
+export type AnalyzeGenerate = (input: { system: string; prompt: string }) => Promise<AnalyzeGenerateResult>;
+
+async function defaultGenerate(input: { system: string; prompt: string }): Promise<AnalyzeGenerateResult> {
+  if (qiniuApiKey() === undefined) {
+    return { ok: false, code: "not-configured", message: notConfiguredMessage() };
+  }
+  try {
+    const result = await generateText({
+      model: createQiniuModel(resolveModel()),
+      system: input.system,
+      prompt: input.prompt,
+      output: Output.object({ schema: reportSchema }),
+      timeout: { totalMs: ANALYZE_TIMEOUT_MS },
+    });
+    return { ok: true, similar: result.output.similar, conflict: result.output.conflict };
+  } catch (e) {
+    const mapped = mapLlmError(e);
+    return { ok: false, code: mapped.code, message: mapped.message };
+  }
 }
 
 export interface RunAnalyzeOptions {
-  /** 测试注入;缺省走 chatCompletion(读 QINIU_API_KEY,见 ai-integration-v1.md) */
-  chat?: (messages: LlmMessage[], opts?: ChatOptions) => Promise<LlmResult>;
-  /** HTTP 只认库存 hash/dirName;CLI 默认可再回退本地目录 */
+  generate?: AnalyzeGenerate;
   allowLocalPath?: boolean | undefined;
 }
 
@@ -102,7 +105,6 @@ export type AnalyzeOutcome =
   | { ok: true; target: string; similar: AnalyzeReportItem[]; conflict: AnalyzeReportItem[] }
   | { ok: false; code: AnalyzeFailureCode; message: string };
 
-/** CLI 与 POST /api/analyze 共用:只读建议,不写库存或链接。 */
 export async function performAnalyze(storeRoot: string, input: string, opts: RunAnalyzeOptions = {}): Promise<AnalyzeOutcome> {
   const needle = input.trim();
   if (needle === "") return { ok: false, code: "bad-usage", message: "需要 target(hash 前缀或 dirName)" };
@@ -129,29 +131,24 @@ export async function performAnalyze(storeRoot: string, input: string, opts: Run
   }
 
   const ctx = buildAnalyzeContext(records, target);
-  const chat = opts.chat ?? chatCompletion;
-  const result = await chat(
-    [
-      { role: "system", content: analyzeSystemPrompt() },
-      {
-        role: "user",
-        content: "待评估 skill:\nname: " + ctx.targetName + "\ndescription: " + ctx.targetDescription + "\n\n库存对照:\n" + ctx.stock.map((s) => "- " + s.name + ": " + s.description).join("\n") + "\n\n请输出 JSON。",
-      },
-    ],
-    { timeoutMs: ANALYZE_TIMEOUT_MS },
-  );
+  const generate = opts.generate ?? defaultGenerate;
+  const result = await generate({
+    system: analyzeSystemPrompt(),
+    prompt:
+      "待评估 skill:\nname: " +
+      ctx.targetName +
+      "\ndescription: " +
+      ctx.targetDescription +
+      "\n\n库存对照:\n" +
+      ctx.stock.map((s) => "- " + s.name + ": " + s.description).join("\n"),
+  });
   if (!result.ok) {
     if (result.code === "not-configured") {
       return { ok: false, code: "not-configured", message: "未配置 QINIU_API_KEY,无法分析 — 请配置密钥后重试(不会编造结论)" };
     }
     return { ok: false, code: "analyze-failed", message: "分析调用失败(" + result.code + "): " + result.message };
   }
-  try {
-    const report = extractReportJson(result.content);
-    return { ok: true, target: ctx.targetName, similar: report.similar, conflict: report.conflict };
-  } catch (e) {
-    return { ok: false, code: "analyze-failed", message: "模型回复无法解析: " + (e instanceof Error ? e.message : String(e)) + " (请重试)" };
-  }
+  return { ok: true, target: ctx.targetName, similar: result.similar, conflict: result.conflict };
 }
 
 export async function runAnalyze(args: AnalyzeArgs, opts: RunAnalyzeOptions = {}): Promise<void> {

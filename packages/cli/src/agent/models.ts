@@ -1,5 +1,5 @@
 /**
- * Agent 模型白名单(agent-v0.md §7)。ID 以七牛云 /v1/models 实际返回为准
+ * Agent 模型白名单(agent-v0.md §6)。ID 以七牛云 /v1/models 实际返回为准
  * (2026-08-22 核实);不在白名单的 model 参数一律回落默认模型。
  */
 

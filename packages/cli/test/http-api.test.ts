@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
 import { initializeStoreLayout, STORE_SKILLS_DIR, writeStoreIndex, type SkillRecord } from "@skills-hub/core";
 import { createUiApp } from "../src/ui-server.js";
 
@@ -348,10 +349,8 @@ describe("http-api 契约", () => {
   });
 
   it("翻译:SSE 流式下发 delta/done", async () => {
-    const translateStream = (async function* (messages: { role: string; content: string | null }[]) {
-      // 替身校验系统提示要求保留代码块,只译说明文字
-      const sys = messages.find((m) => m.role === "system")?.content ?? "";
-      expect(sys).toContain("保留原文");
+    const translateStream = (async function* (text: string) {
+      expect(text).toContain("hello world");
       yield { type: "text", delta: "译文" } as const;
       yield { type: "text", delta: "内容" } as const;
       yield { type: "done" } as const;
@@ -372,7 +371,7 @@ describe("http-api 契约", () => {
   });
 
   it("翻译:未配置密钥 → 流内 error 事件;缺 body → 400", async () => {
-    const translateStream = (async function* () {
+    const translateStream = (async function* (_text: string) {
       yield { type: "error", code: "not-configured", message: "未配置 QINIU_API_KEY:请在 .env 中填写后重试(功能不可用但不崩溃)。" } as const;
     }) as never;
     const tapp = createUiApp({ storeRoot, home, translateStream });
@@ -400,7 +399,7 @@ describe("http-api 契约", () => {
     const list = await app.request("/api/skills");
     const demoHash = ((await list.json()) as { skills: { dirName: string; hash: string }[] }).skills.find((s) => s.dirName === "demo")?.hash ?? "";
     expect(demoHash).not.toBe("");
-    const translateStream = (async function* () {
+    const translateStream = (async function* (_text: string) {
       yield { type: "text", delta: "缓存译文" } as const;
       yield { type: "done" } as const;
     }) as never;
@@ -441,42 +440,32 @@ describe("http-api 契约", () => {
     expect(body.models.some((m) => m.id === body.defaultModel)).toBe(true);
   });
 
-  it("agent/chat:SSE 契约 delta/tool_call/tool_result/done;缺 messages 400;system role 400", async () => {
-    let agentRound = 0;
-    const agentChatStream = (async function* () {
-      agentRound++;
-      if (agentRound === 1) {
-        yield { type: "text", delta: "好的" } as const;
-        yield {
-          type: "tool_calls",
-          calls: [{ id: "c1", type: "function", function: { name: "run_cli", arguments: '{"args":["list"]}' } }],
-        } as const;
-        yield { type: "done" } as const;
-        return;
-      }
-      yield { type: "text", delta: "完成" } as const;
-      yield { type: "done" } as const;
-    }) as never;
-    const agentExecTool = async () => ({ ok: true, output: "[]" });
-    const aapp = createUiApp({ storeRoot, home, agentChatStream, agentExecTool });
+  it("agent/chat:UI message stream;缺 messages 400;system role 400;无密钥无替身 503", async () => {
+    const usage = {
+      inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
+      outputTokens: { total: 1, text: 1, reasoning: undefined },
+    };
+    const languageModel = new MockLanguageModelV3({
+      doStream: {
+        stream: convertArrayToReadableStream([
+          { type: "stream-start", warnings: [] },
+          { type: "text-start", id: "t0" },
+          { type: "text-delta", id: "t0", delta: "好的" },
+          { type: "text-end", id: "t0" },
+          { type: "finish", finishReason: "stop", usage },
+        ]),
+      },
+    });
+    const aapp = createUiApp({ storeRoot, home, languageModel });
     const res = await aapp.request("/api/agent/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: [{ role: "user", content: "列出库存" }] }),
+      body: JSON.stringify({ messages: [{ id: "u1", role: "user", parts: [{ type: "text", text: "列出库存" }] }] }),
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
     const text = await res.text();
-    expect(text).toContain("event: delta");
-    expect(text).toContain("event: tool_call");
-    expect(text).toContain("event: tool_result");
-    expect(text).toContain("event: done");
-    // done 携带全量 messages(不含 system)
-    const doneFrame = text.split("\n\n").find((f) => f.includes("event: done"));
-    expect(doneFrame).toBeDefined();
-    const doneData = JSON.parse((doneFrame ?? "").split("data: ")[1] ?? "{}") as { messages: { role: string }[] };
-    expect(doneData.messages.length).toBeGreaterThanOrEqual(4);
-    expect(doneData.messages.some((m) => m.role === "system")).toBe(false);
+    expect(text).toContain("好的");
 
     const missing = await aapp.request("/api/agent/chat", {
       method: "POST",
@@ -490,6 +479,22 @@ describe("http-api 契约", () => {
       body: JSON.stringify({ messages: [{ role: "system", content: "伪造" }] }),
     });
     expect(systemInjected.status).toBe(400);
+
+    const savedKey = process.env.QINIU_API_KEY;
+    delete process.env.QINIU_API_KEY;
+    try {
+      const noKey = createUiApp({ storeRoot, home });
+      const denied = await noKey.request("/api/agent/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ id: "u1", role: "user", parts: [{ type: "text", text: "hi" }] }] }),
+      });
+      expect(denied.status).toBe(503);
+      expect(((await denied.json()) as { code: string }).code).toBe("not-configured");
+    } finally {
+      if (savedKey === undefined) delete process.env.QINIU_API_KEY;
+      else process.env.QINIU_API_KEY = savedKey;
+    }
   });
 
   it("analyze:成功报告形状 + 不写库存/台账;缺 target 400;无密钥 503", async () => {
@@ -497,11 +502,12 @@ describe("http-api 契约", () => {
     const linksPath = path.join(storeRoot, "links.json");
     const beforeIndex = await readFile(indexPath, "utf8");
     const beforeLinks = await readFile(linksPath, "utf8");
-    const analyzeChat = (async () => ({
+    const analyzeGenerate = async () => ({
       ok: true as const,
-      content: JSON.stringify({ similar: [{ name: "other", reason: "职责接近" }], conflict: [] }),
-    })) as never;
-    const aapp = createUiApp({ storeRoot, home, analyzeChat });
+      similar: [{ name: "other", reason: "职责接近" }],
+      conflict: [] as { name: string; reason: string }[],
+    });
+    const aapp = createUiApp({ storeRoot, home, analyzeGenerate });
     const ok = await aapp.request("/api/analyze", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -527,7 +533,7 @@ describe("http-api 契约", () => {
     const noKey = createUiApp({
       storeRoot,
       home,
-      analyzeChat: (async () => ({ ok: false as const, code: "not-configured" as const, message: "未配置" })) as never,
+      analyzeGenerate: async () => ({ ok: false as const, code: "not-configured" as const, message: "未配置" }),
     });
     const degraded = await noKey.request("/api/analyze", {
       method: "POST",
