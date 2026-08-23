@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeSystemPrompt,
   buildAnalyzeContext,
-  extractReportJson,
   runAnalyze,
   type RunAnalyzeOptions,
 } from "../src/analyze.js";
@@ -46,28 +45,6 @@ describe("analyzeSystemPrompt", () => {
   });
 });
 
-describe("extractReportJson", () => {
-  it("解析裸 JSON", () => {
-    const r = extractReportJson('{"similar":[{"name":"a","reason":"r1"}],"conflict":[]}');
-    expect(r.similar).toEqual([{ name: "a", reason: "r1" }]);
-    expect(r.conflict).toEqual([]);
-  });
-
-  it("容忍 json 围栏与前缀文字", () => {
-    const r = extractReportJson("分析结果:\n\x60\x60\x60json\n{\"similar\":[],\"conflict\":[{\"name\":\"b\",\"reason\":\"r2\"}]}\n\x60\x60\x60");
-    expect(r.conflict).toEqual([{ name: "b", reason: "r2" }]);
-  });
-
-  it("过滤缺字段条目,空数组保留", () => {
-    const r = extractReportJson('{"similar":[{"name":"a"},{"name":"c","reason":"ok"}],"conflict":[]}');
-    expect(r.similar).toEqual([{ name: "c", reason: "ok" }]);
-  });
-
-  it("无 JSON 抛错", () => {
-    expect(() => extractReportJson("抱歉,我无法分析")).toThrow(/JSON/);
-  });
-});
-
 describe("runAnalyze", () => {
   let home = "";
   let storeRoot = "";
@@ -88,8 +65,8 @@ describe("runAnalyze", () => {
     await runAdopt({ home, yes: true, json: true, _: [stockDir] } as never);
   }
 
-  function stubChat(report: unknown): RunAnalyzeOptions["chat"] {
-    return async () => ({ ok: true as const, content: JSON.stringify(report) });
+  function stubGenerate(report: { similar: Array<{ name: string; reason: string }>; conflict: Array<{ name: string; reason: string }> }): RunAnalyzeOptions["generate"] {
+    return async () => ({ ok: true as const, similar: report.similar, conflict: report.conflict });
   }
 
   it("库存名输入:产出相近/冲突报告(--json)", async () => {
@@ -98,7 +75,7 @@ describe("runAnalyze", () => {
     const origLog = console.log;
     console.log = (m?: unknown) => { out.push(String(m)); };
     try {
-      await runAnalyze({ home, json: true, _: ["stock"] }, { chat: stubChat({ similar: [{ name: "stock", reason: "同 demo" }], conflict: [] }) });
+      await runAnalyze({ home, json: true, _: ["stock"] }, { generate: stubGenerate({ similar: [{ name: "stock", reason: "同 demo" }], conflict: [] }) });
     } finally {
       console.log = origLog;
     }
@@ -116,14 +93,14 @@ describe("runAnalyze", () => {
     tempRoots.push(targetDir);
     await writeFile(path.join(targetDir, "SKILL.md"), ["---", "name: target", "description: 本地待评估 skill", "---", "", "# target", "", "demo."].join("\n") + "\n", "utf8");
     let sent = "";
-    const chat: RunAnalyzeOptions["chat"] = async (messages) => {
-      sent = messages[messages.length - 1]!.content ?? "";
-      return { ok: true as const, content: '{"similar":[],"conflict":[]}' };
+    const generate: RunAnalyzeOptions["generate"] = async (input) => {
+      sent = input.prompt;
+      return { ok: true as const, similar: [], conflict: [] };
     };
     const origLog = console.log;
     console.log = () => {};
     try {
-      await runAnalyze({ home, json: true, _: [targetDir] }, { chat });
+      await runAnalyze({ home, json: true, _: [targetDir] }, { generate });
     } finally {
       console.log = origLog;
     }
@@ -137,7 +114,7 @@ describe("runAnalyze", () => {
     const origErr = console.error;
     console.error = (m?: unknown) => { errs.push(String(m)); };
     try {
-      await runAnalyze({ home, json: true, _: ["ghost"] }, { chat: stubChat({}) });
+      await runAnalyze({ home, json: true, _: ["ghost"] }, { generate: stubGenerate({ similar: [], conflict: [] }) });
     } finally {
       console.error = origErr;
     }
@@ -151,7 +128,7 @@ describe("runAnalyze", () => {
     const origErr = console.error;
     console.error = (m?: unknown) => { errs.push(String(m)); };
     try {
-      await runAnalyze({ home, json: true, _: ["stock"] }, { chat: async () => ({ ok: false as const, code: "not-configured" as const, message: "未配置" }) });
+      await runAnalyze({ home, json: true, _: ["stock"] }, { generate: async () => ({ ok: false as const, code: "not-configured" as const, message: "未配置" }) });
     } finally {
       console.error = origErr;
     }

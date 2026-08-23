@@ -1,6 +1,6 @@
 /**
  * SSE 消费工具(翻译与 Agent 共用):POST + 手写 ReadableStream 解析,
- * 不引第三方库。帧格式:event: <name>\ndata: <JSON>\n\n(见 agent-v0.md §4)。
+ * 不引第三方库。帧格式:event: <name>\ndata: <JSON>\n\n(翻译专用 delta/done/error)。
  */
 
 export interface SseHandlers {

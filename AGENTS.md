@@ -145,8 +145,8 @@ scripts/        辅助脚本（setup/build/dev）
 
 - [store-and-paths-v0.md](docs/specs/store-and-paths-v0.md) — **库存位置、目录布局、客户端发现规则、沙箱边界**：所有涉及路径的代码必须按它解析
 - [cli-commands-v0.md](docs/specs/cli-commands-v0.md) — **CLI 命令面与渐进式披露机制**：命令名的唯一口径，不得自行发明
-- [ai-integration-v1.md](docs/specs/ai-integration-v1.md) — **七牛云 AI 推理服务集成口径**（取代 deepseek-integration-v0）：端点、密钥铁律、enable_thinking 约定
-- [agent-v0.md](docs/specs/agent-v0.md) — **Agent 模块唯一口径**：工具面、SSE 事件契约、WireMessage、模型白名单、输出契约
+- [ai-integration-v1.md](docs/specs/ai-integration-v1.md) — **七牛云 AI 推理服务集成口径**：AI SDK + `createOpenAICompatible`、密钥铁律、`enable_thinking: false`
+- [agent-v0.md](docs/specs/agent-v0.md) — **Agent 模块唯一口径**（v1）：一等工具、`writePolicy`、AI SDK UI message stream、模型白名单、输出契约
 
 ### docs/plans/ — 计划
 
