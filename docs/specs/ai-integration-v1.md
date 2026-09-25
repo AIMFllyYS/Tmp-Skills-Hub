@@ -3,6 +3,8 @@
 > 状态:生效 | 取代 [deepseek-integration-v0.md](deepseek-integration-v0.md)
 > 修订理由:供应商从 DeepSeek 官方切换为七牛云聚合推理——统一多模型入口、更便宜、支持 `enable_thinking` 开关、流式与工具调用(function calling),满足翻译流式化与新增 Agent 模块的需求。
 >
+> **Agent v2 修订（2026-09-25）**：Agent 的思考开关改为按请求决定(深度思考),翻译 / 分析仍关闭。
+>
 > **#216 修订（2026-08-24）**：调用封装从自制 `chatCompletion` / `chatCompletionStream`(手写 OpenAI SSE 与 tool_calls 累积)改为 Vercel AI SDK。七牛云仍是唯一供应商;密钥铁律不变。
 
 ## 1. 事实清单
@@ -14,8 +16,8 @@
 | 默认模型 | `deepseek/deepseek-v4-flash-20260731`;`QINIU_MODEL` 环境变量可覆盖(只影响翻译/分析的缺省模型) |
 | Agent 模型 | 白名单制,见 [agent-v0.md](agent-v0.md) §6 |
 | SDK | `ai` + `@ai-sdk/openai-compatible`;provider 名 `qiniu` |
-| 思考开关 | 翻译/分析/Agent 一律 `enable_thinking: false`(经 `transformRequestBody` 注入);供应商仍可能发 reasoning 字段,SDK/客户端忽略 |
-| Agent | `ToolLoopAgent` + `createAgentUIStreamResponse`;`stopWhen: stepCountIs(15)` |
+| 思考开关 | 翻译 / 分析一律 `enable_thinking: false`;Agent 由请求 `thinking` 决定(缺省 `false`,且受模型白名单 `thinking` 能力裁剪),打开时推理以 `reasoning` part 流给前端(agent-v0.md §5)。均经 `transformRequestBody` 注入 |
+| Agent | `ToolLoopAgent` + `createAgentUIStreamResponse`;`stopWhen: stepCountIs(24)`;带 message metadata(agent-v0.md §9) |
 | 翻译 | `streamText`;HTTP 仍发翻译专用 `delta/done/error` |
 | 分析 | `generateText` + `Output.object`;失败不编造结论 |
 | 错误码 | 400 格式 / 401 认证 / 402 余额 / 422 参数 / 429 限流 / 500 服务端 / 503 过载 |

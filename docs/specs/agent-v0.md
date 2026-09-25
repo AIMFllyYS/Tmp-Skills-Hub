@@ -1,6 +1,8 @@
-# Agent v1——面板内对话式库存管家
+# Agent v2——面板内对话式库存管家
 
 > 状态:生效 | AI 调用口径见 [ai-integration-v1.md](ai-integration-v1.md);HTTP 端点登记见 [http-api-v0.md](http-api-v0.md)
+>
+> **v2 修订（2026-09-25）**：推理链可见化。①请求可带 `thinking`（深度思考）,打开时七牛 `enable_thinking: true`,推理以 AI SDK `reasoning` part 流给前端;②新增只读工具 `update_plan`,多步任务先公布计划、边做边勾(§8);③系统提示词改为固定工作法「理解 → 查证 → 计划 → 执行 → 核验 → 汇报」(§7);④流带 message metadata(模型、思考开关、token 用量,§9);⑤循环上限 15 → 24(计划更新也占模型调用)。前端呈现规则见 [ui-design-v2.md](../conventions/ui-design-v2.md) §9。
 >
 > **v1 修订（2026-08-24，#216）**：运行时从自制 OpenAI 子集（WireMessage、自研 SSE、`runAgentTurn`、`run_cli` spawn）换成 Vercel AI SDK（`ToolLoopAgent` + UI message stream + `toolApproval`）。工具面改为一等 `tool()`，直调现有 `perform*`。写操作由会话级 `writePolicy` 控制。翻译不再与 Agent 共用事件契约。
 
@@ -14,7 +16,7 @@
 
 与 ui-server 同一 home / storeRoot(真实库存),不做会话沙箱。安全由 CLI 本身的铁律兜底(软删除、原子切换、库存不可变),再加运行时 `toolApproval`。库存未配置时 Agent 仍可对话,工具返回「库存未配置」文本。
 
-循环上限:`ToolLoopAgent` 的 `stopWhen: stepCountIs(15)`(最多 15 次模型调用)。
+循环上限:`ToolLoopAgent` 的 `stopWhen: stepCountIs(24)`(最多 24 次模型调用;v1 为 15,计划更新会额外占用调用)。
 
 ## 3. 写策略(`writePolicy`)
 
@@ -48,6 +50,12 @@
 | `verify` | 重算哈希、报告漂移 |
 | `analyze_skill` | 相近/冲突建议,不写盘(复用 `performAnalyze`) |
 
+### 4.1.1 计划(只读、永不审批)
+
+| 工具 | 行为 |
+| --- | --- |
+| `update_plan` | 公布 / 更新本轮计划(§8);不读写磁盘,原样回显 |
+
 ### 4.2 写(`ask` 时审批)
 
 | 工具 | 行为 |
@@ -66,23 +74,55 @@
 
 `POST /api/agent/chat` 使用 AI SDK UI message stream(`createAgentUIStreamResponse`),不是自研 `delta/tool_call/tool_result/done` 帧。
 
-- 请求:`{ messages: UIMessage[], model?, writePolicy? }`
+- 请求:`{ messages: UIMessage[], model?, writePolicy?, thinking? }`;`thinking` 缺省 `false`
 - `messages` 不得含 `role: "system"`(system 由服务端 `instructions` 注入)→ 400
 - 缺 `messages` 或非数组 → 400
 - 未配置 `QINIU_API_KEY` → **进流前** 503 `{ ok:false, code:"not-configured" }`
 - `model` 不在白名单时回落默认模型
 - 响应:`text/event-stream`,带 AI SDK UI message stream 头;前端用 `@ai-sdk/react` 的 `useChat` 消费
+- `thinking: true` 时推理内容以 `reasoning` part 下发(`sendReasoning` 默认开);前端回传历史时原样带回,供应商需要时由 SDK 转成 `reasoning_content`
 
 翻译的 `delta/done/error` 是翻译专用契约,见 [http-api-v0.md](http-api-v0.md),不再与 Agent 共用。
 
 ## 6. 模型白名单
 
-`packages/cli/src/agent/models.ts` 的 `AGENT_MODELS` 常量:默认 `deepseek/deepseek-v4-flash-20260731`,另列能力旗舰 / 编程强 / 最便宜三档。`model` 参数不在白名单时回落默认模型。白名单 ID 以七牛云 `/v1/models` 实际返回为准校准。
+`packages/cli/src/agent/models.ts` 的 `AGENT_MODELS` 常量:默认 `deepseek/deepseek-v4-flash-20260731`,另列能力旗舰 / 编程强 / 最便宜三档。`model` 参数不在白名单时回落默认模型。白名单 ID 以七牛云 `/v1/models` 实际返回为准校准。每项带 `thinking: boolean`(是否支持七牛 `enable_thinking`);不支持的模型即使请求 `thinking: true` 也按关闭处理,前端据此禁用开关。
 
-## 7. 输出契约(系统提示词承诺)
+## 7. 工作法与输出契约(系统提示词承诺)
+
+工作法(每轮固定顺序,简单问答可以跳过 3、5):
+
+1. **理解**:用一句话确认用户要什么;有歧义且会导致写操作时先问
+2. **查证**:用只读工具查清现状,不凭印象回答库存问题
+3. **计划**:预计要 ≥3 步,或包含任何写操作时,先调用 `update_plan` 公布计划
+4. **执行**:按计划调用工具;每完成一步更新计划状态
+5. **核验**:写操作后用只读工具确认结果(如 `show_skill` / `list_skills`)
+6. **汇报**:结论先行,列出改了什么、影响哪些客户端、还有什么没做 / 下一步
+
+输出契约:
 
 - 正文一律简体中文 Markdown 流式输出;工具调用由前端渲染卡片,不必解释协议。
 - 先查再动:不确定库存状态时先 list / show / scan。
 - `ask` 模式下不要用口头「请确认」代替工具审批——写工具会自动暂停。
 - 工具返回失败时如实转述,不编造结果。
 - 收录用户已有 skill 前必须明确告知;在 `ask` 下由审批条落地,在 `allow` 下视为用户已选择本会话放行写操作。
+
+## 8. 计划工具 `update_plan`
+
+- 输入:`{ title?: string, steps: { title: string, status: "pending" | "in_progress" | "done" }[] }`,`steps` 1–8 条,每条 ≤ 40 字;同一时刻至多一条 `in_progress`
+- 行为:纯回显 `{ ok: true, title, steps }`,不读写磁盘,不受写策略影响
+- 何时调用:任务预计 ≥3 步或包含写操作时,在第一个写工具之前调用一次;之后每完成一步再调用一次整体更新;全部完成时最后一次把所有步骤标为 `done`
+- 前端只渲染同一消息内最新一版计划(ui-design-v2 §9)
+
+## 9. 消息元信息(message metadata)
+
+`createAgentUIStreamResponse` 的 `messageMetadata` 在 `start` / `finish` 两处写入,前端合并:
+
+| 字段 | 时机 | 说明 |
+| --- | --- | --- |
+| `model` | start | 实际使用的白名单模型 ID |
+| `thinking` | start | 本轮是否开启深度思考(已按模型能力裁剪) |
+| `usage` | finish | `{ inputTokens?, outputTokens?, reasoningTokens?, totalTokens? }`,取 SDK `totalUsage` |
+
+不下发密钥、storeRoot 以外的本机路径、供应商原始错误体。
+

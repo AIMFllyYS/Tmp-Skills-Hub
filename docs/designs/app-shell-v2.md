@@ -2,7 +2,8 @@
 
 > 状态:生效 | 对应 issue:#160
 > 人打开的是这个壳。数据层约束(链接按行暴露、批量一次原子提交)仍见 [panel-ia-v1.md](panel-ia-v1.md)。
-> 视觉与旅程服从 [ui-design-v1.md](../conventions/ui-design-v1.md)（v0 已并入）。
+> 视觉与旅程服从 [ui-design-v2.md](../conventions/ui-design-v2.md)（v1 的 UX 铁律与动效类别仍有效）。
+> **v2 视觉修订（2026-09-25）**：画布 `canvas` 承载侧栏，主区是一块白色主面板；侧栏头部换 Hub 标志与「团队的 Skill 中枢」；「Skills 管理」项显示库存数；Agent 页按 ui-design-v2 §9 重做（深度思考开关、计划卡、工具活动组、审批卡、消息元信息）。IA 不变。
 > **批 14 修订（2026-08-20）**：左下角设置改为同一套 Dialog，不再占主区第四页。页面状态只有总览 / 统计 / Skills。冒烟 `data-testid="nav-settings"` 留在左下角按钮；`reset-panel` / `reset-button` 在 Dialog 内。侧栏可收起、可拖宽。不恢复三栏，不把 Ctrl+K 放回主路径。
 > **批 15 修订（2026-08-20）**：统计图只画前 8 名粗柱（查看/启用可区分色），全集走排行表；应用图只画覆盖率，不画等长「库存」条。Skills 内容详情为层级文件树 + 元信息网格 + 描述 + 正文。
 > **AI 板块修订（2026-08-22）**：左侧板块从三个变四个——新增 **Agent**（对话式库存管家，见 [agent-v0.md](../specs/agent-v0.md)）。左下角设置、侧栏可收起可拖宽不变。
@@ -35,7 +36,7 @@
 3. **Skills 管理** — 两个全幅 tab:
    - **应用**:选一个应用,开/关它看见的 skill。库存默认属于全部已发现应用;未启用 = 尚未挂链接,不是未授权。空覆盖时主动作是「全部启用」。提供「全部启用 / 全部停用」(当前应用)与「启用到全部应用」。落点已被本地目录占用的条目跳过、不覆盖。系统目录(如 `.codex/skills/.system`)不在此列。成功后磁盘立刻改掉;正在运行的 IDE 可能仍要新开对话。应用列显示名称 + 启用数徽章，按已启用数、其次常用 id 排序,不改发现规则。禁止打开面板就静默全开。
    - **内容**:左侧仍是 skill 目录列。选中后详情为层级文件树 + 右侧标题/元信息（来源、收录、文件数、体积）/描述/正文。收录 / 创建走对话框,默认勾选「同时启用到全部已发现应用」。未选 skill 时空状态带「去收录 / 去创建」。应用页与内容页都可搜索名称/描述。分组过滤与「分析 / 分享 / 归档」是选中 skill 后的次级动作,不是左侧导航。归档区要有明确入口。不展示作者（库存无此字段）。
-4. **Agent** — 对话式库存管家：页头标题 + 模型选择（白名单见 agent-v0.md §6）+ 写策略（`ask` 先批准 / `allow` 全部允许）+「新会话」；消息区流式渲染 Markdown 与工具卡片（运行中 / 待批准 Approve·Deny / 成功 / 失败）；底部输入区。会话存 localStorage（`skills-hub.agent.v2`），服务端无状态。详见 [agent-v0.md](../specs/agent-v0.md)。切到 `allow` 时给一句短提示：写操作将不再逐条确认。
+4. **Agent** — 对话式库存管家：页头标题 + 模型选择（白名单见 agent-v0.md §6）+ 写策略（`ask` 先批准 / `allow` 全部允许）+ 深度思考 +「新会话」；消息按 ui-design-v2 §9 分块（思考 / 计划 / 工具活动 / 审批 / 正文 / 元信息）；消息区流式渲染 Markdown 与工具卡片（运行中 / 待批准 Approve·Deny / 成功 / 失败）；底部输入区。会话存 localStorage（`skills-hub.agent.v2`），服务端无状态。详见 [agent-v0.md](../specs/agent-v0.md)。切到 `allow` 时给一句短提示：写操作将不再逐条确认。
 5. **设置（Dialog）** — 从左下角打开。库存路径只读、等宽、可一键复制；已发现应用默认折叠为「已发现 N 个应用」，展开为按常用 id 分组的芯片，不是整页 `clientId` 清单；重置按钮 + 确认弹窗（Dialog 上叠确认层）。确认后打现有 `POST /api/reset`。不在本壳修重置内核。
 
-主路径不放哈希、命令面板、verify/doctor 原文。滚动条隐藏、滚动保留。控件来源与空状态 / Toast / 对话框规则见 [ui-design-v1.md](../conventions/ui-design-v1.md) §8–§9。宽度与折叠态写入 `localStorage`（`skills-hub.shell`），不引状态管理库。
+主路径不放哈希、命令面板、verify/doctor 原文。滚动条隐藏、滚动保留。控件来源与空状态 / Toast / 对话框规则见 [ui-design-v1.md](../conventions/ui-design-v1.md) §8–§9，视觉见 [ui-design-v2.md](../conventions/ui-design-v2.md)。宽度与折叠态写入 `localStorage`（`skills-hub.shell`），不引状态管理库。
