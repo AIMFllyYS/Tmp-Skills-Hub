@@ -276,3 +276,27 @@ html, body, #root {
 .skill-md th, .skill-md td { border: 1px solid var(--color-line); padding: 0.4rem 0.6rem; font-size: 0.875rem; }
 .skill-md th { background: var(--color-surface); font-weight: 500; text-align: left; color: var(--color-ink-strong); }
 .skill-md hr { border: none; border-top: 1px solid var(--color-line); margin: 1em 0; }
+
+/* Agent 正文(ui-design-v2 §9):比 SkillViewer 更紧的段距、表格与流式光标 */
+.agent-md > :first-child { margin-top: 0; }
+.agent-md > :last-child { margin-bottom: 0; }
+.agent-md p, .agent-md li { color: var(--color-ink-strong); }
+.agent-md h1, .agent-md h2, .agent-md h3 { font-size: 1rem; margin: 1.1em 0 0.4em; }
+.agent-md table { font-size: 0.8125rem; border-radius: 0.625rem; overflow: hidden; }
+.agent-md th, .agent-md td { border-color: var(--color-line); }
+.agent-md code { color: var(--color-ink-strong); background: var(--color-surface-strong); }
+.agent-md.is-streaming > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  border-radius: 9999px;
+  background: var(--color-volt-fill);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-volt) 30%, transparent);
+  animation: caret-blink 1s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-md.is-streaming > :last-child::after { animation: none; }
+}

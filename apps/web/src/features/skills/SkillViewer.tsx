@@ -10,11 +10,11 @@ import {
   Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SourceGlyph } from "@/components/ui/source-glyph";
+import { SourceGlyph, sourceLabel } from "@/components/ui/source-glyph";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedTabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { renderMarkdown } from "../../lib/markdown.js";
+import { renderMarkdown, stripFrontmatter } from "../../lib/markdown.js";
 import { getAction, type TranslateParams } from "../actions/registry.js";
 import { fetchSkillFile, fetchSkillTranslation, fetchSkillTree } from "./api.js";
 import { isAbortError } from "./async-resource.js";
@@ -304,7 +304,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
 
   const html = useMemo(() => {
     if (content === "") return "";
-    return renderMarkdown(content);
+    return renderMarkdown(stripFrontmatter(content));
   }, [content]);
 
   const title = skill.meta.name !== "" ? skill.meta.name : skill.dirName;
@@ -384,7 +384,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
             </div>
           </div>
           <div className="grid grid-cols-2 divide-line overflow-hidden rounded-xl border border-line bg-surface/50 sm:grid-cols-4 sm:divide-x [&>*]:px-4 [&>*]:py-3">
-            <MetaCell label="来源" value={originLabel(skill.origins)} />
+            <MetaCell label="来源" value={skill.origins.length === 0 ? originLabel(skill.origins) : [...new Set(skill.origins.map((o) => sourceLabel(o.kind)))].join(" · ")} />
             <MetaCell label="收录" value={formatInstalledAt(skill.installedAt)} />
             <MetaCell label="文件" value={loading ? "…" : String(countFiles(entries))} />
             <MetaCell label="体积" value={loading ? "…" : formatBytes(totalSizeBytes(entries))} />
@@ -418,7 +418,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
                 className="skill-md border-t border-line pt-6 text-sm leading-relaxed"
                 data-testid="skill-md"
                 dangerouslySetInnerHTML={{
-                  __html: showTranslated && translated !== null ? renderMarkdown(translated) : html,
+                  __html: showTranslated && translated !== null ? renderMarkdown(stripFrontmatter(translated)) : html,
                 }}
               />
             )}

@@ -143,3 +143,15 @@ Agent 的推理链是**给人看的工作记录**,不是调试日志。一条助
 ## 10. 禁止清单
 
 v1 §10 全部保留;另外禁止:信号色大面积铺底、一屏多个 `accent`、为 Agent 自造第二套消息气泡组件、在正文里重复渲染工具参数 JSON。
+
+## 11. 落地示意
+
+沙箱数据下的实际渲染(2026-09-25,1440×900):
+
+| 总览 | Skills 内容 |
+| --- | --- |
+| ![总览](./assets/ui-design-v2/overview.jpg) | ![Skills 内容](./assets/ui-design-v2/skills-content.jpg) |
+
+| Agent 空状态 | Agent 推理链(思考 / 计划 / 活动组) | Agent 审批卡与元信息 |
+| --- | --- | --- |
+| ![空状态](./assets/ui-design-v2/agent-empty.jpg) | ![推理链](./assets/ui-design-v2/agent-reasoning.jpg) | ![审批](./assets/ui-design-v2/agent-approval.jpg) |
