@@ -20,13 +20,13 @@ export function Checkbox({
       onCheckedChange={(next) => onCheckedChange?.(next === true)}
       disabled={disabled}
       className={cn(
-        "flex size-4 shrink-0 items-center justify-center rounded-sm border border-line bg-white outline-none motion-fill data-checked:border-ink-strong data-checked:bg-ink-strong",
+        "flex size-4 shrink-0 items-center justify-center rounded-[5px] border border-line-strong bg-card outline-none motion-fill focus-visible:ring-2 focus-visible:ring-volt-fill/60 data-checked:border-volt/60 data-checked:bg-volt-fill",
         className,
       )}
       {...props}
     >
-      <CheckboxPrimitive.Indicator className="flex text-white">
-        <Check className="size-3" strokeWidth={2} />
+      <CheckboxPrimitive.Indicator className="flex text-volt-ink">
+        <Check className="size-3" strokeWidth={2.5} />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

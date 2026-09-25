@@ -146,7 +146,7 @@ scripts/        辅助脚本（setup/build/dev）
 - [store-and-paths-v0.md](docs/specs/store-and-paths-v0.md) — **库存位置、目录布局、客户端发现规则、沙箱边界**：所有涉及路径的代码必须按它解析
 - [cli-commands-v0.md](docs/specs/cli-commands-v0.md) — **CLI 命令面与渐进式披露机制**：命令名的唯一口径，不得自行发明
 - [ai-integration-v1.md](docs/specs/ai-integration-v1.md) — **七牛云 AI 推理服务集成口径**：AI SDK + `createOpenAICompatible`、密钥铁律、`enable_thinking: false`
-- [agent-v0.md](docs/specs/agent-v0.md) — **Agent 模块唯一口径**（v1）：一等工具、`writePolicy`、AI SDK UI message stream、模型白名单、输出契约
+- [agent-v0.md](docs/specs/agent-v0.md) — **Agent 模块唯一口径**（v2）：一等工具、`writePolicy`、深度思考、`update_plan` 计划工具、工作法、message metadata、AI SDK UI message stream、模型白名单
 
 ### docs/plans/ — 计划
 
@@ -169,4 +169,5 @@ scripts/        辅助脚本（setup/build/dev）
 - [code-style.md](docs/conventions/code-style.md) — 代码风格（TypeScript、core 纯净性、CLI、React/Tailwind）
 - [code-size-and-organization.md](docs/conventions/code-size-and-organization.md) — 代码长度与文件组织（colocation 原则、拆分判断方法）
 - [code-review.md](docs/conventions/code-review.md) — Code review 检查清单
-- [ui-design-v1.md](docs/conventions/ui-design-v1.md) — UI 设计规范：克制灰阶、统一组件、UX 铁律、`motion-*` 动效类别、主区 `motion-enter` 缓动刷新、侧栏纵向栏+宽度淡出、Skeleton、统计图/文件树系列色例外、禁用清单（v0 已并入；批 18 修订）
+- [ui-design-v2.md](docs/conventions/ui-design-v2.md) — **UI 设计规范（生效）**：纸白画布 + 白色主面板、唯一信号色 Volt（面 / 线边界）、Geist 字体、按钮 `accent`、Agent 页呈现规则（思考 / 计划 / 工具活动 / 审批）
+- [ui-design-v1.md](docs/conventions/ui-design-v1.md) — 已被 v2 取代；UX 铁律、`motion-*` 动效类别、Skeleton、禁用清单仍引用

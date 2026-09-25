@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { SourceGlyph } from "@/components/ui/source-glyph";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { SKILL_ROW_HEIGHT_PX } from "./virtual-window.js";
@@ -36,24 +37,27 @@ export const SkillRow = memo(function SkillRow({
       role="option"
       aria-selected={focused}
       className={cn(
-        "box-border overflow-hidden motion-fill",
-        focused && "bg-surface outline outline-1 outline-offset-[-1px] outline-line-strong",
+        "relative box-border overflow-hidden motion-fill",
+        focused && "bg-volt-soft/60 before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r-full before:bg-volt-fill",
       )}
       style={{ height: SKILL_ROW_HEIGHT_PX }}
     >
-      <div className="flex h-full items-center gap-2 px-4">
+      <div className="flex h-full items-center gap-2 px-3">
         <button
           type="button"
           data-testid="skill-card-open"
           onClick={() => onFocus(skill.hash)}
-          className="motion-row flex min-w-0 flex-1 items-center justify-between gap-3 text-left hover:bg-surface"
+          className="motion-row flex h-8 min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-1 text-left hover:bg-surface"
         >
-          <span className="truncate text-sm font-medium text-ink-strong">{skill.dirName}</span>
+          <span className="flex min-w-0 items-center gap-2.5">
+            <SourceGlyph name={skill.dirName} kind={skill.origins[0]?.kind} size="sm" />
+            <span className="truncate font-mono text-[13px] text-ink-strong">{skill.dirName}</span>
+          </span>
           {clientView === undefined ? (
             <span className="flex shrink-0 items-center gap-2 font-mono text-xs text-ink-mid">
               {on}/{clientTotal}
               <span
-                className={cn("inline-block h-1.5 w-1.5 rounded-full", on > 0 ? "bg-ink-strong" : "bg-line")}
+                className={cn("inline-block h-1.5 w-1.5 rounded-full", on > 0 ? "bg-volt-fill ring-2 ring-volt-soft" : "bg-line-strong")}
                 aria-hidden
               />
             </span>

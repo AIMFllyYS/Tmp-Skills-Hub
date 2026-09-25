@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Archive } from "lucide-react";
+import { Archive, Blocks } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -147,17 +147,21 @@ export function SkillsPage({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="skills-page">
-      <header className="shrink-0 border-b border-line px-6 py-4">
+      <header className="shrink-0 border-b border-line px-8 py-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">Skills 管理</h1>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">Skills 管理</h1>
+            <p className="mt-1 text-sm text-ink-mid">给每个应用开关 skill,或查看库存里的内容。</p>
+          </div>
           <SegmentedTabs ariaLabel="Skills 管理页签" value={tab} onChange={onTab} items={SKILLS_TABS} />
         </div>
       </header>
 
       {tab === "apps" && (
         <div className="motion-enter flex min-h-0 flex-1" data-testid="skills-apps-pane">
-          <div className="flex w-52 shrink-0 flex-col border-r border-line">
+          <div className="flex w-56 shrink-0 flex-col border-r border-line bg-surface/50">
             <ScrollArea className="min-h-0 flex-1 py-2">
+              <p className="px-4 pt-1 pb-2 text-[11px] font-medium text-ink-faint">应用 · {orderedClients.length}</p>
               {orderedClients.length === 0 && <p className="px-4 py-3 text-sm text-ink-mid">未发现应用</p>}
               {orderedClients.map((c) => {
                 const n = enabledCountForClient(skills, c.clientId);
@@ -169,17 +173,17 @@ export function SkillsPage({
                     onClick={() => onSelectClient(c.clientId)}
                     className={cn(
                       "motion-row mx-2 mb-0.5 flex w-[calc(100%-1rem)] items-center justify-between gap-2 rounded-lg px-3 py-2 text-left",
-                      selected ? "bg-surface text-ink-strong" : "text-ink-mid hover:bg-surface",
+                      selected ? "bg-card font-medium text-ink-strong shadow-card ring-1 ring-line" : "text-ink-mid hover:bg-ink-strong/[0.04] hover:text-ink-strong",
                     )}
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <span
-                        className={cn("size-1.5 shrink-0 rounded-full", n > 0 ? "bg-green-700" : "bg-line")}
+                        className={cn("size-1.5 shrink-0 rounded-full", n > 0 ? "bg-volt-fill ring-2 ring-volt-soft" : "bg-line-strong")}
                         aria-hidden
                       />
                       <TruncateTip text={c.clientId} className="min-w-0 flex-1 text-sm" />
                     </span>
-                    <Badge>{String(n)}</Badge>
+                    <Badge tone={n > 0 ? "volt" : "default"} className="font-mono tabular-nums">{String(n)}</Badge>
                   </button>
                 );
               })}
@@ -190,13 +194,14 @@ export function SkillsPage({
               <p className="px-6 py-6 text-sm text-ink-mid">没有可管理的应用。</p>
             ) : (
               <>
-                <div className="shrink-0 border-b border-line px-4 py-3">
-                  <TruncateTip text={clientId} className="text-sm font-medium text-ink-strong" />
+                <div className="shrink-0 border-b border-line px-5 py-4">
+                  <TruncateTip text={clientId} className="text-base font-semibold tracking-tight text-ink-strong" />
                   <p className="mt-1 text-xs text-ink-mid">{appsCoverageHint(enabledHere, skills.length)}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       type="button"
                       size="sm"
+                      variant="accent"
                       data-testid="bulk-enable-client"
                       disabled={bulkBusy}
                       onClick={() => void startBulk("enable", [clientId])}
@@ -258,7 +263,7 @@ export function SkillsPage({
 
       {tab === "content" && (
         <div className="motion-enter flex min-h-0 flex-1 flex-col" data-testid="skills-content-pane" role="tabpanel">
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-5 py-3">
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -281,7 +286,7 @@ export function SkillsPage({
             <CreateForm clientIds={allClientIds} onDone={onRefresh} onNotice={onNotice} />
           </div>
           <div className="flex min-h-0 flex-1">
-            <div className="flex w-64 shrink-0 flex-col border-r border-line">
+            <div className="flex w-72 shrink-0 flex-col border-r border-line">
               <VirtualSkillList
                 skills={listed}
                 clientTotal={clients.length}
@@ -291,9 +296,15 @@ export function SkillsPage({
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {focused === null ? (
-                <div className="flex flex-col items-start gap-3 px-6 py-6">
-                  <p className="text-sm text-ink-mid">从左侧选一个 skill 查看内容。</p>
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-10 text-center">
+                  <span className="flex size-12 items-center justify-center rounded-xl border border-line bg-surface text-ink-faint">
+                    <Blocks className="size-5" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-ink-strong">从左侧选一个 skill 查看内容</p>
+                    <p className="mt-1 text-xs text-ink-faint">或者收录 / 创建一个新的</p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
                     <AdoptForm clientIds={allClientIds} onDone={onRefresh} onNotice={onNotice} />
                     <CreateForm clientIds={allClientIds} onDone={onRefresh} onNotice={onNotice} />
                   </div>
@@ -319,7 +330,7 @@ export function SkillsPage({
               )}
             </div>
           </div>
-          <div className="shrink-0 border-t border-line px-4 py-2">
+          <div className="shrink-0 border-t border-line bg-surface/40 px-5 py-2">
             <Collapsible open={showArchive} onOpenChange={setShowArchive}>
               <CollapsibleTrigger>
                 <span className="flex items-center gap-2">

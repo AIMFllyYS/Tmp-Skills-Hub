@@ -30,7 +30,7 @@
 | GET /api/doctor | { ok, command: "doctor", store, roots, linkTypes, danglingLinks } | 503 store-not-configured（HTTP 与 CLI 不同：CLI `doctor --json` 在库存未配置时仍 `ok:true`，用 `store.resolved` 表达；HTTP 走 withStore → 503） |
 | GET /api/backups | { ok, command: "backup", verb: "list", storeRoot, latest, snapshots }(与 CLI backup list --json 同形) | 503 |
 | GET /api/drafts | { ok, command: "drafts", drafts: DraftRecord[] }（无 verb；与 CLI `new list` 的 `command:"new"` 不同） | 503 |
-| GET /api/agent/models | { ok, command: "agent-models", defaultModel, models: { id, label, note }[] }（Agent 模型白名单，见 agent-v0.md §6） | — |
+| GET /api/agent/models | { ok, command: "agent-models", defaultModel, models: { id, label, note, thinking }[] }（Agent 模型白名单，见 agent-v0.md §6） | — |
 | GET /api/skills/:hash/tree | { ok, command: "skill-tree", dirName, entries: SkillFileEntry[], truncated } | 404 not-found;503 |
 | GET /api/skills/:hash/file?path= | { ok, command: "skill-file", dirName, path, content, sizeBytes } | 400 bad-usage（缺 path / outside）;404;422 binary\|too-large;503 |
 | GET /api/skills/:hash/translation?path= | { ok, command: "skill-translation", hash, path, translated }（译文缓存命中，见 store-and-paths-v0.md §2.1.1） | 400 bad-usage（缺 path / outside）;404 translation-not-found;503 |
@@ -67,7 +67,7 @@
 | POST /api/drafts/:dirName/discard | —(无 body) | { ok, command: "new", verb: "discard", dirName, archivePath } | 404 draft-not-found;503（#193：与 CLI `new discard` 同 code） |
 | PUT /api/skills/:hash/file?path= | JSON `{ content: string }` | { ok, command: "skill-file-save", dirName, path, hash }（`hash` 为写回后的新内容哈希） | 400 bad-usage（缺 path / 缺 content / outside）;404;422 too-large;503 |
 | POST /api/translate | { text, target?, path? }（target/path 可省：纯文本翻译不落盘；两者都带时流式成功结束后 best-effort 存入译文缓存，落盘失败不影响 done） | **SSE 流**（翻译专用：`event: delta` `{ text }` / `done` `{}` / `error` `{ code, message }`。底层走 AI SDK `streamText`，见 [ai-integration-v1.md](ai-integration-v1.md)） | 进流前：400 bad-usage JSON 信封；未配置密钥走流内 error |
-| POST /api/agent/chat | { messages: UIMessage[], model?, writePolicy?: "ask"\|"allow" }（见 [agent-v0.md](agent-v0.md)） | **AI SDK UI message stream**（`createAgentUIStreamResponse`；`x-vercel-ai-ui-message-stream`） | 400 bad-usage（缺 messages / 含 system role）；**503 not-configured**（无 `QINIU_API_KEY`，进流前 JSON 信封） |
+| POST /api/agent/chat | { messages: UIMessage[], model?, writePolicy?: "ask"\|"allow", thinking?: boolean }（见 [agent-v0.md](agent-v0.md) §5；message metadata 见 §9） | **AI SDK UI message stream**（`createAgentUIStreamResponse`；`x-vercel-ai-ui-message-stream`） | 400 bad-usage（缺 messages / 含 system role）；**503 not-configured**（无 `QINIU_API_KEY`，进流前 JSON 信封） |
 | POST /api/groups | { id, name?, description? } | { ok, command: "group", verb: "create", id, name, description } | 400 bad-usage;409 group-exists;503 |
 | PATCH /api/groups/:id | { name?, description? }(至少一项) | { ok, command: "group", verb: "rename", id, name, description } | 400;404 group-not-found;503 |
 | DELETE /api/groups/:id | — | { ok, command: "group", verb: "delete", id, memberCount }(只删分组定义,不删 skill) | 404 group-not-found;503 |

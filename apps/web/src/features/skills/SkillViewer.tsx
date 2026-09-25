@@ -10,10 +10,11 @@ import {
   Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SourceGlyph, sourceLabel } from "@/components/ui/source-glyph";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedTabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { renderMarkdown } from "../../lib/markdown.js";
+import { renderMarkdown, stripFrontmatter } from "../../lib/markdown.js";
 import { getAction, type TranslateParams } from "../actions/registry.js";
 import { fetchSkillFile, fetchSkillTranslation, fetchSkillTree } from "./api.js";
 import { isAbortError } from "./async-resource.js";
@@ -126,9 +127,9 @@ const EMPTY_PATHS: ReadonlySet<string> = new Set();
 
 function MetaCell({ label, value }: { label: string; value: string }): React.JSX.Element {
   return (
-    <div className="rounded-lg bg-surface px-3 py-3">
+    <div className="min-w-0">
       <p className="text-xs text-ink-faint">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium text-ink-strong" title={value}>{value}</p>
+      <p className="mt-1 truncate text-sm font-medium text-ink-strong tabular-nums" title={value}>{value}</p>
     </div>
   );
 }
@@ -303,7 +304,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
 
   const html = useMemo(() => {
     if (content === "") return "";
-    return renderMarkdown(content);
+    return renderMarkdown(stripFrontmatter(content));
   }, [content]);
 
   const title = skill.meta.name !== "" ? skill.meta.name : skill.dirName;
@@ -312,10 +313,10 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
 
   return (
     <div className="flex h-full min-h-0">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-line">
-        <div className="m-3 flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-2">
-          <Layers className="size-4 shrink-0 text-ink-mid" aria-hidden />
-          <span className="truncate text-sm font-medium text-ink-strong">{skill.dirName}</span>
+      <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-surface/40">
+        <div className="m-3 flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 shadow-card">
+          <Layers className="size-4 shrink-0 text-ink-faint" aria-hidden />
+          <span className="truncate font-mono text-[13px] text-ink-strong">{skill.dirName}</span>
         </div>
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
           {treeError !== null && <Notice text={treeError} tone="error" />}
@@ -335,9 +336,15 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
         </nav>
       </aside>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="space-y-6 p-6">
+        <div className="mx-auto max-w-4xl space-y-6 px-8 py-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <h2 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight text-ink-strong">{title}</h2>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <SourceGlyph name={skill.dirName} kind={skill.origins[0]?.kind} size="lg" />
+              <div className="min-w-0">
+                <h2 className="truncate text-2xl font-semibold tracking-tight text-ink-strong">{title}</h2>
+                <p className="mt-0.5 truncate font-mono text-xs text-ink-faint">{skill.hash.slice(0, 12)}</p>
+              </div>
+            </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {canPreview && (
                 <>
@@ -376,20 +383,20 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
               {actions}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 rounded-xl border border-line p-3 sm:grid-cols-4">
-            <MetaCell label="来源" value={originLabel(skill.origins)} />
+          <div className="grid grid-cols-2 divide-line overflow-hidden rounded-xl border border-line bg-surface/50 sm:grid-cols-4 sm:divide-x [&>*]:px-4 [&>*]:py-3">
+            <MetaCell label="来源" value={skill.origins.length === 0 ? originLabel(skill.origins) : [...new Set(skill.origins.map((o) => sourceLabel(o.kind)))].join(" · ")} />
             <MetaCell label="收录" value={formatInstalledAt(skill.installedAt)} />
             <MetaCell label="文件" value={loading ? "…" : String(countFiles(entries))} />
             <MetaCell label="体积" value={loading ? "…" : formatBytes(totalSizeBytes(entries))} />
           </div>
           <section className="space-y-2">
-            <h3 className="text-base font-medium text-ink-strong">Description</h3>
-            <p className="text-sm leading-relaxed text-ink-mid">
+            <h3 className="text-xs font-medium text-ink-faint">描述</h3>
+            <p className="text-[15px] leading-relaxed text-ink-strong">
               {description === "" ? "无描述" : description}
             </p>
           </section>
           <section className="space-y-3">
-            {savedHash !== null && <p className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800">已保存</p>}
+            {savedHash !== null && <p className="rounded-lg border border-volt-line/60 bg-volt-soft px-3 py-1.5 text-sm text-volt">已保存</p>}
             {fileError !== null && (
               <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />
             )}
@@ -400,7 +407,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
             {fileLoading && (
               <div data-testid="skill-loading">
                 <span className="sr-only">加载中…</span>
-                <div className="h-24 rounded-lg bg-surface motion-safe:animate-skeleton" />
+                <div className="h-24 rounded-lg bg-surface-strong/70 motion-safe:animate-skeleton" />
               </div>
             )}
             {!fileLoading && selected === "" && fileError === null && treeError === null && !loading && (
@@ -408,10 +415,10 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
             )}
             {fileError === null && !editing && html !== "" && (
               <div
-                className="skill-md text-sm leading-relaxed"
+                className="skill-md border-t border-line pt-6 text-sm leading-relaxed"
                 data-testid="skill-md"
                 dangerouslySetInnerHTML={{
-                  __html: showTranslated && translated !== null ? renderMarkdown(translated) : html,
+                  __html: showTranslated && translated !== null ? renderMarkdown(stripFrontmatter(translated)) : html,
                 }}
               />
             )}

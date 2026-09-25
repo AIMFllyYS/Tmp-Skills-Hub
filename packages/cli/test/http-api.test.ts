@@ -434,10 +434,11 @@ describe("http-api 契约", () => {
   it("agent/models:白名单信封形状", async () => {
     const res = await app.request("/api/agent/models");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; command: string; defaultModel: string; models: { id: string; label: string; note: string }[] };
+    const body = (await res.json()) as { ok: boolean; command: string; defaultModel: string; models: { id: string; label: string; note: string; thinking: boolean }[] };
     expect(body.ok).toBe(true);
     expect(body.command).toBe("agent-models");
     expect(body.models.some((m) => m.id === body.defaultModel)).toBe(true);
+    expect(body.models.every((m) => typeof m.thinking === "boolean")).toBe(true);
   });
 
   it("agent/chat:UI message stream;缺 messages 400;system role 400;无密钥无替身 503", async () => {
@@ -449,6 +450,9 @@ describe("http-api 契约", () => {
       doStream: {
         stream: convertArrayToReadableStream([
           { type: "stream-start", warnings: [] },
+          { type: "reasoning-start", id: "r0" },
+          { type: "reasoning-delta", id: "r0", delta: "先查库存" },
+          { type: "reasoning-end", id: "r0" },
           { type: "text-start", id: "t0" },
           { type: "text-delta", id: "t0", delta: "好的" },
           { type: "text-end", id: "t0" },
@@ -460,12 +464,16 @@ describe("http-api 契约", () => {
     const res = await aapp.request("/api/agent/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: [{ id: "u1", role: "user", parts: [{ type: "text", text: "列出库存" }] }] }),
+      body: JSON.stringify({ messages: [{ id: "u1", role: "user", parts: [{ type: "text", text: "列出库存" }] }], thinking: true }),
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
     const text = await res.text();
     expect(text).toContain("好的");
+    // 推理以 reasoning part 下发;message metadata 带模型与思考开关
+    expect(text).toContain("先查库存");
+    expect(text).toContain('"messageMetadata"');
+    expect(text).toContain('"thinking":true');
 
     const missing = await aapp.request("/api/agent/chat", {
       method: "POST",

@@ -3,27 +3,27 @@
  * UIMessage[] 存 localStorage(v2,不迁旧 Wire 会话)。
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
-  type UIMessage,
 } from "ai";
-import type { WritePolicy } from "./types.js";
+import type { AgentUIMessage, WritePolicy } from "./types.js";
 
 const agentTransport = new DefaultChatTransport({ api: "/api/agent/chat" });
 
 const STORAGE_KEY = "skills-hub.agent.v2";
 const MODEL_KEY = "skills-hub.agent.model";
 const POLICY_KEY = "skills-hub.agent.writePolicy";
+const THINKING_KEY = "skills-hub.agent.thinking";
 
-function loadMessages(): UIMessage[] {
+function loadMessages(): AgentUIMessage[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === null) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as UIMessage[]) : [];
+    return Array.isArray(parsed) ? (parsed as AgentUIMessage[]) : [];
   } catch {
     return [];
   }
@@ -37,6 +37,22 @@ function loadStoredModel(): string {
   }
 }
 
+function loadThinking(): boolean {
+  try {
+    return localStorage.getItem(THINKING_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persist(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 存储满 / 隐私模式等静默
+  }
+}
+
 function loadWritePolicy(): WritePolicy {
   try {
     return localStorage.getItem(POLICY_KEY) === "allow" ? "allow" : "ask";
@@ -46,9 +62,15 @@ function loadWritePolicy(): WritePolicy {
 }
 
 export interface UseAgentChat {
-  messages: UIMessage[];
+  messages: AgentUIMessage[];
   busy: boolean;
+  /** 已提交、还没收到第一段流。 */
+  submitted: boolean;
   errorText: string | null;
+  thinking: boolean;
+  setThinking: (on: boolean) => void;
+  retry: () => void;
+  dismissError: () => void;
   model: string;
   setModel: (model: string) => void;
   writePolicy: WritePolicy;
@@ -64,7 +86,8 @@ export interface UseAgentChat {
 export function useAgentChat(): UseAgentChat {
   const [model, setModelState] = useState<string>(loadStoredModel);
   const [writePolicy, setWritePolicyState] = useState<WritePolicy>(loadWritePolicy);
-  const { messages, sendMessage, stop, status, error, setMessages, addToolApprovalResponse } = useChat({
+  const [thinking, setThinkingState] = useState<boolean>(loadThinking);
+  const { messages, sendMessage, stop, status, error, setMessages, addToolApprovalResponse, regenerate, clearError } = useChat<AgentUIMessage>({
     transport: agentTransport,
     messages: loadMessages(),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
@@ -80,21 +103,20 @@ export function useAgentChat(): UseAgentChat {
 
   const setModel = useCallback((next: string) => {
     setModelState(next);
-    try {
-      localStorage.setItem(MODEL_KEY, next);
-    } catch {
-      // 静默
-    }
+    persist(MODEL_KEY, next);
   }, []);
 
   const setWritePolicy = useCallback((next: WritePolicy) => {
     setWritePolicyState(next);
-    try {
-      localStorage.setItem(POLICY_KEY, next);
-    } catch {
-      // 静默
-    }
+    persist(POLICY_KEY, next);
   }, []);
+
+  const setThinking = useCallback((on: boolean) => {
+    setThinkingState(on);
+    persist(THINKING_KEY, on ? "1" : "0");
+  }, []);
+
+  const body = useMemo(() => ({ model, writePolicy, thinking }), [model, writePolicy, thinking]);
 
   const applyModelDefault = useCallback((fallback: string, allowed: string[]) => {
     setModelState((prev) => {
@@ -112,10 +134,15 @@ export function useAgentChat(): UseAgentChat {
     (text: string) => {
       const trimmed = text.trim();
       if (trimmed === "" || status === "streaming" || status === "submitted") return;
-      void sendMessage({ text: trimmed }, { body: { model, writePolicy } });
+      void sendMessage({ text: trimmed }, { body });
     },
-    [sendMessage, status, model, writePolicy],
+    [sendMessage, status, body],
   );
+
+  const retry = useCallback(() => {
+    clearError();
+    void regenerate({ body });
+  }, [clearError, regenerate, body]);
 
   const reset = useCallback(() => {
     void stop();
@@ -129,9 +156,9 @@ export function useAgentChat(): UseAgentChat {
 
   const approve = useCallback(
     (approvalId: string) => {
-      void addToolApprovalResponse({ id: approvalId, approved: true, options: { body: { model, writePolicy } } });
+      void addToolApprovalResponse({ id: approvalId, approved: true, options: { body } });
     },
-    [addToolApprovalResponse, model, writePolicy],
+    [addToolApprovalResponse, body],
   );
 
   const deny = useCallback(
@@ -140,16 +167,21 @@ export function useAgentChat(): UseAgentChat {
         id: approvalId,
         approved: false,
         reason: "用户拒绝",
-        options: { body: { model, writePolicy } },
+        options: { body },
       });
     },
-    [addToolApprovalResponse, model, writePolicy],
+    [addToolApprovalResponse, body],
   );
 
   return {
     messages,
     busy: status === "submitted" || status === "streaming",
+    submitted: status === "submitted",
     errorText: error instanceof Error ? error.message : error !== undefined ? String(error) : null,
+    thinking,
+    setThinking,
+    retry,
+    dismissError: clearError,
     model,
     setModel,
     writePolicy,

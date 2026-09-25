@@ -4,6 +4,7 @@ import { mapLlmError } from "../src/llm/errors.js";
 import {
   DEFAULT_MODEL,
   DEFAULT_QINIU_BASE_URL,
+  injectThinking,
   injectThinkingOff,
   llmBaseUrl,
   notConfiguredMessage,
@@ -43,6 +44,11 @@ describe("qiniu provider 配置", () => {
     expect(llmBaseUrl()).toBe("https://example.com/v1");
     delete process.env.QINIU_BASE_URL;
     expect(llmBaseUrl()).toBe(DEFAULT_QINIU_BASE_URL);
+  });
+
+  it("injectThinking 按开关写入,Agent 深度思考时为 true", () => {
+    expect(injectThinking({ model: "m" }, true).enable_thinking).toBe(true);
+    expect(injectThinking({ model: "m" }, false).enable_thinking).toBe(false);
   });
 
   it("injectThinkingOff 写入 enable_thinking:false,不覆盖其它字段", () => {

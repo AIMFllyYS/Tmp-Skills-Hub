@@ -1,6 +1,6 @@
 /**
  * 七牛云 OpenAI 兼容 provider(ai-integration-v1.md)。
- * 密钥只从环境变量读;enable_thinking 经 transformRequestBody 注入 false。
+ * 密钥只从环境变量读;enable_thinking 经 transformRequestBody 注入(缺省 false,Agent 深度思考时 true)。
  */
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -30,13 +30,20 @@ export function notConfiguredMessage(): string {
   return "未配置 QINIU_API_KEY:请在 .env 中填写后重试(功能不可用但不崩溃)。";
 }
 
-/** 给请求体补 enable_thinking:false(七牛思考开关)。导出供单测。 */
+/** 给请求体写七牛思考开关 enable_thinking。导出供单测。 */
+export function injectThinking(body: Record<string, unknown>, enabled: boolean): Record<string, unknown> {
+  return { ...body, enable_thinking: enabled };
+}
+
+/** 翻译 / 分析的固定口径:思考关闭。 */
 export function injectThinkingOff(body: Record<string, unknown>): Record<string, unknown> {
-  return { ...body, enable_thinking: false };
+  return injectThinking(body, false);
 }
 
 export interface QiniuModelOptions {
   fetch?: typeof fetch;
+  /** 深度思考(仅 Agent 按请求打开);缺省 false。 */
+  thinking?: boolean;
 }
 
 /**
@@ -51,7 +58,7 @@ export function createQiniuModel(modelId: string, opts: QiniuModelOptions = {}):
     name: "qiniu",
     baseURL: llmBaseUrl(),
     apiKey,
-    transformRequestBody: (body) => injectThinkingOff(body as Record<string, unknown>),
+    transformRequestBody: (body) => injectThinking(body as Record<string, unknown>, opts.thinking === true),
   };
   if (opts.fetch !== undefined) settings.fetch = opts.fetch;
   return createOpenAICompatible(settings).chatModel(modelId);
