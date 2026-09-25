@@ -21,6 +21,7 @@ import {
   CHART_SERIES,
 } from "@/components/ui/chart";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { sourceLabel } from "@/components/ui/source-glyph";
 import { Table, TableBody, TableHead, TableRow, TableTd, TableTh } from "@/components/ui/table";
 import { SegmentedTabs, type SegmentedTabItem } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -282,8 +283,8 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="shrink-0 border-b border-line px-6 py-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      <header className="shrink-0 border-b border-line px-8 py-5">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">统计</h1>
             <p className="mt-1 text-sm text-ink-mid">本机用量与各应用的分布。</p>
@@ -292,32 +293,36 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
         </div>
       </header>
       <ScrollArea className="min-h-0 flex-1">
-        <div key={tab} className="motion-enter space-y-6 p-6">
+        <div key={tab} className="motion-enter mx-auto max-w-6xl space-y-6 px-8 py-7">
           {tab === "overview" && (
             noData ? <Empty onGo={onGo} /> : (
               <div className="grid gap-4 lg:grid-cols-2">
                 {usageHead.length > 0 && (
                   <Card>
-                    <h2 className="text-base font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>
-                    <p className="mt-1 text-xs text-ink-mid">蓝 = 查看，青 = 启用。点击进入该 skill。</p>
+                    <h2 className="text-sm font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>
+                    <p className="mt-1 text-xs text-ink-mid">蓝 = 查看，绿 = 启用。点击进入该 skill。</p>
                     <UsageChart rows={usageHead} onSelect={openSkill} />
                   </Card>
                 )}
                 {appHead.length > 0 && (
                   <Card>
-                    <h2 className="text-base font-medium text-ink-strong">应用覆盖</h2>
+                    <h2 className="text-sm font-medium text-ink-strong">应用覆盖</h2>
                     <p className="mt-1 text-xs text-ink-mid">已启用 / 库存。点击打开该应用。</p>
                     <AppsChart rows={appHead} onSelect={openApp} />
                   </Card>
                 )}
                 {sources.length > 0 && (
                   <Card>
-                    <h2 className="text-base font-medium text-ink-strong">来源</h2>
+                    <h2 className="text-sm font-medium text-ink-strong">来源</h2>
                     <p className="mt-1 text-xs text-ink-mid">有标记的收录来源。</p>
                     <SourceChart rows={sources} />
                     <ul className="mt-3 space-y-1 text-sm text-ink-mid">
-                      {sources.map((s) => (
-                        <li key={s.kind}>{s.kind} · {String(s.count)} 份</li>
+                      {sources.map((s, i) => (
+                        <li key={s.kind} className="flex items-center gap-2">
+                          <span className="size-2 rounded-[3px]" style={{ background: CHART_SERIES[i % CHART_SERIES.length] }} aria-hidden />
+                          <span className="flex-1">{sourceLabel(s.kind)}</span>
+                          <span className="font-mono text-xs text-ink-strong tabular-nums">{String(s.count)} 份</span>
+                        </li>
                       ))}
                     </ul>
                   </Card>
@@ -329,12 +334,12 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
             usage.length === 0 ? <Empty onGo={onGo} /> : (
               <div className="space-y-6">
                 <Card>
-                  <h2 className="text-base font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>
+                  <h2 className="text-sm font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>
                   <p className="mt-1 text-xs text-ink-mid">全集在下表，不把全部塞进一张图。</p>
                   <UsageChart rows={usageHead} onSelect={openSkill} />
                 </Card>
                 <div>
-                  <h2 className="mb-2 text-base font-medium text-ink-strong">排行</h2>
+                  <h2 className="mb-2 text-sm font-medium text-ink-strong">排行</h2>
                   <Table>
                     <TableHead>
                       <TableRow>
@@ -371,11 +376,11 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
             apps.length === 0 ? <Empty onGo={onGo} /> : (
               <div className="space-y-6">
                 <Card>
-                  <h2 className="text-base font-medium text-ink-strong">覆盖前 {String(appHead.length)} 名</h2>
+                  <h2 className="text-sm font-medium text-ink-strong">覆盖前 {String(appHead.length)} 名</h2>
                   <AppsChart rows={appHead} onSelect={openApp} />
                 </Card>
                 <div>
-                  <h2 className="mb-2 text-base font-medium text-ink-strong">应用</h2>
+                  <h2 className="mb-2 text-sm font-medium text-ink-strong">应用</h2>
                   <Table>
                     <TableHead>
                       <TableRow>
@@ -409,7 +414,7 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
           {tab === "sources" && (
             sources.length === 0 ? <Empty onGo={onGo} /> : (
               <Card>
-                <h2 className="text-base font-medium text-ink-strong">来源</h2>
+                <h2 className="text-sm font-medium text-ink-strong">来源</h2>
                 <SourceChart rows={sources} />
                 <ul className="mt-3 space-y-1 text-sm text-ink-mid">
                   {sources.map((s) => (

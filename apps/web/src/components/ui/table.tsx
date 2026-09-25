@@ -3,14 +3,14 @@ import { cn } from "@/lib/utils";
 
 export function Table({ className, ...props }: HTMLAttributes<HTMLTableElement>): React.JSX.Element {
   return (
-    <div className="overflow-x-auto rounded-xl border border-line">
+    <div className="overflow-x-auto rounded-xl border border-line bg-card shadow-card">
       <table className={cn("w-full border-collapse text-sm", className)} {...props} />
     </div>
   );
 }
 
 export function TableHead({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>): React.JSX.Element {
-  return <thead className={cn("bg-surface text-left text-xs tracking-wide text-ink-faint", className)} {...props} />;
+  return <thead className={cn("border-b border-line bg-surface text-left text-xs font-medium text-ink-faint", className)} {...props} />;
 }
 
 export function TableBody({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>): React.JSX.Element {
@@ -21,7 +21,7 @@ export function TableRow({ className, ...props }: HTMLAttributes<HTMLTableRowEle
   return (
     <tr
       className={cn(
-        "h-10 motion-fill",
+        "h-10 motion-fill hover:bg-surface/70",
         className,
       )}
       {...props}

@@ -34,13 +34,13 @@ export function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop
         className={cn(
-          "dialog-backdrop fixed inset-0 bg-ink-strong/40",
+          "dialog-backdrop fixed inset-0 bg-ink-strong/30",
           nested ? "z-[60]" : "z-50",
         )}
       />
       <DialogPrimitive.Popup
         className={cn(
-          "dialog-popup fixed top-1/2 left-1/2 w-full max-w-md rounded-lg border border-line bg-white p-4 outline-none",
+          "dialog-popup fixed top-1/2 left-1/2 w-full max-w-md rounded-xl border border-line bg-card p-5 shadow-pop outline-none",
           nested ? "z-[61]" : "z-50",
           className,
         )}
@@ -56,14 +56,14 @@ export function DialogTitle({
   className,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Title>): React.JSX.Element {
-  return <DialogPrimitive.Title className={cn("text-base font-medium text-ink-strong", className)} {...props} />;
+  return <DialogPrimitive.Title className={cn("text-base font-semibold tracking-tight text-ink-strong", className)} {...props} />;
 }
 
 export function DialogDescription({
   className,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Description>): React.JSX.Element {
-  return <DialogPrimitive.Description className={cn("mt-2 text-sm text-ink-mid", className)} {...props} />;
+  return <DialogPrimitive.Description className={cn("mt-1.5 text-sm leading-relaxed text-ink-mid", className)} {...props} />;
 }
 
 export const DialogClose = DialogPrimitive.Close;

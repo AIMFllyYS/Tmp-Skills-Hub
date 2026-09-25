@@ -25,7 +25,7 @@ export function Tooltip({
       {!disabled && (
         <PreviewCard.Portal>
           <PreviewCard.Positioner side={side} sideOffset={8} className="z-50">
-            <PreviewCard.Popup className="max-w-xs rounded-lg border border-line bg-white px-2 py-1 text-xs text-ink-strong transition-opacity duration-fast ease-smooth data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none">
+            <PreviewCard.Popup className="max-w-xs rounded-md bg-ink-strong px-2 py-1 text-xs text-white shadow-pop transition-opacity duration-fast ease-smooth data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none">
               {label}
             </PreviewCard.Popup>
           </PreviewCard.Positioner>

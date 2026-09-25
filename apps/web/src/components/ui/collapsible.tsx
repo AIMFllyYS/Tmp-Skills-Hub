@@ -34,7 +34,7 @@ export function CollapsibleTrigger({
   return (
     <CollapsiblePrimitive.Trigger
       className={cn(
-        "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-left text-sm text-ink-strong outline-none motion-fill hover:bg-surface focus-visible:ring-1 focus-visible:ring-line-strong",
+        "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-card px-3 py-2 text-left text-sm text-ink-strong outline-none motion-fill hover:bg-surface focus-visible:ring-2 focus-visible:ring-volt-fill/60",
         className,
       )}
       {...props}

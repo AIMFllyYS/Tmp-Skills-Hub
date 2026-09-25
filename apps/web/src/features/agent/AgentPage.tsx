@@ -93,7 +93,7 @@ export function AgentPage(): React.JSX.Element {
             aria-label="写策略"
             value={writePolicy}
             onChange={(ev) => onPolicyChange(ev.target.value === "allow" ? "allow" : "ask")}
-            className="h-9 rounded-lg border border-line bg-white px-2 text-sm text-ink-strong focus:outline-none"
+            className="h-9 rounded-lg border border-line bg-card px-2 text-sm text-ink-strong focus:outline-none"
           >
             <option value="ask">写操作需批准</option>
             <option value="allow">全部允许</option>
@@ -102,7 +102,7 @@ export function AgentPage(): React.JSX.Element {
             aria-label="模型"
             value={model}
             onChange={(ev) => setModel(ev.target.value)}
-            className="h-9 rounded-lg border border-line bg-white px-2 text-sm text-ink-strong focus:outline-none"
+            className="h-9 rounded-lg border border-line bg-card px-2 text-sm text-ink-strong focus:outline-none"
           >
             {models.map((m) => (
               <option key={m.id} value={m.id}>

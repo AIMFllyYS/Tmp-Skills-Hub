@@ -73,13 +73,13 @@ export function SettingsDialog({
           <ScrollArea className="mt-4 min-h-0 flex-1">
             <section>
               <Label>库存</Label>
-              <div className="mt-2 flex items-start gap-2">
-                <TruncateTip text={path} className="min-w-0 flex-1 break-all font-mono text-sm text-ink-mid" />
+              <div className="mt-2 flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pr-1 pl-3">
+                <TruncateTip text={path} className="min-w-0 flex-1 break-all font-mono text-xs text-ink-mid" />
                 <Tooltip label={copied ? "已复制" : "复制路径"} side="top" disabled={storeRoot === ""}>
                   <Button
                     type="button"
-                    variant="outline"
-                    size="icon"
+                    variant="ghost"
+                    size="icon-sm"
                     aria-label="复制库存路径"
                     disabled={storeRoot === ""}
                     onClick={copyPath}
@@ -118,9 +118,9 @@ export function SettingsDialog({
               )}
             </section>
 
-            <section className="mt-6" data-testid="reset-panel">
+            <section className="mt-6 rounded-xl border border-red-200/80 bg-red-50/40 p-4" data-testid="reset-panel">
               <Label>重置</Label>
-              <p className="mt-1 text-sm text-ink-mid">
+              <p className="mt-1 text-sm leading-relaxed text-ink-mid">
                 按备份快照回到初始化前,再自动收录。请再次确认后才会执行。
               </p>
               <Button

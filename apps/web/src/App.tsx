@@ -104,7 +104,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-dvh overflow-hidden bg-white">
+    <div className="h-dvh overflow-hidden bg-canvas text-ink-strong">
       <Toaster />
       <ResizablePanelGroup
         orientation="horizontal"
@@ -137,6 +137,8 @@ export default function App() {
           <Sidebar
             page={page}
             collapsed={collapsed}
+            skillCount={catalog.status === "ready" ? catalog.skills.length : null}
+            online={catalog.status !== "offline"}
             settingsOpen={settingsOpen}
             onPage={setPage}
             onSettings={() => setSettingsOpen(true)}
@@ -145,7 +147,7 @@ export default function App() {
         </ResizablePanel>
         <ResizableHandle
           disabled={collapsed}
-          className="w-1 bg-line motion-fill hover:bg-line-strong"
+          className="w-1.5 bg-transparent motion-fill hover:bg-line-strong/60 data-[separator=active]:bg-volt-fill"
           onPointerDown={() => {
             setSidebarDragging(true);
             sidebarMotionRef.current = false;
@@ -158,9 +160,10 @@ export default function App() {
           onPointerUp={() => setSidebarDragging(false)}
         />
         <ResizablePanel id="shell-main" minSize="40%" className="min-w-0">
-          <main className="flex h-full min-h-0 min-w-0 flex-col">
+          <main className="my-2 mr-2 flex h-[calc(100%-1rem)] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-card shadow-card">
             {catalog.status === "offline" && (
-              <p className="shrink-0 bg-amber-50 px-6 py-3 text-sm text-amber-800">
+              <p className="flex shrink-0 items-center gap-2 border-b border-amber-200/70 bg-amber-50 px-8 py-2.5 text-sm text-amber-800">
+                <span className="size-1.5 rounded-full bg-amber-500" aria-hidden />
                 未连接到本地数据服务。先运行一键启动,再刷新本页。
               </p>
             )}
@@ -173,6 +176,7 @@ export default function App() {
                     clients={catalog.clients}
                     doctor={catalog.doctor}
                     snapshotCount={catalog.snapshotCount}
+                    storeRoot={catalog.storeRoot}
                     onGo={go}
                   />
                 )}

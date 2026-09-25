@@ -44,7 +44,7 @@ export function SegmentedTabs<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
-      className="inline-flex rounded-lg bg-surface p-1"
+      className="inline-flex rounded-lg bg-surface-strong/70 p-1"
     >
       {items.map((item, i) => {
         const active = item.id === value;
@@ -63,10 +63,10 @@ export function SegmentedTabs<T extends string>({
             onClick={() => onChange(item.id)}
             className={cn(
               "inline-flex items-center rounded-md outline-none motion-press",
-              "focus-visible:ring-1 focus-visible:ring-line-strong",
+              "focus-visible:ring-2 focus-visible:ring-volt-fill/60",
               size === "sm" ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm",
               active
-                ? "bg-white font-medium text-ink-strong shadow-[var(--shadow-thumb)]"
+                ? "bg-card font-medium text-ink-strong shadow-thumb"
                 : "text-ink-mid hover:text-ink-strong",
             )}
           >
