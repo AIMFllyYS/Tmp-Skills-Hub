@@ -1,4 +1,5 @@
 // b52–60 链：库存居中，逐拍把符号链接挂到 8 个 Agent；改一处，全局同步。
+import { T } from "../theme.js";
 import { CLIENTS } from "../data.js";
 import { E, css, el, hit, kf, prog, svg, toggle } from "../engine.js";
 import { logoSVG } from "../ui.js";
@@ -22,8 +23,8 @@ export default {
       const x = CX + Math.cos(a) * 640;
       const y = CY + Math.sin(a) * 320;
       const len = Math.hypot(x - CX, y - CY);
-      const line = svg("line", { x1: CX, y1: CY, x2: x, y2: y, stroke: "rgba(200,245,60,.85)", "stroke-width": 2, "stroke-dasharray": len, "stroke-dashoffset": len }, s.svg);
-      const dot = svg("circle", { r: 5, fill: "#e9ffb0", opacity: 0 }, s.svg);
+      const line = svg("line", { x1: CX, y1: CY, x2: x, y2: y, stroke: `rgba(${T.accentRGB},.85)`, "stroke-width": 2, "stroke-dasharray": len, "stroke-dashoffset": len }, s.svg);
+      const dot = svg("circle", { r: 5, fill: T.accent, opacity: 0 }, s.svg);
       const n = el("div", "node", s.cam);
       n.style.left = `${x}px`;
       n.style.top = `${y}px`;
@@ -35,7 +36,7 @@ export default {
     });
 
     s.hub = el("div", "abs", s.cam);
-    s.hub.style.cssText = `left:${CX - 90}px;top:${CY - 90}px;width:180px;height:180px;display:grid;place-items:center;border-radius:50%;background:radial-gradient(closest-side,rgba(200,245,60,.18),transparent);`;
+    s.hub.style.cssText = `left:${CX - 90}px;top:${CY - 90}px;width:180px;height:180px;display:grid;place-items:center;border-radius:50%;background:radial-gradient(closest-side,rgba(${T.glowRGB},.22),transparent);`;
     el("div", "", s.hub, logoSVG(110));
     s.hubLabel = el("div", "abs", s.cam, "<div style='font-size:18px;font-weight:600'>skills-hub</div><div class='sh-hash' style='margin-top:4px'>~/.skills-hub/skills/pptx</div>");
     s.hubLabel.style.cssText += `left:${CX - 200}px;width:400px;top:${CY + 88}px;text-align:center;`;
@@ -58,7 +59,7 @@ export default {
       const draw = prog(b, nd.at - 0.2, nd.at + 0.15, E.outExpo);
       nd.line.setAttribute("stroke-dashoffset", (nd.len * (1 - draw)).toFixed(1));
       nd.line.setAttribute("stroke-width", (2 + 3 * wave).toFixed(2));
-      nd.line.setAttribute("stroke", `rgba(200,245,60,${(0.55 + 0.45 * Math.max(wave, hit(b, nd.at, 0.3))).toFixed(3)})`);
+      nd.line.setAttribute("stroke", `rgba(${T.accentRGB},${(0.55 + 0.45 * Math.max(wave, hit(b, nd.at, 0.3))).toFixed(3)})`);
       const appear = prog(b, nd.at - 0.35, nd.at, E.outBack);
       css(nd.n, { opacity: appear.toFixed(3), transform: `translate(-50%,-50%) scale(${(0.7 + 0.3 * appear + 0.06 * hit(b, nd.at + 0.15, 0.2)).toFixed(3)})` });
       toggle(nd.n, "is-lit", b >= nd.at + 0.1);

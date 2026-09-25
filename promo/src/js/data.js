@@ -6,7 +6,7 @@
 export const SOURCES = {
   anthropic: { label: "anthropics/skills", color: "#e0845e" },
   superpowers: { label: "obra/superpowers", color: "#a293ff" },
-  vercel: { label: "vercel-labs/agent-skills", color: "#f3f5f7" },
+  vercel: { label: "vercel-labs/agent-skills", color: "#d4d4d8" },
   remotion: { label: "remotion-dev/skills", color: "#5ad7ff" },
   local: { label: "本机自建", color: "#c8f53c" },
   club: { label: "club/skills", color: "#ffb547" },
@@ -57,8 +57,8 @@ export const SKILLS = [
 
 export const CLIENTS = [
   { id: "claude", name: "Claude Code", path: "~/.claude/skills", color: "#e0845e" },
-  { id: "codex", name: "Codex", path: "~/.codex/skills", color: "#f3f5f7" },
-  { id: "cursor", name: "Cursor", path: "~/.cursor/skills", color: "#a3abb6" },
+  { id: "codex", name: "Codex", path: "~/.codex/skills", color: "#3f3f46" },
+  { id: "cursor", name: "Cursor", path: "~/.cursor/skills", color: "#8b919b" },
   { id: "gemini", name: "Gemini CLI", path: "~/.gemini/skills", color: "#5ad7ff" },
   { id: "trae", name: "Trae", path: "~/.trae/skills", color: "#ff6f91" },
   { id: "windsurf", name: "Windsurf", path: "~/.windsurf/skills", color: "#6ee7a8" },

@@ -1,4 +1,5 @@
 // b44–52 收：散落的副本被吸进统一库存，581 → 213，按内容哈希去重。
+import { T } from "../theme.js";
 import { ROOTS, SCAN, SKILLS } from "../data.js";
 import { E, clamp, css, el, fakeHash, hit, kf, lerp, prog, rng, rollNum } from "../engine.js";
 import { glyph, logoSVG } from "../ui.js";
@@ -84,8 +85,8 @@ export default {
         const xb = lerp(tl.x0, SX, pb);
         const yb = lerp(tl.y0, SY, pb);
         const grad = g.createLinearGradient(xb, yb, x, y);
-        grad.addColorStop(0, "rgba(200,245,60,0)");
-        grad.addColorStop(1, `rgba(200,245,60,${(0.55 * p).toFixed(3)})`);
+        grad.addColorStop(0, `rgba(${T.trail},0)`);
+        grad.addColorStop(1, `rgba(${T.trail},${(0.55 * p).toFixed(3)})`);
         g.strokeStyle = grad;
         g.lineWidth = 2;
         g.beginPath();
@@ -104,7 +105,7 @@ export default {
       height: `${ph.toFixed(1)}px`,
       transform: `translate(${(px - SX - pw / 2).toFixed(1)}px,${(-ph / 2).toFixed(1)}px) scale(${(kf(b, [[44, 0.6, E.outBack], [44.5, 1]]) * (1 + 0.04 * Math.min(1, pulse)) * lerp(1, 1.2, open)).toFixed(4)})`,
       opacity: prog(b, 44, 44.3).toFixed(2),
-      boxShadow: `0 0 0 1px rgba(200,245,60,${(0.2 + 0.5 * Math.min(1, pulse)).toFixed(3)}), 0 0 ${(30 + 60 * Math.min(1, pulse)).toFixed(0)}px -6px rgba(200,245,60,${(0.2 + 0.5 * Math.min(1, pulse)).toFixed(3)})`,
+      boxShadow: `0 0 0 1px rgba(${T.accentRGB},${(0.2 + 0.5 * Math.min(1, pulse)).toFixed(3)}), 0 0 ${(30 + 60 * Math.min(1, pulse)).toFixed(0)}px -6px rgba(${T.glowRGB},${(0.2 + 0.5 * Math.min(1, pulse)).toFixed(3)})`,
     });
     css(s.headCount, { opacity: prog(b, 48.2, 48.6).toFixed(2) });
     s.rows.forEach((row, i) => {

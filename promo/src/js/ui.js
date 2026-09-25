@@ -3,7 +3,7 @@ import { CLIENTS, SKILLS, SOURCES, glyphOf } from "./data.js";
 import { el, fakeHash } from "./engine.js";
 
 /** Hub 标志：中心库存 + 六条链接到各 Agent。 */
-export function logoSVG(size = 64, color = "var(--sh-volt)") {
+export function logoSVG(size = 64, color = "var(--sh-logo)", core = "var(--sh-logo-core)") {
   const nodes = [];
   const spokes = [];
   for (let k = 0; k < 6; k++) {
@@ -15,7 +15,7 @@ export function logoSVG(size = 64, color = "var(--sh-volt)") {
   }
   return `<svg class="logo" width="${size}" height="${size}" viewBox="0 0 64 64" fill="none">
     <g stroke="${color}" stroke-width="3" stroke-linecap="round">${spokes.join("")}</g>
-    <g fill="${color}">${nodes.join("")}<circle class="lg-core" cx="32" cy="32" r="8.5" /></g>
+    <g fill="${color}">${nodes.join("")}</g><circle class="lg-core" cx="32" cy="32" r="8.5" fill="${core}" stroke="${color}" stroke-width="3" />
   </svg>`;
 }
 
@@ -94,7 +94,7 @@ export function buildApp(parent) {
   grid.style.cssText = "display:grid;grid-template-columns:1.75fr 1fr;gap:14px;";
   const chartCard = el("div", "sh-card", grid);
   const ch = el("div", "sh-card-head", chartCard, "用量 Top 8");
-  el("div", "sh-legend sh-sub", ch, "<span><i style='background:var(--sh-volt)'></i>启用</span><span><i style='background:var(--sh-c-cyan)'></i>查看</span>");
+  el("div", "sh-legend sh-sub", ch, "<span><i style='background:var(--sh-volt-fill)'></i>启用</span><span><i style='background:var(--sh-c-cyan)'></i>查看</span>");
   const chart = el("div", "sh-chart", chartCard);
   const top = [
     ["frontend-design", 62, 30], ["systematic-debugging", 55, 28], ["pptx", 49, 31], ["vercel-react-best-practices", 44, 20],

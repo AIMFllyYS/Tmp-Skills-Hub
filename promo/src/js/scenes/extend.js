@@ -1,4 +1,5 @@
 // b76–88 为扩展而建：四个接口模块逐拍「咔」进确定性内核，再收成工程 DAG。
+import { T } from "../theme.js";
 import { E, clamp, css, el, hit, kf, prog, svg, toggle } from "../engine.js";
 import { drawBurst, makeBurst } from "../fx.js";
 import { chapter, updateChapter } from "./chapter.js";
@@ -38,10 +39,10 @@ export default {
     s.a = el("div", "abs", root);
     s.a.style.cssText = "inset:0;transform-origin:960px 560px;";
     s.svg = svg("svg", { width: 1920, height: 1080, style: "position:absolute;inset:0;overflow:visible" }, s.a);
-    s.links = MODULES.map((m) => svg("line", { x1: CX, y1: CY, x2: m.x, y2: m.y, stroke: "rgba(200,245,60,.8)", "stroke-width": 2, opacity: 0 }, s.svg));
+    s.links = MODULES.map((m) => svg("line", { x1: CX, y1: CY, x2: m.x, y2: m.y, stroke: `rgba(${T.accentRGB},.8)`, "stroke-width": 2, opacity: 0 }, s.svg));
     const g = svg("g", { transform: `translate(${CX} ${CY})` }, s.svg);
-    s.ring = svg("path", { d: hexPath(190), fill: "none", stroke: "rgba(255,255,255,.18)", "stroke-width": 1.5, "stroke-dasharray": "6 10" }, g);
-    s.hex = svg("path", { d: hexPath(140), fill: "#0f1215", stroke: "rgba(200,245,60,.9)", "stroke-width": 2.5 }, g);
+    s.ring = svg("path", { d: hexPath(190), fill: "none", stroke: "var(--sh-line-3)", "stroke-width": 1.5, "stroke-dasharray": "6 10" }, g);
+    s.hex = svg("path", { d: hexPath(140), fill: "var(--sh-surface)", stroke: `rgba(${T.accentRGB},.9)`, "stroke-width": 2.5 }, g);
     s.core = el("div", "abs", s.a, "<div style='font-family:var(--sh-mono);font-size:30px;font-weight:500'>core</div><div class='dim' style='margin-top:8px;font-size:17px'>确定性内核</div><div class='sh-hash' style='margin-top:6px'>@skills-hub/core</div>");
     s.core.style.cssText += `left:${CX - 150}px;width:300px;top:${CY - 58}px;text-align:center;`;
 
@@ -68,7 +69,7 @@ export default {
       const A = pos[a];
       const Z = pos[z];
       const dpath = `M ${A.x + 130} ${A.y} C ${(A.x + Z.x) / 2} ${A.y}, ${(A.x + Z.x) / 2} ${Z.y}, ${Z.x - 130} ${Z.y}`;
-      return { p: svg("path", { d: dpath, fill: "none", stroke: "rgba(200,245,60,.85)", "stroke-width": 2, "stroke-dasharray": 700, "stroke-dashoffset": 700 }, s.dsvg), at };
+      return { p: svg("path", { d: dpath, fill: "none", stroke: `rgba(${T.accentRGB},.85)`, "stroke-width": 2, "stroke-dasharray": 700, "stroke-dashoffset": 700 }, s.dsvg), at };
     });
     s.dnodes = DAG.map((d, i) => {
       const n = el("div", "node", s.b);
@@ -109,7 +110,7 @@ export default {
       });
       toggle(m.n, "is-lit", b >= m.at && b < m.at + 1.2);
       s.links[i].setAttribute("opacity", b >= m.at ? (0.35 + 0.65 * hit(b, m.at, 0.5)).toFixed(3) : "0");
-      g.globalCompositeOperation = "lighter";
+      g.globalCompositeOperation = T.blend;
       const mx = CX + (m.x - CX) * 0.55;
       const my = CY + (m.y - CY) * 0.55;
       drawBurst(g, m.burst, b, m.at, mx, my);

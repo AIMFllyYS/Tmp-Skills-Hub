@@ -1,8 +1,10 @@
 // 片中特效：故障字、粒子爆发、星空、冲击环。全部是 (b, frame) 的纯函数。
+import { T } from "./theme.js";
 import { E, W, H, clamp, css, el, rng } from "./engine.js";
 
 /** 故障字：主层 + 红青色散层 + 横向切片层。 */
-export function glitchText(parent, html, cls = "") {
+/** onDark：这段文字压在深色底上（反相镜头），色散层改用 screen。 */
+export function glitchText(parent, html, cls = "", onDark = T.name === "dark") {
   const root = el("div", `glitch ${cls}`, parent);
   root.style.position = "relative";
   root.style.display = "inline-block";
@@ -13,8 +15,9 @@ export function glitchText(parent, html, cls = "") {
     n.style.cssText = `position:absolute;inset:0;color:${color};mix-blend-mode:${blend};opacity:0;`;
     return n;
   };
-  const red = mk("#ff2a4d", "screen");
-  const cyan = mk("#2af0ff", "screen");
+  const pair = onDark ? [["#ff2a4d", "screen"], ["#2af0ff", "screen"]] : T.glitch;
+  const red = mk(pair[0][0], pair[0][1]);
+  const cyan = mk(pair[1][0], pair[1][1]);
   const slices = [];
   for (let i = 0; i < 6; i++) {
     const s = el("div", "", root, html);
@@ -42,7 +45,7 @@ export function updateGlitch(g, amount, frame, seed = 1) {
 /** 粒子爆发：预生成参数，按时间推进。 */
 export function makeBurst(seed, count = 160, opts = {}) {
   const r = rng(seed);
-  const colors = opts.colors ?? ["#c8f53c", "#e9ffb0", "#ffffff"];
+  const colors = opts.colors ?? T.burst;
   return Array.from({ length: count }, () => {
     const a = r() * Math.PI * 2;
     return {
@@ -84,7 +87,7 @@ export function drawBurst(ctx, parts, b, at, x, y, beatSec = 0.5) {
   ctx.globalAlpha = 1;
 }
 
-export function drawRing(ctx, b, at, x, y, maxR = 1200, dur = 1.2, color = "200,245,60", width = 3) {
+export function drawRing(ctx, b, at, x, y, maxR = 1200, dur = 1.2, color = T.accentRGB, width = 3) {
   const tt = (b - at) / dur;
   if (tt < 0 || tt > 1) return;
   const r = maxR * E.outExpo(tt);
@@ -113,12 +116,12 @@ export function drawStars(ctx, stars, travel, alpha = 1, streak = 0) {
     const bright = clamp((1 - z) * 1.2) * alpha * s.m;
     if (bright < 0.02) continue;
     ctx.globalAlpha = bright;
-    ctx.fillStyle = "#e8f0ff";
+    ctx.fillStyle = T.star;
     if (streak > 0.01) {
       const zb = zz + streak * 0.25;
       const bx = W / 2 + s.x / zb / 2.2;
       const by = H / 2 + s.y / zb / 2.2;
-      ctx.strokeStyle = "#e8f0ff";
+      ctx.strokeStyle = T.star;
       ctx.lineWidth = 1.2 * (1.4 - z);
       ctx.beginPath();
       ctx.moveTo(bx, by);

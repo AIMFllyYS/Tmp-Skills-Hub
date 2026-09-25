@@ -5,6 +5,7 @@
  *   node render.mjs                         # 全片 60fps → out/skills-hub-promo.mp4
  *   node render.mjs --fps 30 --from 20 --to 30
  *   node render.mjs --stills 3,12,21        # 只出静帧到 out/stills/（--dir 可改），用于审片
+ *   node render.mjs --theme dark            # 深色版（默认浅色）
  *
  * 环境：CHROME_PATH 覆盖浏览器；FFMPEG 覆盖 ffmpeg（默认找 imageio-ffmpeg 的静态版或 PATH 里的 ffmpeg）。
  */
@@ -68,7 +69,7 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
 page.on("pageerror", (e) => console.error("[page]", e.message));
 page.on("console", (m) => m.type() === "error" && console.error("[console]", m.text()));
-await page.goto(`http://127.0.0.1:${port}/src/index.html`);
+await page.goto(`http://127.0.0.1:${port}/src/index.html${args.theme ? `?theme=${args.theme}` : ""}`);
 await page.waitForFunction(() => globalThis.__ready === true, null, { timeout: 60000 });
 const cdp = await page.context().newCDPSession(page);
 

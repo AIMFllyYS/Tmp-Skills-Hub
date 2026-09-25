@@ -1,4 +1,5 @@
 // b68–76 享：左半推到社团仓库并分发链接；甩镜到右半，Agent 帮你启用 skill。
+import { T } from "../theme.js";
 import { TEAM } from "../data.js";
 import { E, css, el, hit, kf, prog, revealChars, split, svg, toggle } from "../engine.js";
 import { icon } from "../ui.js";
@@ -37,11 +38,11 @@ export default {
     s.repo = el("div", "node", L, `${icon("git").replace("<svg", "<svg width='22' height='22' stroke='var(--sh-volt)' fill='none' stroke-width='2'")}<div><div class="n-name">club/skills</div><div class="n-path">社团共享仓库 · 零服务器</div></div>`);
     s.repo.style.left = "1180px";
     s.repo.style.top = "540px";
-    s.repoLine = svg("path", { d: "M 960 540 C 1000 540, 1030 540, 1070 540", stroke: "rgba(200,245,60,.9)", "stroke-width": 2, fill: "none", "stroke-dasharray": 120, "stroke-dashoffset": 120 }, s.lines);
+    s.repoLine = svg("path", { d: "M 960 540 C 1000 540, 1030 540, 1070 540", stroke: `rgba(${T.accentRGB},.9)`, "stroke-width": 2, fill: "none", "stroke-dasharray": 120, "stroke-dashoffset": 120 }, s.lines);
     s.members = TEAM.concat([{ handle: "@nagi", color: "#ff6f91" }]).map((m, i) => {
       const y = 300 + i * 120;
       const x = 1640;
-      const p = svg("path", { d: `M 1300 540 C 1450 540, 1480 ${y}, ${x - 40} ${y}`, stroke: "rgba(200,245,60,.7)", "stroke-width": 1.6, fill: "none", "stroke-dasharray": 520, "stroke-dashoffset": 520 }, s.lines);
+      const p = svg("path", { d: `M 1300 540 C 1450 540, 1480 ${y}, ${x - 40} ${y}`, stroke: `rgba(${T.accentRGB},.7)`, "stroke-width": 1.6, fill: "none", "stroke-dasharray": 520, "stroke-dashoffset": 520 }, s.lines);
       const n = el("div", "abs", L);
       n.style.cssText = `left:${x - 30}px;top:${y - 30}px;display:flex;align-items:center;gap:14px;white-space:nowrap;`;
       el("div", "sh-avatar", n, m.handle[1].toUpperCase()).style.cssText = `width:60px;height:60px;font-size:22px;background:${m.color}`;

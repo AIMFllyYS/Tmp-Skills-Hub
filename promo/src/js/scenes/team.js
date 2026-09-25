@@ -1,4 +1,5 @@
 // b88–96 每个人在用什么：成员主页卡逐拍滑入，接社团精选排行。
+import { T } from "../theme.js";
 import { SKILLS, TEAM } from "../data.js";
 import { E, clamp, css, el, hit, kf, prog, toggle } from "../engine.js";
 import { glyph } from "../ui.js";
@@ -52,7 +53,7 @@ export default {
       const track = el("div", "", row);
       track.style.cssText = "height:10px;border-radius:5px;background:var(--sh-surface-3);overflow:hidden;";
       const fill = el("div", "", track);
-      fill.style.cssText = `height:100%;border-radius:5px;background:${i === 0 ? "var(--sh-volt)" : "var(--sh-c-cyan)"};`;
+      fill.style.cssText = `height:100%;border-radius:5px;background:${i === 0 ? "var(--sh-volt-fill)" : "var(--sh-c-cyan)"};`;
       el("div", "", row, `${n} 人启用`).style.cssText = "font-family:var(--sh-mono);font-size:14px;color:var(--sh-ink-2);text-align:right;";
       return { row, fill, n, at: 92.2 + i * 0.25 };
     });
@@ -76,7 +77,7 @@ export default {
       const p = prog(b, r.at, r.at + 0.35, E.outCubic);
       css(r.row, { opacity: p.toFixed(3), transform: `translateX(${(-30 * (1 - p)).toFixed(1)}px)` });
       css(r.fill, { width: `${(prog(b, r.at + 0.1, r.at + 0.9, E.outExpo) * (r.n / 18) * 100).toFixed(1)}%` });
-      if (i === 0) css(r.row, { background: `rgba(200,245,60,${(0.07 * prog(b, 94, 94.5) + 0.1 * hit(b, 94, 0.3)).toFixed(3)})` });
+      if (i === 0) css(r.row, { background: `rgba(${T.glowRGB},${(0.14 * prog(b, 94, 94.5) + 0.1 * hit(b, 94, 0.3)).toFixed(3)})` });
     });
   },
 };

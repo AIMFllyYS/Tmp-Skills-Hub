@@ -59,7 +59,7 @@
   color: var(--sh-ink-2);
 }
 .sh-nav svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; }
-.sh-nav.is-active { background: var(--sh-surface-2); color: var(--sh-ink); }
+.sh-nav.is-active { background: var(--sh-surface-3); color: var(--sh-ink); font-weight: 500; }
 .sh-nav.is-active::before {
   content: "";
   position: absolute;
@@ -68,7 +68,7 @@
   bottom: 10px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--sh-volt);
+  background: var(--sh-volt-fill);
   box-shadow: 0 0 12px var(--sh-volt-glow);
 }
 .sh-nav .sh-count { margin-left: auto; font-family: var(--sh-mono); font-size: 12px; color: var(--sh-ink-3); }
@@ -98,7 +98,7 @@
   white-space: nowrap;
 }
 .sh-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
-.sh-btn.is-primary { border-color: transparent; background: var(--sh-volt); color: var(--sh-volt-ink); }
+.sh-btn.is-primary { border-color: rgba(10, 12, 16, 0.08); background: var(--sh-volt-fill); color: var(--sh-volt-ink); }
 .sh-btn.is-pressed { transform: scale(0.96); filter: brightness(0.9); }
 
 .sh-card {
@@ -125,7 +125,7 @@
 .sh-chart { display: flex; align-items: flex-end; gap: 18px; height: 250px; padding: 22px 22px 0; }
 .sh-bar { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 8px; height: 100%; justify-content: flex-end; }
 .sh-bar .sh-bar-stack { display: flex; flex-direction: column; justify-content: flex-end; width: 100%; max-width: 46px; height: 190px; }
-.sh-bar .sh-bar-a { border-radius: 6px 6px 0 0; background: var(--sh-volt); }
+.sh-bar .sh-bar-a { border-radius: 6px 6px 0 0; background: var(--sh-volt-fill); }
 .sh-bar .sh-bar-b { background: color-mix(in oklab, var(--sh-c-cyan) 70%, transparent); }
 .sh-bar .sh-bar-num { font-family: var(--sh-mono); font-size: 12px; color: var(--sh-ink-2); }
 .sh-bar .sh-bar-name { width: 100%; overflow: hidden; font-family: var(--sh-mono); font-size: 11px; color: var(--sh-ink-3); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
@@ -175,8 +175,8 @@
 .sh-hash b { font-weight: 500; color: var(--sh-volt); }
 
 .sh-switch { position: relative; width: 36px; height: 20px; border-radius: 999px; background: var(--sh-surface-3); }
-.sh-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--sh-ink-3); transition: none; }
-.sh-switch.is-on { background: var(--sh-volt); }
+.sh-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--sh-surface); box-shadow: 0 1px 2px rgba(10, 12, 16, 0.2); transition: none; }
+.sh-switch.is-on { background: var(--sh-volt-fill); }
 .sh-switch.is-on::after { left: 19px; background: var(--sh-volt-ink); }
 
 .sh-avatar {

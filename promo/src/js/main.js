@@ -1,4 +1,5 @@
 // 舞台入口：挂载所有场景，提供 window.__seek(t) 给逐帧渲染器；?play 时跟随音频实时预览。
+import { T } from "./theme.js";
 import { E, H, W, clamp, css, el, hit, prog, rng } from "./engine.js";
 import { makeGrain } from "./fx.js";
 import intro from "./scenes/intro.js";
@@ -139,7 +140,7 @@ export function render(t) {
     grainCtx.drawImage(grainFrames[frame % grainFrames.length], 0, 0);
     lastFrame = frame;
   }
-  css(grain, { opacity: (0.7 + 0.3 * clamp(amp)).toFixed(3) });
+  css(grain, { opacity: ((T.name === "dark" ? 0.7 : 0.5) + 0.3 * clamp(amp)).toFixed(3) });
 }
 
 // 字体：隐藏场景是 display:none，不会触发加载，这里按全部文字显式预载

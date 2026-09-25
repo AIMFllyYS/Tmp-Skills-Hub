@@ -26,10 +26,10 @@ body { width: 1920px; height: 1080px; }
 .center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 
 /* 后期层 */
-#vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.72) 100%); }
+#vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, var(--sh-vignette) 100%); }
 #grain { position: absolute; inset: 0; width: 1920px; height: 1080px; }
 #flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
-#bars i { position: absolute; left: 0; right: 0; height: 140px; background: #000; }
+#bars i { position: absolute; left: 0; right: 0; height: 140px; background: var(--sh-bars); }
 #bars i:first-child { top: 0; }
 #bars i:last-child { bottom: 0; }
 #flare {
@@ -39,9 +39,9 @@ body { width: 1920px; height: 1080px; }
   top: 540px;
   height: 3px;
   opacity: 0;
-  background: linear-gradient(90deg, transparent, rgba(200, 245, 60, 0.0) 10%, rgba(220, 255, 140, 0.9) 50%, rgba(200, 245, 60, 0) 90%, transparent);
+  background: linear-gradient(90deg, transparent, transparent 10%, var(--sh-volt) 50%, transparent 90%, transparent);
   filter: blur(1px);
-  box-shadow: 0 0 40px 8px rgba(200, 245, 60, 0.35);
+  box-shadow: 0 0 40px 8px var(--sh-volt-glow);
 }
 #hud { position: absolute; inset: 0; font-family: var(--sh-mono); font-size: 13px; letter-spacing: 0.08em; color: var(--sh-ink-3); text-transform: uppercase; }
 #hud .hud-tl { position: absolute; left: 64px; top: 170px; }

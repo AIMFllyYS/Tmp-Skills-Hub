@@ -13,14 +13,14 @@ export default {
     s.cam = el("div", "abs", root);
     s.cam.style.cssText = "inset:0;transform-origin:960px 560px;";
     s.line = el("div", "abs", s.cam);
-    s.line.style.cssText = "left:360px;width:1200px;top:540px;height:1px;background:linear-gradient(90deg,transparent,rgba(200,245,60,.7),transparent);transform-origin:center;";
+    s.line.style.cssText = "left:360px;width:1200px;top:540px;height:1px;background:linear-gradient(90deg,transparent,var(--sh-volt),transparent);transform-origin:center;";
 
     s.path = el("div", "abs kt-mono", s.cam);
     s.path.style.cssText = "left:0;right:0;top:512px;text-align:center;font-size:40px;color:var(--sh-ink-2);white-space:pre;";
     s.pathChars = split(s.path, PATH);
     s.pathChars.forEach((c, i) => { if (i >= 17) c.style.color = "var(--sh-ink)"; });
     s.caret = el("span", "", s.path);
-    s.caret.style.cssText = "display:inline-block;width:18px;height:42px;margin-left:4px;vertical-align:-8px;background:var(--sh-volt);box-shadow:0 0 18px var(--sh-volt-glow);";
+    s.caret.style.cssText = "display:inline-block;width:18px;height:42px;margin-left:4px;vertical-align:-8px;background:var(--sh-volt-fill);box-shadow:0 0 18px var(--sh-volt-glow);";
 
     s.docWrap = el("div", "center", s.cam);
     s.docWrap.style.top = "590px";
@@ -36,7 +36,7 @@ export default {
     ];
     s.lines = lines.map((h) => el("div", "", s.doc, h));
     s.scan = el("div", "abs", s.doc);
-    s.scan.style.cssText = "left:0;right:0;height:120px;top:0;background:linear-gradient(180deg,transparent,rgba(200,245,60,.10),transparent);pointer-events:none;";
+    s.scan.style.cssText = "left:0;right:0;height:120px;top:0;background:linear-gradient(180deg,transparent,var(--sh-volt-soft),transparent);pointer-events:none;";
     s.doc.style.position = "relative";
     s.doc.style.overflow = "hidden";
 

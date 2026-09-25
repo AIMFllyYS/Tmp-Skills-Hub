@@ -1,4 +1,5 @@
 // b96–104 跨次元：界面坍缩成点，长成一颗 skill 星球，再拉远成团队星系 —— Skills 连接一切。
+import { T } from "../theme.js";
 import { SKILLS } from "../data.js";
 import { E, W, H, clamp, css, el, kf, prog, rng } from "../engine.js";
 import { drawRing, drawStars, makeStars } from "../fx.js";
@@ -19,7 +20,7 @@ function fib(n, r) {
 function makeWorld() {
   const r = rng(96);
   const main = { c: [0, 0, 0], R: 380, pts: fib(1100, 1), arcs: [] };
-  for (let i = 0; i < 80; i++) main.arcs.push([Math.floor(r() * 1100), Math.floor(r() * 1100), r(), r() < 0.7 ? "200,245,60" : r() < 0.5 ? "90,215,255" : "162,147,255"]);
+  for (let i = 0; i < 80; i++) main.arcs.push([Math.floor(r() * 1100), Math.floor(r() * 1100), r(), r() < 0.7 ? T.arc[0] : r() < 0.5 ? T.arc[1] : T.arc[2]]);
   const names = ["前端组", "后端组", "设计组", "算法组", "社团", "企业团队", "开源世界"];
   const sats = names.map((name, i) => {
     const a = (i / names.length) * Math.PI * 2 + 0.4;
@@ -49,8 +50,8 @@ function drawSphere(g, sph, yaw, pitch, z, cx, cy, alpha, labels = null, arcP = 
     if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
     const front = (d + 1) / 2;
     g.globalAlpha = alpha * (0.15 + 0.85 * front);
-    g.fillStyle = i % 11 === 0 ? "#c8f53c" : "#dfe7f0";
-    const sz = (0.8 + 1.8 * front) * Math.max(0.6, z);
+    g.fillStyle = i % 11 === 0 ? T.pointHot : T.point;
+    const sz = (0.8 + 1.8 * front) * Math.max(0.6, z) * T.pointScale;
     g.fillRect(x - sz / 2, y - sz / 2, sz, sz);
   }
   // 弧线：球面上两点之间向外鼓起的曲线，按进度生长
@@ -82,7 +83,7 @@ function drawSphere(g, sph, yaw, pitch, z, cx, cy, alpha, labels = null, arcP = 
       const [x, y, d] = P[i];
       if (d < 0.25) continue;
       g.globalAlpha = alpha * clamp((d - 0.25) * 2) * 0.85;
-      g.fillStyle = "#a3abb6";
+      g.fillStyle = T.label;
       g.fillText(labels[(i / 29) % labels.length | 0], x + 6, y - 6);
     }
   }
@@ -105,7 +106,7 @@ export default {
     ].map(([at, text, cls, size]) => {
       const n = el("div", `center ${cls}`, root, text);
       n.style.fontSize = `${size}px`;
-      n.style.textShadow = "0 0 60px rgba(200,245,60,.35), 0 0 2px rgba(255,255,255,.4)";
+      n.style.textShadow = `0 0 60px rgba(${T.glowRGB},.45)`;
       return { at, n };
     });
     s.sub = el("div", "abs cap", root, "SKILLS CONNECT EVERYTHING");
@@ -126,8 +127,8 @@ export default {
     const cx = W / 2;
     const cy = H / 2;
 
-    g.globalCompositeOperation = "lighter";
-    drawRing(g, b, 96, cx, cy, 1300, 1.2, "200,245,60", 4);
+    g.globalCompositeOperation = T.blend;
+    drawRing(g, b, 96, cx, cy, 1300, 1.2, T.accentRGB, 4);
     drawSphere(g, main, yaw, 0.38, zoom, cx, cy, alpha, s.world.labels, prog(b, 96.6, 99.5));
     const satOn = prog(b, 99.3, 100.6, E.outCubic) * alpha;
     if (satOn > 0) {
@@ -140,7 +141,7 @@ export default {
         if (grow > 0) {
           const mx = (cx + sx) / 2;
           const my = (cy + sy) / 2 - 180 * zoom;
-          g.strokeStyle = `rgba(200,245,60,${(0.6 * satOn).toFixed(3)})`;
+          g.strokeStyle = `rgba(${T.accentRGB},${(0.6 * satOn).toFixed(3)})`;
           g.lineWidth = 1.4;
           g.beginPath();
           for (let k = 0; k <= 30 * grow; k++) {
@@ -153,7 +154,7 @@ export default {
           g.stroke();
         }
         g.globalAlpha = satOn;
-        g.fillStyle = "#f3f5f7";
+        g.fillStyle = T.satLabel;
         g.font = '600 20px "Noto Sans SC Variable", sans-serif';
         g.textAlign = "center";
         g.fillText(sat.name, sx, sy + sat.R * zoom + 34);

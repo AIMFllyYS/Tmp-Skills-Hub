@@ -1,4 +1,5 @@
 // b60–68 看：重做后的总览页从透视里落定，镜头依次推到 KPI、图表、列表。
+import { T } from "../theme.js";
 import { E, css, el, hit, kf, prog, rollNum, toggle } from "../engine.js";
 import { buildApp } from "../ui.js";
 import { chapter, updateChapter } from "./chapter.js";
@@ -72,7 +73,7 @@ export default {
     s.ui.rows.forEach((r, i) => {
       const on = b >= 66 + i * 0.25;
       toggle(r.sw, "is-on", on);
-      css(r.row, { background: on ? `rgba(200,245,60,${(0.08 * hit(b, 66 + i * 0.25, 0.4)).toFixed(3)})` : "transparent" });
+      css(r.row, { background: on ? `rgba(${T.glowRGB},${(0.16 * hit(b, 66 + i * 0.25, 0.4)).toFixed(3)})` : "transparent" });
     });
     toggle(s.ui.adopt, "is-pressed", b >= 67.4 && b < 67.55);
   },

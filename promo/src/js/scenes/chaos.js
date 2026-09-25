@@ -1,4 +1,5 @@
 // b24–40 很多，很怪，没人知道：真机扫描的数字 + 快切提问 + 故障大字。
+import { T } from "../theme.js";
 import { ROOTS, SCAN, SKILLS } from "../data.js";
 import { E, clamp, css, el, fakeHash, hit, kf, life, prog, rng, rollNum, toggle } from "../engine.js";
 import { glitchText, updateGlitch } from "../fx.js";
@@ -99,10 +100,10 @@ export default {
     s.shot3.style.cssText = "inset:0;";
     s.qs = QUESTIONS.map(([at, cn, en, tone], i) => {
       const box = el("div", "abs", s.shot3);
-      box.style.cssText = `inset:0;background:${tone === "light" ? "#f3f5f7" : "transparent"};`;
-      const g = glitchText(el("div", "center", box), cn, "kt");
+      box.style.cssText = `inset:0;background:${tone === "light" ? "var(--sh-invert-bg)" : "transparent"};`;
+      const g = glitchText(el("div", "center", box), cn, "kt", tone === "light" ? T.name !== "dark" : T.name === "dark");
       g.root.parentElement.style.textAlign = "center";
-      g.root.style.cssText += `font-size:${[190, 150, 160, 180][i]}px;color:${tone === "light" ? "#050607" : i === 2 ? "var(--sh-volt)" : "var(--sh-ink)"};`;
+      g.root.style.cssText += `font-size:${[190, 150, 160, 180][i]}px;color:${tone === "light" ? "var(--sh-invert-ink)" : i === 2 ? "var(--sh-volt)" : "var(--sh-ink)"};`;
       const cap = el("div", "abs cap", box, en);
       cap.style.cssText += `left:0;right:0;top:${i % 2 ? 300 : 740}px;text-align:center;color:${tone === "light" ? "#5c6470" : "var(--sh-ink-3)"};font-size:18px;`;
       const idx = el("div", "abs kt-mono", box, `0${i + 1} / 04`);
@@ -112,12 +113,13 @@ export default {
 
     // shot4：很多 / 很怪 / 没人知道
     s.shot4 = el("div", "abs", root);
-    s.shot4.style.cssText = "inset:0;";
+    // 三记重音用反相底：浅色片里是全片最暗的一刻，紧接黑场与定名闪白
+    s.shot4.style.cssText = "inset:0;background:var(--sh-invert-bg);color:var(--sh-invert-ink);";
     s.scan = el("div", "abs", s.shot4);
-    s.scan.style.cssText = "inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 2px,transparent 2px 5px);";
+    s.scan.style.cssText = "inset:0;background:repeating-linear-gradient(0deg,rgba(128,128,128,.07) 0 2px,transparent 2px 5px);";
     s.words = WORDS.map(([at, w], i) => {
       const box = el("div", "center", s.shot4);
-      const g = glitchText(box, w, "kt");
+      const g = glitchText(box, w, "kt", T.name !== "dark");
       g.root.style.cssText += `font-size:${i === 2 ? 230 : 300}px;font-weight:900;`;
       return { at, box, g };
     });

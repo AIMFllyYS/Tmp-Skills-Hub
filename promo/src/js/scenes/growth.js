@@ -69,7 +69,7 @@ export default {
       const box = el("div", "abs", root);
       box.style.cssText = "left:0;right:0;top:806px;text-align:center;";
       const glow = el("div", "abs", box);
-      glow.style.cssText = "left:50%;top:40%;width:900px;height:220px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(5,6,7,.92),transparent);";
+      glow.style.cssText = "left:50%;top:40%;width:900px;height:220px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,var(--sh-scrim),transparent);";
       const t = el("div", "kt", box);
       t.style.cssText = "position:relative;font-size:60px;";
       const chars = split(t, cn);
