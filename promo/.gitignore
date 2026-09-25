@@ -1,0 +1,3 @@
+node_modules/
+# 渲染产物：配乐 wav、草稿、静帧。成片单独放在 film/ 下提交（根 .gitignore 忽略所有 dist/）。
+out/

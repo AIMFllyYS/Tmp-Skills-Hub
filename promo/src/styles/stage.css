@@ -1,0 +1,103 @@
+/* 影片舞台：1920×1080 固定画布，分层 = 背景 canvas / DOM 世界 / 前景 canvas / 后期 */
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; overflow: hidden; }
+body { width: 1920px; height: 1080px; }
+
+#stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--sh-bg);
+  color: var(--sh-ink);
+  font-family: var(--sh-font);
+  -webkit-font-smoothing: antialiased;
+}
+#stage canvas { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
+#bg { z-index: 0; }
+#world { position: absolute; inset: 0; z-index: 1; transform-origin: 960px 540px; }
+#fx { z-index: 2; }
+#post { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+
+.scene { position: absolute; inset: 0; display: none; transform-origin: 960px 540px; }
+.scene.is-on { display: block; }
+.abs { position: absolute; }
+.center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+
+/* 后期层 */
+#vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.72) 100%); }
+#grain { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+#bars i { position: absolute; left: 0; right: 0; height: 140px; background: #000; }
+#bars i:first-child { top: 0; }
+#bars i:last-child { bottom: 0; }
+#flare {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 540px;
+  height: 3px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, rgba(200, 245, 60, 0.0) 10%, rgba(220, 255, 140, 0.9) 50%, rgba(200, 245, 60, 0) 90%, transparent);
+  filter: blur(1px);
+  box-shadow: 0 0 40px 8px rgba(200, 245, 60, 0.35);
+}
+#hud { position: absolute; inset: 0; font-family: var(--sh-mono); font-size: 13px; letter-spacing: 0.08em; color: var(--sh-ink-3); text-transform: uppercase; }
+#hud .hud-tl { position: absolute; left: 64px; top: 170px; }
+#hud .hud-tr { position: absolute; right: 64px; top: 170px; text-align: right; }
+
+/* 片中大字 */
+.kt { font-family: var(--sh-font-cn); font-weight: 800; letter-spacing: -0.04em; line-height: 1; white-space: nowrap; }
+.kt-en { font-family: var(--sh-font); font-weight: 600; letter-spacing: -0.045em; line-height: 0.92; white-space: nowrap; }
+.kt-mono { font-family: var(--sh-mono); letter-spacing: 0.02em; }
+.cap { font-family: var(--sh-mono); font-size: 15px; letter-spacing: 0.22em; color: var(--sh-ink-3); text-transform: uppercase; white-space: nowrap; }
+.ch { display: inline-block; will-change: transform, opacity, filter; }
+.volt { color: var(--sh-volt); }
+.dim { color: var(--sh-ink-3); }
+
+/* 章节题签：左上角编号 + 大字 */
+.chapter { position: absolute; left: 96px; top: 96px; display: flex; align-items: center; gap: 22px; }
+.chapter .ch-num { font-family: var(--sh-mono); font-size: 14px; letter-spacing: 0.2em; color: var(--sh-volt); }
+.chapter .ch-line { width: 64px; height: 1px; background: var(--sh-line-3); transform-origin: left; }
+.chapter .ch-cn { font-family: var(--sh-font-cn); font-size: 44px; font-weight: 800; }
+.chapter .ch-en { font-family: var(--sh-mono); font-size: 14px; letter-spacing: 0.3em; color: var(--sh-ink-3); }
+.caption { position: absolute; left: 0; right: 0; bottom: 88px; text-align: center; }
+.caption .c-cn { font-family: var(--sh-font-cn); font-size: 34px; font-weight: 600; letter-spacing: -0.01em; }
+.caption .c-en { margin-top: 12px; font-family: var(--sh-mono); font-size: 14px; letter-spacing: 0.24em; color: var(--sh-ink-3); text-transform: uppercase; }
+
+/* 技能卡（生长 / 混乱 / 收录 共用） */
+.tile {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 232px;
+  height: 72px;
+  padding: 0 14px;
+  border: 1px solid var(--sh-line-2);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--sh-surface-2), var(--sh-surface));
+  box-shadow: var(--sh-shadow-1);
+  will-change: transform, opacity;
+}
+.tile .sh-glyph { flex: none; width: 38px; height: 38px; border-radius: 9px; font-size: 12px; }
+.tile .t-name { overflow: hidden; font-family: var(--sh-mono); font-size: 15px; color: var(--sh-ink); text-overflow: ellipsis; white-space: nowrap; }
+.tile .t-src { margin-top: 5px; overflow: hidden; font-family: var(--sh-mono); font-size: 11px; color: var(--sh-ink-3); text-overflow: ellipsis; white-space: nowrap; }
+.tile .t-meta { min-width: 0; }
+.tile.is-hot { border-color: var(--sh-volt-line); box-shadow: var(--sh-glow); }
+
+/* SKILL.md 文档卡 */
+.doc { width: 640px; padding: 26px 30px; border: 1px solid var(--sh-line-2); border-radius: 16px; background: var(--sh-surface); box-shadow: var(--sh-shadow-2); font-family: var(--sh-mono); font-size: 20px; line-height: 1.75; }
+.doc .d-file { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 14px; letter-spacing: 0.08em; color: var(--sh-ink-3); }
+.doc .d-k { color: var(--sh-c-cyan); }
+.doc .d-v { color: var(--sh-ink); }
+.doc .d-dash { color: var(--sh-ink-3); }
+
+/* 节点（链接 / 扩展 / DAG） */
+.node { position: absolute; display: flex; align-items: center; gap: 12px; padding: 14px 18px; border: 1px solid var(--sh-line-2); border-radius: 14px; background: var(--sh-surface); box-shadow: var(--sh-shadow-1); transform: translate(-50%, -50%); white-space: nowrap; }
+.node .n-name { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.node .n-path { margin-top: 4px; font-family: var(--sh-mono); font-size: 12px; color: var(--sh-ink-3); }
+.node.is-lit { border-color: var(--sh-volt-line); box-shadow: var(--sh-glow); }

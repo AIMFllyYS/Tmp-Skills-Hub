@@ -1,0 +1,21 @@
+{
+  "bpm": 120,
+  "beats": 114,
+  "fps": 60,
+  "sections": [
+    { "id": "intro",  "start": 0,   "end": 8,   "title": "起初，只是一个文件夹" },
+    { "id": "growth", "start": 8,   "end": 24,  "title": "一个，十个，一百个" },
+    { "id": "chaos",  "start": 24,  "end": 40,  "title": "很多，很怪，没人知道" },
+    { "id": "title",  "start": 40,  "end": 44,  "title": "Skills Hub" },
+    { "id": "store",  "start": 44,  "end": 52,  "title": "收 · 内容哈希去重" },
+    { "id": "link",   "start": 52,  "end": 60,  "title": "链 · 一处修改全局生效" },
+    { "id": "see",    "start": 60,  "end": 68,  "title": "看 · 一个地方统一看" },
+    { "id": "share",  "start": 68,  "end": 76,  "title": "享 · 授信仓库 + Agent" },
+    { "id": "extend", "start": 76,  "end": 88,  "title": "为扩展而建" },
+    { "id": "team",   "start": 88,  "end": 96,  "title": "每个人在用什么" },
+    { "id": "beyond", "start": 96,  "end": 104, "title": "Skills 连接一切" },
+    { "id": "finale", "start": 104, "end": 114, "title": "Logo 定版" }
+  ],
+  "impacts": [40, 96, 104],
+  "silences": [[39.5, 40], [103.5, 104]]
+}

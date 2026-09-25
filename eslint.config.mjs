@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/*.tsbuildinfo", ".sandbox/**"],
+    ignores: ["**/dist/**", "**/node_modules/**", "**/*.tsbuildinfo", ".sandbox/**", "promo/out/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -49,6 +49,28 @@ export default tseslint.config(
         process: "readonly",
         setTimeout: "readonly",
       },
+    },
+    rules: { "no-console": "off" },
+  },
+  {
+    // 宣传片舞台：浏览器里逐帧渲染的纯 JS（promo/README.md），不属于 workspace
+    files: ["promo/src/**/*.js"],
+    languageOptions: {
+      globals: {
+        Audio: "readonly",
+        URLSearchParams: "readonly",
+        document: "readonly",
+        fetch: "readonly",
+        location: "readonly",
+        requestAnimationFrame: "readonly",
+        window: "readonly",
+      },
+    },
+  },
+  {
+    files: ["promo/*.mjs"],
+    languageOptions: {
+      globals: { Buffer: "readonly", URL: "readonly", console: "readonly", process: "readonly" },
     },
     rules: { "no-console": "off" },
   },
