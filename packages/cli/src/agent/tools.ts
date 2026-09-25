@@ -55,6 +55,35 @@ export const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "group_members",
 ]);
 
+export const PLAN_STEP_STATUSES = ["pending", "in_progress", "done"] as const;
+
+const PLAN_INPUT = z.object({
+  title: z.string().max(40).optional().describe("计划标题,如「整理前端相关 skill」"),
+  steps: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(40).describe("一步要做的事,动词开头"),
+        status: z.enum(PLAN_STEP_STATUSES),
+      }),
+    )
+    .min(1)
+    .max(8),
+});
+
+export type PlanInput = z.infer<typeof PLAN_INPUT>;
+
+/** 计划回显:同一时刻至多一条 in_progress,多出来的降为 pending。 */
+export function normalizePlan(input: PlanInput): { ok: true; title: string; steps: PlanInput["steps"] } {
+  let running = false;
+  const steps = input.steps.map((s) => {
+    if (s.status !== "in_progress") return { title: s.title.trim(), status: s.status };
+    if (running) return { title: s.title.trim(), status: "pending" as const };
+    running = true;
+    return { title: s.title.trim(), status: s.status };
+  });
+  return { ok: true, title: input.title?.trim() ?? "", steps };
+}
+
 export interface ToolEnv {
   home: string;
   storeRoot: string | null;
@@ -225,6 +254,12 @@ export function createAgentTools(env: ToolEnv): ToolSet {
         const opts = env.analyzeGenerate !== undefined ? { generate: env.analyzeGenerate } : {};
         return dump(await performAnalyze(root, target, opts));
       },
+    }),
+    update_plan: tool({
+      description:
+        "公布或更新本轮计划(agent-v0.md §8)。任务预计 ≥3 步或含写操作时,在第一个写工具前调用;每完成一步再整体更新;全部完成时把所有步骤标为 done。不读写磁盘。",
+      inputSchema: PLAN_INPUT,
+      execute: async (input) => normalizePlan(input),
     }),
     enable_skills: tool({
       description: "给指定客户端启用 skill(建链接)。",

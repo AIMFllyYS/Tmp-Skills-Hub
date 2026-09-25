@@ -3,8 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
-import { createSkillsHubAgent, parseWritePolicy } from "../src/agent/agent.js";
-import { createAgentTools, WRITE_TOOL_NAMES, type ToolEnv } from "../src/agent/tools.js";
+import { AGENT_MAX_STEPS, createSkillsHubAgent, parseWritePolicy } from "../src/agent/agent.js";
+import { agentMessageMetadata, pickUsage } from "../src/agent/metadata.js";
+import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveThinking } from "../src/agent/models.js";
+import { buildAgentSystemPrompt } from "../src/agent/prompt.js";
+import { createAgentTools, normalizePlan, WRITE_TOOL_NAMES, type ToolEnv } from "../src/agent/tools.js";
 
 const usage = {
   inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
@@ -89,5 +92,87 @@ describe("createSkillsHubAgent", () => {
     });
     const result = await agent.generate({ prompt: "列出库存" });
     expect(result.text).toContain("skill");
+  });
+});
+
+describe("update_plan(agent-v0.md §8)", () => {
+  it("不是写工具,不受写策略影响", () => {
+    expect(WRITE_TOOL_NAMES.has("update_plan")).toBe(false);
+  });
+
+  it("回显计划;同一时刻至多一条 in_progress", async () => {
+    const tools = createAgentTools({ home: "/tmp/fake-home", storeRoot: null });
+    const opts = { messages: [], abortSignal: new AbortController().signal, toolCallId: "t" };
+    const out = await tools.update_plan.execute!(
+      {
+        title: " 整理前端 skill ",
+        steps: [
+          { title: "查库存", status: "done" },
+          { title: "找重复", status: "in_progress" },
+          { title: "停用旧版", status: "in_progress" },
+        ],
+      },
+      opts,
+    );
+    expect(out).toEqual({
+      ok: true,
+      title: "整理前端 skill",
+      steps: [
+        { title: "查库存", status: "done" },
+        { title: "找重复", status: "in_progress" },
+        { title: "停用旧版", status: "pending" },
+      ],
+    });
+  });
+
+  it("normalizePlan 缺省标题为空串", () => {
+    expect(normalizePlan({ steps: [{ title: "a", status: "pending" }] }).title).toBe("");
+  });
+});
+
+describe("深度思考与提示词", () => {
+  it("resolveThinking:只有 true 且模型支持时打开", () => {
+    expect(resolveThinking(DEFAULT_AGENT_MODEL, true)).toBe(true);
+    expect(resolveThinking(DEFAULT_AGENT_MODEL, "true")).toBe(false);
+    expect(resolveThinking(DEFAULT_AGENT_MODEL, undefined)).toBe(false);
+    const noThinking = AGENT_MODELS.find((m) => !m.thinking);
+    if (noThinking !== undefined) expect(resolveThinking(noThinking.id, true)).toBe(false);
+    expect(resolveThinking("not-in-list", true)).toBe(false);
+  });
+
+  it("提示词含工作法与计划工具;思考提示只在开启时出现", () => {
+    const base = { storeRoot: "/s", clients: ["claude"], writePolicy: "ask" as const };
+    const off = buildAgentSystemPrompt(base);
+    expect(off).toContain("update_plan");
+    expect(off).toContain("工作法");
+    expect(off).toContain("先批准");
+    expect(off).not.toContain("深度思考");
+    expect(buildAgentSystemPrompt({ ...base, thinking: true })).toContain("深度思考");
+    expect(buildAgentSystemPrompt({ ...base, writePolicy: "allow" })).toContain("全部允许");
+  });
+
+  it("循环上限 24", () => {
+    expect(AGENT_MAX_STEPS).toBe(24);
+  });
+});
+
+describe("message metadata(agent-v0.md §9)", () => {
+  it("start 写模型与思考;finish 写用量;其它部件不写", () => {
+    const meta = agentMessageMetadata({ model: "m1", thinking: true });
+    expect(meta({ part: { type: "start" } as never })).toEqual({ model: "m1", thinking: true });
+    expect(meta({ part: { type: "text-delta", id: "x", text: "a" } as never })).toBeUndefined();
+    const finish = meta({
+      part: {
+        type: "finish",
+        finishReason: "stop",
+        totalUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, outputTokenDetails: { reasoningTokens: 3 } },
+      } as never,
+    });
+    expect(finish).toEqual({ usage: { inputTokens: 10, outputTokens: 5, reasoningTokens: 3, totalTokens: 15 } });
+  });
+
+  it("pickUsage 不把缺报字段填成 0", () => {
+    expect(pickUsage(undefined)).toBeUndefined();
+    expect(pickUsage({ inputTokens: undefined, outputTokens: 2 } as never)).toEqual({ outputTokens: 2 });
   });
 });

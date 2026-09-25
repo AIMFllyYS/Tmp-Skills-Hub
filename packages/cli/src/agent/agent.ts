@@ -17,7 +17,12 @@ export interface CreateSkillsHubAgentOptions {
   env: ToolEnv;
   clients: string[];
   writePolicy: WritePolicy;
+  /** 本轮是否开启深度思考(已按模型能力裁剪),只影响提示词;供应商开关在 provider 层。 */
+  thinking?: boolean;
 }
+
+/** 最多模型调用次数(agent-v0.md §2):计划更新也占调用,v1 的 15 不够。 */
+export const AGENT_MAX_STEPS = 24;
 
 export function createSkillsHubAgent(opts: CreateSkillsHubAgentOptions) {
   const tools = createAgentTools(opts.env);
@@ -28,9 +33,10 @@ export function createSkillsHubAgent(opts: CreateSkillsHubAgentOptions) {
       storeRoot: opts.env.storeRoot ?? "(未配置)",
       clients: opts.clients,
       writePolicy: opts.writePolicy,
+      thinking: opts.thinking === true,
     }),
     tools,
-    stopWhen: stepCountIs(15),
+    stopWhen: stepCountIs(AGENT_MAX_STEPS),
     toolApproval: ({ toolCall }) => {
       if (opts.writePolicy === "allow") return "approved";
       return WRITE_TOOL_NAMES.has(String(toolCall.toolName)) ? "user-approval" : "not-applicable";

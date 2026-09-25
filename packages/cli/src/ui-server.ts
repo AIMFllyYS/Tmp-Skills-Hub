@@ -36,7 +36,8 @@ import {
 } from "./llm/provider.js";
 import { readTranslation, writeTranslation } from "./translations.js";
 import { createSkillsHubAgent, parseWritePolicy } from "./agent/agent.js";
-import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
+import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel, resolveThinking } from "./agent/models.js";
+import { agentMessageMetadata } from "./agent/metadata.js";
 import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, withStore, type UiRouteContext } from "./ui-http.js";
 import { registerGroupRoutes } from "./ui-groups.js";
 import { registerDraftRoutes } from "./ui-drafts.js";
@@ -274,7 +275,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     if (opts.languageModel === undefined && qiniuApiKey() === undefined) {
       return err(c, "agent-chat", "not-configured", notConfiguredMessage());
     }
-    const raw = (await c.req.json().catch(() => null)) as { messages?: unknown; model?: unknown; writePolicy?: unknown } | null;
+    const raw = (await c.req.json().catch(() => null)) as { messages?: unknown; model?: unknown; writePolicy?: unknown; thinking?: unknown } | null;
     const messages = raw?.messages;
     if (!Array.isArray(messages)) return err(c, "agent-chat", "bad-usage", "body 需要 { messages: UIMessage[] }(不含 system)");
     if (messages.some((m) => typeof m === "object" && m !== null && (m as { role?: unknown }).role === "system")) {
@@ -282,6 +283,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }
     const modelId = resolveAgentModel(raw?.model);
     const writePolicy = parseWritePolicy(raw?.writePolicy);
+    const thinking = resolveThinking(modelId, raw?.thinking);
     const clients = (await discoverClientRoots(home, clientDiscoverOpts(storeRoot))).map((r) => r.clientId);
     const env: { home: string; storeRoot: string | null; fetchImpl?: typeof fetch; analyzeGenerate?: AnalyzeGenerate } = {
       home,
@@ -290,15 +292,17 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     if (fetchImpl !== undefined) env.fetchImpl = fetchImpl;
     if (analyzeGenerate !== undefined) env.analyzeGenerate = analyzeGenerate;
     const agent = createSkillsHubAgent({
-      model: opts.languageModel ?? createQiniuModel(modelId),
+      model: opts.languageModel ?? createQiniuModel(modelId, { thinking }),
       env,
       clients,
       writePolicy,
+      thinking,
     });
     return createAgentUIStreamResponse({
       agent,
       uiMessages: messages,
       abortSignal: c.req.raw.signal,
+      messageMetadata: agentMessageMetadata({ model: modelId, thinking }),
     });
   });
 
