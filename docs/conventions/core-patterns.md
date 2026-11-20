@@ -10,7 +10,8 @@
 
 - `skills/<name>/` 是**可写的活跃副本**，符号链接直接指向它。用户在任何 Agent 里改、或在面板/Agent 里编辑写回，改到的都是这一份——这正是「全局改、不漂移」的实现方式。
 - `index.json` 里的哈希是「**入库、编辑写回或上次 `verify` 那一刻的内容指纹**」，不是随时可信的身份。
-- 通过 `saveSkillFile` 编辑写回时，旧文件副本先原子落入 `archive/versions/` 作为版本快照，写回后重算目录哈希并原子同步更新 `index.json`、`groups.json`、`stats.json` 与 `links.json`；外部（如 Agent 直接改文件）造成的漂移则由只读 `verify` 维持（重算哈希 → 报告漂移 → 用户确认后归档更新）。**归档区天然构成版本历史**，回滚 = 从归档或版本快照取回。
+- 通过 `saveSkillFile` 编辑写回时，旧文件副本先原子落入 `archive/versions/` 作为版本快照，写回后重算目录哈希并原子同步更新 `index.json`、`groups.json`、`stats.json` 与 `links.json`；外部（如 Agent 直接改文件）造成的漂移则由只读 `verify` 维持（重算哈希 → 报告漂移 → 用户确认后经 `verify --accept` 或归档更新刷新指纹）。**归档区与可选 Git 仓库天然构成版本历史**，回滚 = 从归档、版本快照或 Git 历史取回。
+- v0.3 状态与资产分离后，本机控制/账本/备份/归档/冲突池固定位于 `<home>/.skills-hub/`，活跃唯一真源目录默认位于 `<home>/.skills-hub/skills/` 且支持自定义跨盘路径；写入真源目录时必须使用同分区临时文件 + `rename`（防 `EXDEV`）。
 - 去重仍然按内容哈希做(录音稿要求),但那是**入库判定**逻辑,不是目录命名逻辑。布局细节见 [store-and-paths-v0.md](../specs/store-and-paths-v0.md)。
 
 ## 二、受管条目集合的原子切换
@@ -28,6 +29,8 @@
 > **2026-08-16 修订理由(与 #21 同步)**:原口径为「在 `<storeRoot>/tmp/` 构建完整新集合,再逐条 rename 进目标」。但库存与客户端 home 可能**跨卷**(如库存 D:、home C:),跨卷目录 rename 必然失败(EXDEV),tmp 构建方案不可行;链接创建本身逐条原子,集合级原子性改由 journal 回滚保证。rename 顺序约束仍有效:先 unlink 旧链接(不跟随),再建新链接——rename 不允许目录覆盖非空目录。
 
 **禁止**对客户端的 skills 目录做整目录重命名或整目录删除,无例外。
+
+> **2026-11-20 修订（v0.3 授权 Reconcile 收敛）**：常规 `enable`/`disable` 严格保留上述 `unregistered-conflict` / `not-link-conflict` 刹车锁；当且仅当用户明确预览并授权执行 **Reconcile 收敛**（且强制备份快照校验通过）时，内核允许按**单个有效 skill 目录粒度**将客户端真目录移入临时旁路并立即在原地建回指向唯一真源的 Junction/symlink（任一步失败逆序还原原目录），仍严禁整目录清空、严禁触碰非 skill 系统文件与未勾选的外部软链接。冲突变体全部零丢失存留至 `~/.skills-hub/conflicts/`。
 
 ## 三、哈希确定性
 

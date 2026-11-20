@@ -8,6 +8,7 @@
 > **AI 板块修订（2026-08-22）**：左侧板块从三个变四个——新增 **Agent**（对话式库存管家，见 [agent-v0.md](../specs/agent-v0.md)）。左下角设置、侧栏可收起可拖宽不变。
 > **#216 修订（2026-08-24）**：Agent 页增加写策略切换（先批准 / 全部允许）与工具审批条。运行时改为 AI SDK `useChat`，会话 key `skills-hub.agent.v2`。
 > **#205 / 2026-11-20 修订**：`index.html` 内置首屏灰阶壳骨架，页面采用 `React.lazy()` + `Suspense` + `ErrorBoundary` 与渐进式水合（先拉 `/api/skills` 与 `/api/clients`）；严格区分服务端离线与库存未配置（`503 store-not-configured`），未配置时展示引导初始化卡片（`POST /api/store/init`）同时保持 **Agent** 可对话。
+> **v0.3 兼容扩展（2026-11-20，见 [single-source-sync-and-versioning/PRD.md](../specs/single-source-sync-and-versioning/PRD.md)）**：保持左侧四板块（总览 / 统计 / Skills 管理 / Agent）+ 左下角设置 Dialog 不膨胀；新增：① 顶栏非阻塞「发现野生/冲突 skill」提醒横幅与一键合并预览弹窗（Reconcile）；② **Skills 管理** 下扩展第三 Tab **「冲突」**（有未决冲突时带数字徽章，支持 Diff 对比、切换主版、拆分、一键跳 Agent 合并）；③ **设置 Dialog** 展示双目录（固定 `~/.skills-hub/` + 可迁移唯一真源）、自愈按钮（清死链 / 认领漂移）、Git 版本控制开关与 `gh` 设备码登录/云端备份入口、桌面端开机自启开关。
 
 ## 受众
 

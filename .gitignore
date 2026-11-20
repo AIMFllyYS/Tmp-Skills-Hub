@@ -28,6 +28,9 @@ coverage/
 # 沙箱假 home:无人值守期间所有写操作的落点(store-and-paths-v0.md §5)
 .sandbox/
 
+# 任务进度监控本地 WebUI 面板（纯本地工具，不入库）
+docs/specs/single-source-sync-and-versioning/monitor/
+
 # OS / editor
 .DS_Store
 Thumbs.db

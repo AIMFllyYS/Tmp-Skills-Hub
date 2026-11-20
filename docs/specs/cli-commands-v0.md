@@ -45,6 +45,18 @@
 | `new list` | 列出当前草稿（`drafts[]`），只读 | AI / 面板 |
 | `bootstrap` | 一键体验：交互确认（库存位置/备份/迁移）→ 自动备份 → 收录全部本机 skills → 收录并启用自身 skill → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
 
+### 1.1 v0.3 演进预留命令（见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
+
+> 以下为 v0.3 正式定案的预留命令名，各 Sub-Issue 实现并注册至 `packages/cli/src/index.ts` 后，同步移入 §1 命令表（§1 表格受 `spec-conformance.test.ts` 严格校验，确保表内命令均已落地）：
+>
+> - `doctor --prune`（T1.2）：清理 `links.json` 中指向已不存在磁盘路径的死链接记录（写操作，需 `--yes` / TTY）
+> - `verify --accept [name...]`（T1.2）：确认外部修改合法，重算哈希并原子同步四份元数据（写操作，需 `--yes` / TTY）
+> - `migrate-store --to <absPath>`（T1.2）：将唯一真源目录迁至新路径，校验并按 journal 重指全机软链接，旧目录旁路留底（写操作，需 `--yes` / TTY）
+> - `reconcile [--include-external-links]`（T2.3）：L1/L2 扫描野生非软链接与冲突 skill → 备份校验 → 精准移出客户端真目录（冲突入 `conflicts/`）→ 原地挂回纯软链接（写操作，需 `--yes` / TTY）
+> - `conflicts list` / `conflicts diff <name>` / `conflicts resolve <name> --mode pick|merge|split`（T3.2）：列出、对比与无损解决同名多版本冲突（`list`/`diff` 只读，`resolve` 需 `--yes` / TTY）
+> - `git status | enable | disable | log [name] | commit [-m msg]`（T5.2）：检测/开关唯一真源目录 Git 版本控制、查看历史、执行规范化提交（`status`/`log` 只读，其余需 `--yes` / TTY）
+> - `git cloud init [--private|--public] [--repo <name>]` / `git cloud push`（T5.2）：经 `gh` CLI 设备码登录、安全扫描、一键创建 GitHub 仓库并推送云端备份（写操作，需 `--yes` / TTY，绝不 `--force`）
+
 > **bootstrap 的流程与铁律**：每一步确认都是显式授权（写操作铁律不变）；备份 = 调用与 `backup` 同一套内核（`<库存根>/backups/blobs` 共享池 + 快照 manifest；源目录只读；库存内链接只记引用）；库存已就绪的幂等启动不重新备份；迁移 = 与 `init`+`adopt` 同一套布局与去重/冲突判定；非 TTY 环境需 `--yes`（跳过全部确认，库存位置取默认）。拉起面板时只把 **home 基座**交给 `ui`（发现客户端、读 `<home>/.skills-hub/config.json`），库存位置以指针为准，不能把 home 当成 storeRoot。
 
 ## 2. 铁律

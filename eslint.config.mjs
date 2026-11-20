@@ -9,6 +9,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/*.tsbuildinfo",
       ".sandbox/**",
+      "docs/specs/single-source-sync-and-versioning/monitor/**",
       "promo/out/**",
       "apps/desktop/release/**",
       "apps/desktop/out/**",

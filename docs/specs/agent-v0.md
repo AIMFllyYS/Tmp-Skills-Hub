@@ -64,6 +64,17 @@
 
 不做:`run_cli` 逃生舱、`reset`、`backup restore`。
 
+### 4.3 v0.3 演进预留工具（冲突分析合并 + Git 版本历史，见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
+
+- **新增读工具（永不审批）**：
+  - `list_conflicts`：列出所有待解决的同名多版本冲突及各变体来源、`maxMtime` 与告警标记；
+  - `diff_conflict_variants`：计算指定冲突 skill 两个变体间的逐文件 Diff；
+  - `read_conflict_file`：按需读取指定冲突变体内的单个文本文件；
+  - `git_status` / `git_log` / `git_diff`：读取唯一真源仓库的 Git 状态、提交历史与变更差异（未开启 Git 时返回可读降级提示）。
+- **新增写工具（受 `writePolicy` 审批门禁保护，`ask` 模式下必须经人点击批准）**：
+  - `apply_conflict_resolution`：落地 `pick` / `merge` / `split` 冲突决议（自动快照旧真源至 `archive/versions/`、归档落选变体至 `archive/conflicts/` 并同步元数据哈希）；
+  - `git_commit`：为 Agent 刚完成的改动/合并执行带语义摘要的 Git 提交（仅在 Git 开关开启时可用）。
+
 ## 5. HTTP 流契约
 
 `POST /api/agent/chat` 使用 AI SDK UI message stream(`createAgentUIStreamResponse`),不是自研 `delta/tool_call/tool_result/done` 帧。

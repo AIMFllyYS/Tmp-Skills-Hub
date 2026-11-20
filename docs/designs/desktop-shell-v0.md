@@ -77,3 +77,11 @@ apps/desktop ──(import 编程接口)──→ packages/cli ──(import)─
   - 现阶段定位是**社团内部试验分发**，购置商业 Windows EV 代码签名证书与 Apple Developer 公证账号会产生持续费用并阻塞自动化打包链路。
   - 因此默认输出**无代码签名**产物；代价是 Windows SmartScreen 或 macOS Gatekeeper 首次运行会提示「未知发布者」，需在社团安装指引中说明首次放行步骤。
   - 若未来面向公开广泛分发，只需在 CI 发布工作流补充签名环境变量与证书密钥即可平滑接入，不牵动应用代码架构。
+
+## 七、开机自启、系统托盘与启动 L1 极速巡检（v0.3 规划）
+
+为承接 [single-source-sync-and-versioning/PRD.md](../specs/single-source-sync-and-versioning/PRD.md) 中的「开机巡检兜底」目标，桌面壳新增以下原生能力（仍严格遵守 `desktop → cli → core` 分层，不重写任何扫描业务）：
+
+1. **可选开机自启**：通过 Electron `app.setLoginItemSettings({ openAtLogin, args: ["--hidden"] })` 实现，状态持久化至 `~/.skills-hub/config.json`（`autoLaunch` 字段），由 WebUI 设置 Dialog 经 `PATCH /api/settings` 开关。
+2. **系统托盘（`apps/desktop/src/tray.ts`）**：支持静默启动到系统托盘，菜单含「打开主窗口」「立即重新扫描」「退出 Skills Hub」。
+3. **启动 L1 极速巡检与原生通知**：启动后经 `packages/cli` 编程导出调用 L1 浅扫（仅一层 `readdir` + `lstat`，耗时 < 20ms，零文件内容 I/O）；若无野生真目录或冲突且以 `--hidden` 启动，静默驻留不打扰；若检出新增本地真目录或版本冲突，发出 OS 原生 `Notification` 并更新托盘状态，点击通知直接唤醒窗口进入合并预览弹窗。

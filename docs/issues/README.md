@@ -15,6 +15,7 @@
 
 - [backlog-from-first-sync.md](./backlog-from-first-sync.md) — 第一次同步会后置项
 - [skill-creation-path/](./skill-creation-path/) — 用户在客户端里**新建** skill 这条路径的分析与追踪（对应 [#169](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/169)）
+- [single-source-sync-and-versioning/](./single-source-sync-and-versioning/single-source-sync-and-versioning.md) — 单一真源纯软链接接管、同名多版本冲突合并、启动巡检、目录分离与可选 Git/GitHub 云端备份架构分析
 
 ## 与 GitHub Issues 的关系
 

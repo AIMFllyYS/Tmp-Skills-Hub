@@ -33,11 +33,12 @@
 | 14 | 人用壳交互：反馈、收纳、仪表盘 | 批 13 只换了皮，交互语法仍像静态灰字 | 13 |
 | 15 | 统计排行粗柱与内容层级树 | 看清 Top 用量与多文件 skill 结构 | 14 |
 | 16–18 | 动效收口、#189 收口与 AI 板块（七牛云 + Agent + 译文缓存 + AI SDK v7） | 统一动效、消除契约漂移、面板管家落地 | 15 |
-| 19 | 系统性治理与桌面端封装（Wave 1 修复 + Wave 2 Electron 壳 + 工程治理） | 全仓安全加固、#159/#205 收口、开箱桌面分发 | 16–18 |
+| 19 | 系统性治理与桌面端封装（Wave 1 修复 + Wave 2 Electron 壳 + 工程治理） | 全仓安全加固、#159/#205 收口、开箱桌面分发（已合入 `v0.2.0`） | 16–18 |
+| 20 | v0.3 单一真源接管、冲突解决中心、开机巡检与 Git 云端备份（Epic 1–5 / 15 Sub-Issues） | 状态与资产目录分离、纯软链接收敛、多版本冲突池 + Agent 合并、托盘 L1 巡检、可选 Git & `gh` 云端备份 | 19 |
 
-一批 = 一个父 issue + 一群 sub-issue = 一个分支族。按 [pr-and-git-workflow.md](../conventions/pr-and-git-workflow.md) 规范，**每个 sub-issue 单独出一个 PR**，PR 打向 `dev`，正文末尾唯一一条 `Closes #N`。
+一批 = 一个父 issue + 一群 sub-issue = 一个分支族。按 [pr-and-git-workflow.md](../conventions/pr-and-git-workflow.md) 规范，**每个 sub-issue 单独出一个 PR** 打向 `dev`；批 20（v0.3 自治任务流）PR 正文采用 **`Refs #N`（默认不自动关单）**，执行报告与手动端测指南追加在 Sub-Issue 评论区，待用户端测确认后手动关闭。
 
-> 批 0–15 与批 16–18（含 #187 / #188 / #189 / #204 / #207 / #208 / #216 / #218）均已合入 `dev`。当前推进**系统性治理与桌面壳工程（Wave 1 + Wave 2）**。设计依据：[panel-ia-v1.md](../designs/panel-ia-v1.md)、[app-shell-v2.md](../designs/app-shell-v2.md)、[desktop-shell-v0.md](../designs/desktop-shell-v0.md)、[ui-design-v1.md](../conventions/ui-design-v1.md)。
+> 批 0–19 均已合入 `dev`（并发布 `v0.2.0`）。当前正式进入 **批 20（v0.3 单一真源与版本控制演进）**，详细 PRD 与进度总表见 [docs/specs/single-source-sync-and-versioning/PRD.md](../specs/single-source-sync-and-versioning/PRD.md) 与 [task.md](../specs/single-source-sync-and-versioning/task.md)。
 
 ## 各批内容与验收
 
