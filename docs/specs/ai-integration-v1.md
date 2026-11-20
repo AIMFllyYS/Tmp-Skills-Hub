@@ -29,7 +29,7 @@
 - **统一失败分类（`mapLlmError`）**:
   - 先用 `RetryError.isInstance(err)` 解包 `err.lastError`,再判定 `APICallError.isInstance(...)`,确保重试耗尽后的 429 / 500 / 503 仍命中中文错误提示（`api`）;
   - 区分 `TimeoutError`（`timeout`）与 `AbortError`（`aborted`）,不再把用户主动取消吞并成超时;
-  - 将 `NoObjectGeneratedError`、`JSONParseError`、`TypeValidationError` 映射为 `invalid-response`（HTTP `502` / CLI 退出码 2）;
+  - 将 `NoObjectGeneratedError`、`JSONParseError`、`TypeValidationError` 映射为 `invalid-response`（`defaultGenerate` 产出并由 `STATUS_BY_CODE` 预留 HTTP `502`;`performAnalyze` / `POST /api/analyze` / CLI `analyze` 除保留 `not-configured` 外,将此类调用异常收拢为顶层 `code: "analyze-failed"` 并在 `message` 中附带底层失败码如 `(invalid-response)`）;
   - 其余网络异常映射为 `network`（经 `scrub()` 脱敏）。
 
 ## 3. 边界

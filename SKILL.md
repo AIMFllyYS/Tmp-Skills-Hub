@@ -32,7 +32,7 @@ CLI 入口:仓库内 `node packages/cli/dist/index.js <command>`(需先 `pnpm bu
 
     skills-hub bootstrap [--home <库存根>] [--port 4321] [--yes]
 
-- 依次交互确认:库存位置(回车用默认 `~/.skills-hub`)→ 备份(Y=复制全部客户端 skills 目录到 `<库存根>/backups/<时间戳>/`,N=跳过)→ 迁移(Y=收录全部本机 skills)
+- 依次交互确认:库存位置(回车用默认 `~/.skills-hub`)→ 备份(Y=写入 `<库存根>/backups/` 增量快照,N=跳过)→ 迁移(Y=收录全部本机 skills)
 - 红字警告 + 每一步 Y 即显式授权;完成后自动收录并启用自身 skill,再启动面板并尝试打开浏览器
 - 幂等:指针文件已配置 → 零交互直接启动面板
 - 非 TTY 环境需 `--yes`(全自动,默认路径,跳过全部确认)

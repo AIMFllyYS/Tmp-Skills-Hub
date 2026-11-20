@@ -65,7 +65,7 @@
 
 | 端点 | body | 成功响应 | 失败 |
 | --- | --- | --- | --- |
-| POST /api/store/init | `{ storeRoot? }`（缺省用 `<home>/.skills-hub/store` 或预设位置） | `{ ok, command: "init", storeRoot, pointerFile, layoutCreated, builtinGroupsWrote }`（同时更新 `ctx.storeRoot`） | 400 bad-usage（非法/相对路径）; 500 io-error |
+| POST /api/store/init | `{ storeRoot? }`（缺省用 `<home>/.skills-hub/store` 或预设位置） | `{ ok, command: "store-init", storeRoot, pointerFile, layoutCreated, builtinGroupsWrote }`（同时更新 `ctx.storeRoot`） | 400 bad-usage（非法/相对路径）; 500 io-error |
 | POST /api/skills/:hash/enable | `{ clientId, scope? }` | `{ ok, command: "enable", clientId, scope, targetDir, created, removed }` | 400 bad-usage(缺 clientId); 404 not-found(客户端或 skill 不存在); 409 link-failed; 503 |
 | POST /api/skills/:hash/disable | 同上 | `{ ok, command: "disable", ... }` | 同上 |
 | POST /api/links/preview | `{ hashes, clientIds, action: enable\|disable, scope? }` | `{ ok, command: "links-preview", action, add, remove, conflictCount, wouldCreate, wouldRemove, conflicts }`(不写盘) | 400 bad-usage; 404 not-found; 503 |
@@ -83,7 +83,7 @@
 | PATCH /api/groups/:id | `{ name?, description? }`(至少一项) | `{ ok, command: "group", verb: "rename", id, name, description }` | 400; 404 group-not-found; 503 |
 | DELETE /api/groups/:id | — | `{ ok, command: "group", verb: "delete", id, memberCount }`(只删分组定义,不删 skill) | 404 group-not-found; 503 |
 | POST /api/groups/:id/members | `{ hashes, action: add\|remove }` | `{ ok, command: "group", verb: "add"\|"remove", id, hashes, changed }` | 400; 404 group-not-found\|not-found; 503 |
-| POST /api/analyze | `{ target }`(hash 前缀或 dirName) | `{ ok, command: "analyze", target, similar, conflict }`(只建议,不写盘) | 400 bad-usage; 404 not-found; 503 not-configured; 502 analyze-failed\|invalid-response |
+| POST /api/analyze | `{ target }`(hash 前缀或 dirName) | `{ ok, command: "analyze", target, similar, conflict }`(只建议,不写盘) | 400 bad-usage; 404 not-found; 503 not-configured; 502 analyze-failed（底层 `invalid-response` 等编码写入 `message`） |
 | POST /api/share | `{ target, repo? }`(hash 前缀或 dirName;repo 覆盖 manifest.trustedRepo) | `{ ok, command: "share", dirName, url, idempotent, dryRun }` | 400 bad-usage; 404 not-found; 409 remote-conflict; 503 auth-required(无 GITHUB_TOKEN); 502 github-push-failed |
 | POST /api/backups/preview | `{ snapshotId? }` | `{ ok, command: "backups-preview", snapshotId, dryRun: true, clients, skills, files, links, wouldRestore, skippedOwnDirs, asideStore, asidePointer }`(不写盘) | 400; 404 not-found; 409 verify-failed; 503 |
 | POST /api/reset | `{ snapshotId?, confirm: "reset" }` | `{ ok, command: "reset", storeRoot, snapshotId, asideStore, asidePointer, adopted }`(本请求内跑完还原,与 CLI `reset --json` 同形) | 400 bad-usage(缺确认短语); 404; 409 verify-failed\|restore-failed; 500 io-error; 503 |
@@ -119,8 +119,8 @@
 | binary | 422 | 二进制文件禁止按文本读取 |
 | io-error | 500 | 文件系统或未捕获全局异常（已脱敏） |
 | github-fetch-failed | 502 | adopt 拉取 GitHub / skills.sh 失败 |
-| analyze-failed | 502 | 相近/冲突分析调用失败 |
-| invalid-response | 502 | AI 返回不可解析的 JSON/Schema 结构 |
+| analyze-failed | 502 | 相近/冲突分析调用失败（含底层 `invalid-response` / `timeout` / `network` / `api` 收拢） |
+| invalid-response | 502 | `mapLlmError` 对不可解析 JSON/Schema 结构的内部映射（`STATUS_BY_CODE` 预留 502;`POST /api/analyze` 当前以顶层 `analyze-failed` 返回并将 `(invalid-response)` 附入 `message`） |
 | github-push-failed | 502 | share 推送被 GitHub 拒绝或失败 |
 | store-not-configured | 503 | 库存未配置（`withStore` 守卫） |
 | not-configured | 503 | 缺少 `QINIU_API_KEY` |

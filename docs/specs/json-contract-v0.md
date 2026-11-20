@@ -228,11 +228,9 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 | io-error | 文件系统故障 |
 | not-configured | 分析/翻译/Agent 缺 `QINIU_API_KEY`（CLI `analyze` 保留 `not-configured` 并退出 2;HTTP 503） |
 | github-fetch-failed | adopt 拉 GitHub/skills.sh 失败 |
-| analyze-failed | 分析模型调用失败 |
-| invalid-response | AI 返回不可解析的 JSON 或不满足 Schema（HTTP 502 / CLI 退出 2） |
-| aborted / timeout | AI 请求被中止或超时（流内 `error` 事件 / `mapLlmError` 映射） |
+| analyze-failed | 分析模型调用失败（`performAnalyze` / CLI `analyze` / `POST /api/analyze` 将除 `not-configured` 外的底层 `LlmFailureCode` 如 `invalid-response` / `timeout` / `network` / `api` 收拢为此 code,并在 `message` 附带底层码） |
 
-HTTP 另有 `forbidden`（403）、`translation-not-found`（404）、`conflict`（409）、请求体 `too-large`（413）及文件读取 `binary` / `too-large`（422）、`outside`（400），完整状态码映射见 [http-api-v0.md](http-api-v0.md) §4。
+内部流/LLM 失败码（`LlmFailureCode`）：`mapLlmError` 还会产出 `invalid-response`、`aborted`、`timeout`、`network`、`api`——翻译 SSE 流通过 `error` 事件直接暴露这些 `code`,HTTP `STATUS_BY_CODE` 亦为 `invalid-response` 预留 `502`（`forbidden` 403、`translation-not-found` 404、`conflict` 409、请求体 `too-large` 413 及文件读取 `binary`/`too-large` 422、`outside` 400 见 [http-api-v0.md](http-api-v0.md) §4）。
 
 ## 4. ui-server 的 GET /api/skills（库存视图）
 
