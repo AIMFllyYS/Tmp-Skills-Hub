@@ -1,4 +1,4 @@
-import { startUiServer, type UiServerHandle } from "@skills-hub/cli";
+import { startUiServer, type DesktopPreferences, type UiServerHandle } from "@skills-hub/cli";
 
 export const APP_SCHEME = "app";
 export const APP_HOST = "skills-hub";
@@ -14,6 +14,7 @@ export interface FetchableApp {
 export interface DesktopHttpTransportOptions {
   home: string;
   webRoot: string;
+  onDesktopPreferences?: (preferences: DesktopPreferences) => void;
 }
 
 interface DuplexRequestInit extends RequestInit {
@@ -39,6 +40,7 @@ export async function startDesktopHttpTransport(opts: DesktopHttpTransportOption
     desktop: true,
     home: opts.home,
     webRoot: opts.webRoot,
+    ...(opts.onDesktopPreferences === undefined ? {} : { onDesktopPreferences: opts.onDesktopPreferences }),
   });
 }
 

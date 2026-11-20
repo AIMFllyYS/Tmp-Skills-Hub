@@ -6,7 +6,8 @@ import { performPrune } from "./doctor.js";
 import { performMigrate } from "./store-migrate.js";
 import { performAcceptDrift } from "./store-query.js";
 import { POINTER_REL } from "./store-shared.js";
-import { err, setUiPaths, withStore, type UiRouteContext } from "./ui-http.js";
+import { err, setUiPaths, withStore, type DesktopPreferences, type UiRouteContext } from "./ui-http.js";
+import { scrub } from "./llm/errors.js";
 
 async function jsonObject(c: Context): Promise<Record<string, unknown> | null> {
   const text = await c.req.text();
@@ -27,8 +28,20 @@ function preferences(config: HubConfig | null) {
   };
 }
 
+export async function readDesktopPreferences(home: string): Promise<DesktopPreferences> {
+  const { autoLaunch, silentTray } = preferences(await readHubConfig(path.join(home, POINTER_REL)));
+  return { autoLaunch, silentTray };
+}
+
 export function registerSettingsRoutes(app: Hono, ctx: UiRouteContext): void {
   const configFile = path.join(ctx.home, POINTER_REL);
+  let preferenceWrites = Promise.resolve();
+
+  function enqueuePreferenceWrite(action: () => Promise<Response>): Promise<Response> {
+    const result = preferenceWrites.then(action);
+    preferenceWrites = result.then(() => undefined, () => undefined);
+    return result;
+  }
 
   app.get("/api/settings", (c) => withStore(ctx, c, "settings", async (paths) => {
     const config = await readHubConfig(configFile);
@@ -36,7 +49,7 @@ export function registerSettingsRoutes(app: Hono, ctx: UiRouteContext): void {
     return c.json({ ok: true, command: "settings", ...paths, stateDiskBytes: bytes, ...preferences(config), isDesktop: ctx.desktop });
   }));
 
-  app.patch("/api/settings", (c) => withStore(ctx, c, "settings", async (paths) => {
+  app.patch("/api/settings", (c) => enqueuePreferenceWrite(() => withStore(ctx, c, "settings", async (paths) => {
     const fields = ["gitEnabled", "autoLaunch", "silentTray"];
     const body = await jsonObject(c);
     if (body === null || Object.entries(body).some(([key, value]) => !fields.includes(key) || typeof value !== "boolean")) {
@@ -49,17 +62,29 @@ export function registerSettingsRoutes(app: Hono, ctx: UiRouteContext): void {
       autoLaunch: typeof body.autoLaunch === "boolean" ? body.autoLaunch : current.autoLaunch,
       silentTray: typeof body.silentTray === "boolean" ? body.silentTray : current.silentTray,
     };
-    if (Object.keys(body).length > 0) {
-      if (paths.layoutMode === "split") {
-        await writeHubConfig(configFile, { version: 2, stateRoot: paths.stateRoot, skillsRoot: paths.skillsRoot, storeRoot: paths.stateRoot, ...next });
-      } else {
-        await mkdir(path.dirname(configFile), { recursive: true });
-        await writeFileAtomicSafe(configFile, JSON.stringify({ storeRoot: paths.stateRoot, ...next }, null, 2) + "\n");
+    const notify = ctx.desktop && (next.autoLaunch !== current.autoLaunch || next.silentTray !== current.silentTray)
+      ? ctx.onDesktopPreferences : undefined;
+    try {
+      notify?.({ autoLaunch: next.autoLaunch, silentTray: next.silentTray });
+    } catch (error) {
+      return err(c, "settings", "io-error", scrub(error instanceof Error ? error.message : String(error)));
+    }
+    try {
+      if (Object.keys(body).length > 0) {
+        if (paths.layoutMode === "split") {
+          await writeHubConfig(configFile, { version: 2, stateRoot: paths.stateRoot, skillsRoot: paths.skillsRoot, storeRoot: paths.stateRoot, ...next });
+        } else {
+          await mkdir(path.dirname(configFile), { recursive: true });
+          await writeFileAtomicSafe(configFile, JSON.stringify({ storeRoot: paths.stateRoot, ...next }, null, 2) + "\n");
+        }
       }
+    } catch (error) {
+      notify?.({ autoLaunch: current.autoLaunch, silentTray: current.silentTray });
+      throw error;
     }
     const { bytes } = await computeDirDiskUsage(paths.stateRoot);
     return c.json({ ok: true, command: "settings", ...paths, stateDiskBytes: bytes, ...next, isDesktop: ctx.desktop });
-  }));
+  })));
 
   app.post("/api/doctor/prune", (c) => withStore(ctx, c, "doctor-prune", async (paths) => {
     const body = await jsonObject(c);

@@ -18,6 +18,12 @@ export interface UiRouteContext {
   paths: HubPaths | null;
   desktop: boolean;
   home: string;
+  onDesktopPreferences?: (preferences: DesktopPreferences) => void;
+}
+
+export interface DesktopPreferences {
+  autoLaunch: boolean;
+  silentTray: boolean;
 }
 
 export function setUiPaths(ctx: UiRouteContext, paths: HubPaths | null): void {

@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   adoptSkillFolder,
   applyLinkSet,
@@ -88,6 +88,27 @@ it("initializes an independent skills root over HTTP and preserves config prefer
   const settings = await app.request("/api/settings");
   expect(await settings.json()).toMatchObject({ skillsRoot: canonical, git: { enabled: true }, autoLaunch: true, stateDiskBytes: expect.any(Number) });
   expect((await request(app, "/api/store/init", "POST", { skillsRoot: paths.skillsRoot })).status).toBe(400);
+});
+
+it("applies and persists desktop preferences in order, leaving browser settings read-only to Electron", async () => {
+  const onDesktopPreferences = vi.fn();
+  const desktop = createUiApp({ home, paths, desktop: true, onDesktopPreferences });
+  const browser = createUiApp({ home, paths, onDesktopPreferences });
+  expect(await (await browser.request("/api/settings")).json()).toMatchObject({ isDesktop: false });
+  const [autostart, retention] = await Promise.all([
+    request(desktop, "/api/settings", "PATCH", { autoLaunch: true }),
+    request(desktop, "/api/settings", "PATCH", { silentTray: true }),
+  ]);
+  expect(autostart.status).toBe(200);
+  expect(retention.status).toBe(200);
+  expect(onDesktopPreferences.mock.calls).toEqual([
+    [{ autoLaunch: true, silentTray: false }], [{ autoLaunch: true, silentTray: true }],
+  ]);
+  onDesktopPreferences.mockImplementationOnce(() => { throw new Error("simulated OS rejection"); });
+  expect((await request(desktop, "/api/settings", "PATCH", { autoLaunch: false })).status).toBe(500);
+  expect(await (await desktop.request("/api/settings")).json()).toMatchObject({
+    autoLaunch: true, silentTray: true, isDesktop: true,
+  });
 });
 
 it("migrates through HTTP, updates running content routes and preserves the source directory", async () => {

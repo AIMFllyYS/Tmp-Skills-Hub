@@ -3,25 +3,34 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from "electron";
 import {
+  checkBundledSelfSkill,
   createUiApp,
   loadEnvFile,
+  performReconcileScanL1,
+  readDesktopPreferences,
   resolveHome,
   resolveUiHubPaths,
+  type DesktopPreferences,
   type UiServerHandle,
 } from "@skills-hub/cli";
 import {
   APP_ENTRY_URL,
+  APP_ORIGIN,
   APP_SCHEME,
   createAppProtocolHandler,
   resolveDesktopTransport,
   startDesktopHttpTransport,
 } from "./protocol.js";
+import { createDesktopTray, loginItemSettings, startInTray } from "./tray.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
 let serverHandle: UiServerHandle | null = null;
 let resolvedEntryUrl: string | null = null;
 let shuttingDown = false;
+let desktopPreferences: DesktopPreferences = { autoLaunch: false, silentTray: false };
+let tray: ReturnType<typeof createDesktopTray> | null = null;
+let windowRequested = false;
 
 function resolveAppDir(): string {
   return app.isPackaged ? app.getAppPath() : path.resolve(currentDir, "..");
@@ -51,11 +60,35 @@ function isSameAppOrigin(targetUrl: string, entryUrl: string): boolean {
   }
 }
 
-function focusMainWindow(): void {
-  if (mainWindow === null || mainWindow.isDestroyed()) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+async function showMainWindow(reconcile = false): Promise<void> {
+  if (shuttingDown) return;
+  if (resolvedEntryUrl === null) {
+    windowRequested = true;
+    return;
+  }
+  let win = mainWindow;
+  if (win === null || win.isDestroyed()) {
+    const entry = new URL(resolvedEntryUrl);
+    if (reconcile) entry.hash = "reconcile";
+    win = await createMainWindow(entry.href);
+  } else if (reconcile) {
+    const contents = win.webContents;
+    if (contents.isLoadingMainFrame()) {
+      contents.once("did-finish-load", () => contents.send("desktop:open-reconcile"));
+    } else {
+      contents.send("desktop:open-reconcile");
+    }
+  }
+  if (win.isDestroyed() || shuttingDown) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+function requestWindow(reconcile = false): void {
+  void showMainWindow(reconcile).catch((error: unknown) => {
+    console.warn("Unable to open Skills Hub:", error instanceof Error ? error.name : "unknown");
+  });
 }
 
 function registerIpcHandlers(): void {
@@ -97,6 +130,7 @@ function registerIpcHandlers(): void {
 async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
   const preloadPath = path.join(currentDir, "preload.cjs");
   const win = new BrowserWindow({
+    show: false,
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -136,6 +170,11 @@ async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
     return { action: "deny" };
   });
 
+  win.on("close", (event) => {
+    if (shuttingDown || !desktopPreferences.silentTray || tray === null) return;
+    event.preventDefault();
+    win.hide();
+  });
   win.on("closed", () => {
     if (mainWindow === win) {
       mainWindow = null;
@@ -143,7 +182,12 @@ async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
   });
 
   mainWindow = win;
-  await win.loadURL(entryUrl);
+  try {
+    await win.loadURL(entryUrl);
+  } catch (error) {
+    if (!win.isDestroyed()) win.destroy();
+    throw error;
+  }
   return win;
 }
 
@@ -157,25 +201,77 @@ async function bootstrapDesktop(): Promise<void> {
     process.env.SKILLSHUB_SELF_SKILL_DIR = selfSkillDir;
   }
 
+  const sandbox = Boolean(process.env.SKILLS_HUB_HOME);
+  const platform = process.platform;
+  const openedAtLogin = platform === "darwin" && !sandbox && app.getLoginItemSettings().wasOpenedAtLogin;
+  const reconcile = () => performReconcileScanL1(home);
+  let scan: Promise<void> | null = null;
+  const rescan = () => {
+    if (scan !== null) return;
+    scan = reconcile().then((result) => tray?.report(result)).catch((error: unknown) => {
+      console.warn("Startup scan failed:", error instanceof Error ? error.name : "unknown");
+    }).finally(() => { scan = null; });
+  };
+  const onDesktopPreferences = (next: DesktopPreferences, startup = false) => {
+    if (startup || desktopPreferences.autoLaunch !== next.autoLaunch) {
+      const settings = loginItemSettings(next.autoLaunch, platform, app.isPackaged, sandbox);
+      if (settings !== null && (!startup || app.getLoginItemSettings({ args: settings.args }).openAtLogin !== next.autoLaunch)) {
+        app.setLoginItemSettings(settings);
+      }
+    }
+    desktopPreferences = next;
+    tray?.setAutoLaunch(next.autoLaunch);
+  };
+  onDesktopPreferences(await readDesktopPreferences(home), true);
+  let submitPreference: ((enabled: boolean) => Promise<Response>) | null = null;
+  const setAutoLaunch = async (enabled: boolean) => {
+    try {
+      const response = await submitPreference?.(enabled);
+      if (response?.ok !== true) throw new Error();
+      if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.webContents.send("desktop:preferences-changed");
+    } catch {
+      tray?.setAutoLaunch(desktopPreferences.autoLaunch);
+      dialog.showErrorBox("开机自启设置未保存", "请先打开 Skills Hub 完成库存初始化，再从设置修改开机自启。");
+    }
+  };
+
   const transport = resolveDesktopTransport();
+  const preferenceRequest = (enabled: boolean, origin: string): RequestInit => ({
+    method: "PATCH", headers: { "content-type": "application/json", origin },
+    body: JSON.stringify({ autoLaunch: enabled }),
+  });
   if (transport === "http") {
-    serverHandle = await startDesktopHttpTransport({ home, webRoot });
+    serverHandle = await startDesktopHttpTransport({ home, webRoot, onDesktopPreferences });
     resolvedEntryUrl = serverHandle.url.endsWith("/") ? serverHandle.url : `${serverHandle.url}/`;
+    const origin = new URL(resolvedEntryUrl).origin;
+    submitPreference = (enabled) => fetch(origin + "/api/settings", preferenceRequest(enabled, origin));
   } else {
     const paths = await resolveUiHubPaths(home);
-    const honoApp = createUiApp({ paths, home, webRoot, desktop: true });
+    if (paths !== null) await checkBundledSelfSkill(home, paths);
+    const honoApp = createUiApp({ paths, home, webRoot, desktop: true, onDesktopPreferences });
     protocol.handle(APP_SCHEME, createAppProtocolHandler(honoApp));
     resolvedEntryUrl = APP_ENTRY_URL;
+    submitPreference = async (enabled) => honoApp.fetch(new Request(
+      "http://skills-hub/api/settings", preferenceRequest(enabled, APP_ORIGIN),
+    ));
   }
 
+  tray = createDesktopTray({
+    open: requestWindow,
+    rescan,
+    setAutoLaunch: (enabled) => void setAutoLaunch(enabled),
+    quit: () => app.quit(),
+  }, desktopPreferences.autoLaunch);
   registerIpcHandlers();
-  await createMainWindow(resolvedEntryUrl);
+  rescan();
+  if (windowRequested || !startInTray(process.argv, openedAtLogin)) await showMainWindow();
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
+  if (process.platform === "win32") app.setAppUserModelId("dev.skills-hub.desktop");
   protocol.registerSchemesAsPrivileged([
     {
       scheme: APP_SCHEME,
@@ -189,17 +285,20 @@ if (!gotSingleInstanceLock) {
     },
   ]);
 
-  app.on("second-instance", () => {
-    focusMainWindow();
+  app.on("second-instance", (_event, secondArgv) => {
+    if (!secondArgv.includes("--hidden")) requestWindow();
   });
 
   app.on("before-quit", (event) => {
-    if (serverHandle === null || shuttingDown) return;
+    if (shuttingDown) return;
     shuttingDown = true;
+    tray?.destroy();
+    tray = null;
+    if (serverHandle === null) return;
     event.preventDefault();
     const handle = serverHandle;
     serverHandle = null;
-    void handle.close().finally(() => {
+    void handle.close().catch(() => undefined).finally(() => {
       app.quit();
     });
   });
@@ -211,9 +310,7 @@ if (!gotSingleInstanceLock) {
   });
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0 && resolvedEntryUrl !== null) {
-      void createMainWindow(resolvedEntryUrl);
-    }
+    requestWindow();
   });
 
   void app.whenReady().then(() => bootstrapDesktop()).catch((error: unknown) => {
