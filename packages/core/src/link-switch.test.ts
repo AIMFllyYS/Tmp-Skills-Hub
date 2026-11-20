@@ -191,6 +191,58 @@ describe("链接集合原子切换(#21)", () => {
     expect((await readLinksLedger(w.store))[0]!.kind).toBe("copy");
   });
 
+  it("kind=copy 受管条目可被替换与摘除,不误报 not-link-conflict 且不删用户文件", async () => {
+    const w = await world();
+    await makeSkill(w.store, "copy-skill", "C-v1");
+    const e1 = entry(w, "e-copy", "copy-skill", { kind: "copy" });
+    const res1 = await applyLinkSet(w.store, { targetDir: w.clientRoot, entries: [e1] as never });
+    expect(res1.ok).toBe(true);
+
+    // 1. 同 id 替换(更新文件内容后再次 apply kind=copy)
+    await writeFile(path.join(w.store, STORE_SKILLS_DIR, "copy-skill", "SKILL.md"), "C-v2");
+    const res2 = await applyLinkSet(w.store, { targetDir: w.clientRoot, entries: [e1] as never });
+    expect(res2.ok).toBe(true);
+    expect(await readFile(path.join(w.clientRoot, "copy-skill", "SKILL.md"), "utf8")).toBe("C-v2");
+
+    // 2. 新 id 切换成 junction
+    const e2 = entry(w, "e-junction", "copy-skill", { kind: "junction" });
+    const res3 = await applyLinkSet(w.store, { targetDir: w.clientRoot, entries: [e2] as never });
+    expect(res3.ok).toBe(true);
+    expect((await readLinksLedger(w.store))[0]!.kind).toBe("junction");
+
+    // 3. 切回 copy 再完整摘除
+    const res4 = await applyLinkSet(w.store, { targetDir: w.clientRoot, entries: [e1] as never });
+    expect(res4.ok).toBe(true);
+    // 3b. 摘除 copy 后创建新条目过程中注入失败 → 回滚重建 copy
+    await makeSkill(w.store, "other", "O");
+    const resFail = await applyLinkSet(
+      w.store,
+      { targetDir: w.clientRoot, entries: [entry(w, "e-other", "other", { kind: "copy" })] as never },
+      { failAfter: 1 },
+    );
+    expect(resFail.ok).toBe(false);
+    expect(await readFile(path.join(w.clientRoot, "copy-skill", "SKILL.md"), "utf8")).toBe("C-v2");
+    expect((await readLinksLedger(w.store)).map((x) => x.id)).toEqual(["e-copy"]);
+    // 3c. 真正摘除
+    const res5 = await applyLinkSet(w.store, { targetDir: w.clientRoot, entries: [] });
+    expect(res5.ok).toBe(true);
+    expect(await readdir(w.clientRoot)).toEqual(["user-own.md"]);
+    expect(await readLinksLedger(w.store)).toEqual([]);
+  });
+
+  it("红线:即使 plan 指定 kind=copy,未登记的用户真实目录仍报 unregistered-conflict 绝不删除", async () => {
+    const w = await world();
+    await makeSkill(w.store, "user-dir", "store-version");
+    await mkdir(path.join(w.clientRoot, "user-dir"));
+    await writeFile(path.join(w.clientRoot, "user-dir", "SKILL.md"), "keep-user-dir");
+    const e = entry(w, "e-copy", "user-dir", { kind: "copy" });
+    const res = await applyLinkSet(w.store, { targetDir: w.clientRoot, entries: [e] as never });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.code).toBe("unregistered-conflict");
+    expect(await readFile(path.join(w.clientRoot, "user-dir", "SKILL.md"), "utf8")).toBe("keep-user-dir");
+  });
+
   it("整目录安全:全程不 rename/删除客户端目录本身(静态断言:操作只发生在条目路径)", async () => {
     // 本测试验证客户端根目录始终存在、目录内用户文件始终原样
     const w = await world();

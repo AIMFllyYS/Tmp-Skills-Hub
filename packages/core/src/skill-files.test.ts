@@ -2,8 +2,12 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { readStoreIndex, writeStoreIndex } from "./store.js";
+import { readGroups, writeGroups } from "./groups.js";
+import { readLinksLedger, writeLinksLedger, type LinkEntry } from "./links.js";
 import { listSkillFiles, readSkillFile, saveSkillFile } from "./skill-files.js";
+import { readUsageStats } from "./stats.js";
+import { readStoreIndex, writeStoreIndex } from "./store.js";
+import { STORE_TMP_DIR } from "./store-layout.js";
 import type { SkillRecord } from "./types.js";
 
 const roots: string[] = [];
@@ -129,5 +133,82 @@ describe("saveSkillFile", () => {
     const res = await saveSkillFile({ storeRoot: root, skillDir, relPath: "SKILL.md", content: "x".repeat(600 * 1024) });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe("too-large");
+  });
+
+  it("保存同步更新 index.json、groups.json、stats.json 与 links.json 的哈希", async () => {
+    const { root, skillDir } = await makeStore();
+    await mkdir(path.join(root, STORE_TMP_DIR), { recursive: true });
+    const { hashSkillFolder } = await import("./hash.js");
+    const precomputedNewHash = await (async () => {
+      // 预先计算将写入的新内容哈希,以测试 groups 去重与 stats 合并分支
+      const tempDir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-prehash-"));
+      roots.push(tempDir);
+      await writeFile(path.join(tempDir, "SKILL.md"), "# synced\n", "utf8");
+      return hashSkillFolder(tempDir);
+    })();
+
+    await writeGroups(root, {
+      version: 1,
+      groups: [
+        { id: "dev", name: "开发", description: "", memberHashes: ["old-hash", "unrelated-hash"] },
+        { id: "dup", name: "去重", description: "", memberHashes: ["old-hash", precomputedNewHash] },
+      ],
+    });
+    await writeFile(
+      path.join(root, "stats.json"),
+      JSON.stringify({
+        version: 1,
+        counters: {
+          "old-hash": { show: 3, enable: 2 },
+          [precomputedNewHash]: { show: 1, enable: 4 },
+          "unrelated-hash": { show: 5, enable: 0 },
+        },
+      }),
+      "utf8",
+    );
+    const ledgerEntries: LinkEntry[] = [
+      {
+        id: "claude:global:demo",
+        clientId: "claude",
+        scope: "global",
+        targetDir: path.join(root, "fake-client"),
+        entryName: "demo",
+        skillHash: "old-hash",
+        kind: "junction",
+        createdAt: "2026-08-16T00:00:00.000Z",
+      },
+      {
+        id: "cursor:global:other",
+        clientId: "cursor",
+        scope: "global",
+        targetDir: path.join(root, "fake-client-2"),
+        entryName: "other",
+        skillHash: "unrelated-hash",
+        kind: "junction",
+        createdAt: "2026-08-16T00:00:00.000Z",
+      },
+    ];
+    await writeLinksLedger(root, ledgerEntries);
+
+    const res = await saveSkillFile({ storeRoot: root, skillDir, relPath: "SKILL.md", content: "# synced\n" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.newHash).toBe(precomputedNewHash);
+
+    const skills = await readStoreIndex(root);
+    expect(skills[0]?.hash).toBe(res.newHash);
+
+    const groups = await readGroups(root);
+    expect(groups.groups.find((g) => g.id === "dev")?.memberHashes).toEqual([res.newHash, "unrelated-hash"]);
+    expect(groups.groups.find((g) => g.id === "dup")?.memberHashes).toEqual([res.newHash]);
+
+    const stats = await readUsageStats(root);
+    expect(stats.counters["old-hash"]).toBeUndefined();
+    expect(stats.counters[res.newHash]).toEqual({ show: 4, enable: 6 });
+    expect(stats.counters["unrelated-hash"]).toEqual({ show: 5, enable: 0 });
+
+    const ledger = await readLinksLedger(root);
+    expect(ledger.find((e) => e.id === "claude:global:demo")?.skillHash).toBe(res.newHash);
+    expect(ledger.find((e) => e.id === "cursor:global:other")?.skillHash).toBe("unrelated-hash");
   });
 });

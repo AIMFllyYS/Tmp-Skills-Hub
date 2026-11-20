@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 
 /**
  * 调用计数(#27):CLI 是唯一且准确的计数点(cli-commands-v0.md §4.2)。
@@ -71,7 +72,9 @@ export async function readUsageStats(storeRoot: string): Promise<StatsFile> {
 
 async function writeStats(storeRoot: string, stats: StatsFile): Promise<void> {
   const target = file(storeRoot);
-  const tmp = path.join(storeRoot, STORE_TMP_DIR, "stats." + process.pid + "-" + Date.now() + ".tmp");
+  const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
+  await mkdir(tmpDir, { recursive: true });
+  const tmp = path.join(tmpDir, "stats." + uniqueTmpId() + ".tmp");
   await writeFile(tmp, JSON.stringify({ version: STATS_FILE_VERSION, counters: stats.counters }, null, 2) + "\n", "utf8");
   await rename(tmp, target);
 }
@@ -80,16 +83,23 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 /**
  * 跨进程互斥(mkdir 原子性):tmp 下持锁做读-改-写,杜绝同秒并发互相覆盖。
- * 锁僵死(进程崩溃)超过 5s 强制夺锁;统计只是副产品,任何失败静默降级。
+ * 先确保 tmp 目录存在,避免缺失 tmp/ 时 ENOENT 死循环;
+ * 锁僵死(进程崩溃)超过 5s 强制夺锁。
  */
 async function withStatsLock<T>(storeRoot: string, fn: () => Promise<T>): Promise<T> {
   const lockDir = path.join(storeRoot, STORE_TMP_DIR, "stats.lock");
+  await mkdir(path.dirname(lockDir), { recursive: true });
   const started = Date.now();
   for (;;) {
     try {
       await mkdir(lockDir);
       break;
-    } catch {
+    } catch (e) {
+      const err = e as NodeJS.ErrnoException;
+      if (err.code === "ENOENT") {
+        await mkdir(path.dirname(lockDir), { recursive: true });
+        continue;
+      }
       if (Date.now() - started > 5000) {
         await rm(lockDir, { recursive: true, force: true });
         continue;
@@ -117,11 +127,33 @@ export async function recordUsage(storeRoot: string, skillHash: string, kind: Us
       stats.counters[skillHash] = c;
       await writeStats(storeRoot, stats);
     });
-  } catch (err) {
-    if (typeof process !== "undefined" && (process as { env?: Record<string, string> }).env?.DSH_DEBUG_STATS) {
-      console.error("[stats] recordUsage failed:", err);
-    }
+  } catch {
+    /* 统计只是副产品,失败静默降级 */
   }
+}
+
+/**
+ * 内容哈希变更时(如保存编辑),在 stats 锁内把 oldHash 的计数合并迁移到 newHash。
+ * 若 oldHash 无记录则不写入。
+ */
+export async function migrateSkillStatsHash(
+  storeRoot: string,
+  oldHash: string,
+  newHash: string,
+): Promise<void> {
+  if (oldHash === newHash) return;
+  await withStatsLock(storeRoot, async () => {
+    const stats = await readUsageStats(storeRoot);
+    const prev = stats.counters[oldHash];
+    if (prev === undefined) return;
+    const existing = stats.counters[newHash];
+    stats.counters[newHash] = {
+      show: (existing?.show ?? 0) + (typeof prev.show === "number" ? prev.show : 0),
+      enable: (existing?.enable ?? 0) + (typeof prev.enable === "number" ? prev.enable : 0),
+    };
+    delete stats.counters[oldHash];
+    await writeStats(storeRoot, stats);
+  });
 }
 
 /** 按总使用次数降序的排名(同分按哈希字典序,确定性)。 */

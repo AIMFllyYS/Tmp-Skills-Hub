@@ -2,6 +2,7 @@ import { readFile, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { inspectClientPath } from "./link-probe.js";
 import { STORE_SKILLS_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 import type { SkillRecord } from "./types.js";
 
 /**
@@ -78,7 +79,7 @@ export async function readLinksLedger(storeRoot: string): Promise<LinkEntry[]> {
 /** 原子写台账:先写 tmp 再 rename,中断不产生半个文件。 */
 export async function writeLinksLedger(storeRoot: string, entries: LinkEntry[]): Promise<void> {
   const file = path.join(storeRoot, "links.json");
-  const tmp = path.join(storeRoot, "links." + process.pid + "-" + Date.now() + ".tmp");
+  const tmp = path.join(storeRoot, "links." + uniqueTmpId() + ".tmp");
   await writeFile(tmp, JSON.stringify({ version: LINKS_LEDGER_VERSION, entries }, null, 2) + "\n", "utf8");
   await rename(tmp, file);
 }

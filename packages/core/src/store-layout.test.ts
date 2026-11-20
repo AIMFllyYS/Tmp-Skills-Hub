@@ -93,4 +93,17 @@ describe("initializeStoreLayout", () => {
     await writeFile(path.join(root, "manifest.json"), '{"version": 1}');
     await expect(initializeStoreLayout(root)).rejects.toThrow(/version\/createdAt/);
   });
+
+  it("manifest 可选 trustedRepo 字段在幂等读取时完整保留", async () => {
+    const root = await fakeStoreRoot();
+    await initializeStoreLayout(root);
+    const manifestPath = path.join(root, "manifest.json");
+    const raw = JSON.parse(await readFile(manifestPath, "utf8")) as { version: number; createdAt: string; trustedRepo?: string };
+    raw.trustedRepo = "https://github.com/example/skills";
+    await writeFile(manifestPath, JSON.stringify(raw, null, 2) + "\n", "utf8");
+
+    const res = await initializeStoreLayout(root);
+    expect(res.created).toBe(false);
+    expect(res.manifest.trustedRepo).toBe("https://github.com/example/skills");
+  });
 });

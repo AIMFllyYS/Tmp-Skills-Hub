@@ -1,6 +1,7 @@
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 
 /**
  * 分组模型与持久化(#25)。
@@ -73,7 +74,9 @@ export async function readGroups(storeRoot: string): Promise<GroupsFile> {
 /** 原子写分组定义:先写 tmp 再 rename。 */
 export async function writeGroups(storeRoot: string, groups: GroupsFile): Promise<void> {
   const target = file(storeRoot);
-  const tmp = path.join(storeRoot, STORE_TMP_DIR, "groups." + process.pid + "-" + Date.now() + ".tmp");
+  const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
+  await mkdir(tmpDir, { recursive: true });
+  const tmp = path.join(tmpDir, "groups." + uniqueTmpId() + ".tmp");
   await writeFile(tmp, JSON.stringify({ version: GROUPS_FILE_VERSION, groups: groups.groups }, null, 2) + "\n", "utf8");
   await rename(tmp, target);
 }
