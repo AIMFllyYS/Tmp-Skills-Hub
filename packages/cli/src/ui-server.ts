@@ -49,6 +49,7 @@ import { registerGroupRoutes } from "./ui-groups.js";
 import { registerDraftRoutes } from "./ui-drafts.js";
 import { registerContentRoutes } from "./ui-content.js";
 import { registerLinkRoutes } from "./ui-links.js";
+import { registerReconcileRoutes } from "./ui-reconcile.js";
 import { registerSettingsRoutes } from "./ui-settings.js";
 
 export const DEFAULT_UI_PORT = 4321;
@@ -291,6 +292,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   registerDraftRoutes(app, ctx);
   registerContentRoutes(app, ctx);
   registerLinkRoutes(app, ctx);
+  registerReconcileRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
 
   app.get("/api/health", (c) => c.json({ ok: true }));

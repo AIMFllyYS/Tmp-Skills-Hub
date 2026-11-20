@@ -29,6 +29,7 @@ export type { BootstrapArgs, BootstrapOptions } from "./bootstrap.js";
 export { performReset } from "./reset-cmds.js";
 export type { ResetFailure, ResetFailureCode, ResetSuccess } from "./reset-cmds.js";
 export { collectDoctorReport } from "./doctor.js";
+export { performReconcileScanL1 } from "./reconcile-cmds.js";
 export type { DoctorReport, DoctorStoreInfo } from "./doctor.js";
 export { AGENT_MODELS, DEFAULT_AGENT_MODEL } from "./agent/models.js";
 export type { AgentModel } from "./agent/models.js";

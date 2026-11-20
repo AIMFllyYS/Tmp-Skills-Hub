@@ -71,6 +71,9 @@
 | POST /api/store/migrate | `{ targetSkillsRoot, dryRun? }` | `{ ok, command: "store-migrate", paths, skills, movedLinks, aside, dryRun }` | 400 bad-usage; 409 conflict; 500 io-error; 503 store-not-configured |
 | POST /api/doctor/prune | `{ dryRun? }` | `{ ok, command: "doctor-prune", count, pruned, dryRun }`，只修改台账 | 400 bad-usage; 503 store-not-configured |
 | POST /api/verify/accept | `{ names?, dryRun? }` | `{ ok, command: "verify-accept", count, accepted, missing, dryRun }`，缺失项跳过 | 400 bad-usage; 404 not-found; 409 conflict; 503 store-not-configured |
+| GET /api/reconcile/scan | — | `{ ok, command: "reconcile-scan", clientsScanned, managedLinks, unmanagedRealDirs, replacedLinks, newConflicts, externalSymlinks, danglingLinks, nonSkillEntries, scanDurationMs, scannedAt }` | 503 store-not-configured |
+| POST /api/reconcile/preview | `{ includeExternalLinks? }` | `{ ok, command: "reconcile-preview", backupRequired, backupDir, skillsRoot, toAdopt, toRelinkIdentical, conflicts, skippedExternalLinks, untouchedNonSkill, danglingToPrune }`（只读） | 400 bad-usage; 503 store-not-configured |
+| POST /api/reconcile/apply | JSON 对象 `{ includeExternalLinks? }` | `{ ok, command: "reconcile-apply", snapshotId, backupVerified, adoptedCount, relinkedCount, conflictCount, linksCreated, externalLinksAdopted, skippedExternalLinks, danglingPruned, failures }`。部分客户端失败由 `failures` 报告 | 400 bad-usage; 409 verify-failed; 500 io-error; 503 store-not-configured |
 | POST /api/skills/:hash/enable | `{ clientId, scope? }` | `{ ok, command: "enable", clientId, scope, targetDir, created, removed }` | 400 bad-usage(缺 clientId); 404 not-found(客户端或 skill 不存在); 409 link-failed; 503 |
 | POST /api/skills/:hash/disable | 同上 | `{ ok, command: "disable", ... }` | 同上 |
 | POST /api/links/preview | `{ hashes, clientIds, action: enable\|disable, scope? }` | `{ ok, command: "links-preview", action, add, remove, conflictCount, wouldCreate, wouldRemove, conflicts }`(不写盘) | 400 bad-usage; 404 not-found; 503 |
@@ -99,9 +102,6 @@
 
 | 端点 | 方法 / 参数 | 响应与用途 | 关键失败码 |
 | --- | --- | --- | --- |
-| `/api/reconcile/scan` | `GET` | L1 浅扫 + L2 按需深扫，返回野生真目录、被覆盖链接、外部链接与冲突摘要 | 503 |
-| `/api/reconcile/preview` | `POST { includeExternalLinks? }` | 返回接管计划预览（只读） | 503 |
-| `/api/reconcile/apply` | `POST { includeExternalLinks? }` | 执行备份校验 → 精准移出/入冲突池 → 原地挂回纯软链接 | 409 link-failed; 500; 503 |
 | `/api/conflicts` | `GET` | 列出所有待解决冲突及变体元数据（含 `maxMtime` 与 `shorterContentWarning`） | 503 |
 | `/api/conflicts/:name/diff` | `GET ?a=&b=` | 返回两个变体间逐文件差异 | 404; 503 |
 | `/api/conflicts/:name/file` | `GET ?variant=&path=` | 读取指定冲突变体内的文本文件 | 400 outside; 404; 422; 503 |

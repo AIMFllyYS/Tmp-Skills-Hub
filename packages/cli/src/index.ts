@@ -9,6 +9,7 @@ import { emitError, emitOk } from "./json-out.js";
 import { scanKnownClients } from "./scan.js";
 import { planInitialPaths, resolveConfiguredHubPaths, resolveStoreRootOrFail } from "./store-shared.js";
 import { performMigrate } from "./store-migrate.js";
+import { runReconcile } from "./reconcile-cmds.js";
 import { collectDoctorReport, performPrune } from "./doctor.js";
 import { runGroup } from "./group-cmds.js";
 import { performInit, POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
@@ -411,12 +412,27 @@ const migrate = defineCommand({
   },
 });
 
+const reconcile = defineCommand({
+  meta: { name: "reconcile", description: "备份并接管客户端技能，收敛为指向真源的软链接" },
+  args: {
+    home: { type: "string", description: "重定向 home 基座" },
+    yes: { type: "boolean", description: "授权接管和建链" },
+    json: { type: "boolean", description: "机器可读输出" },
+    "dry-run": { type: "boolean", description: "仅预演" },
+    "include-external-links": { type: "boolean", description: "同时接管外部链接，保留外部目标" },
+  },
+  run({ args }) {
+    return runReconcile({ home: args.home, yes: args.yes, json: args.json,
+      dryRun: args["dry-run"] === true, includeExternalLinks: args["include-external-links"] === true });
+  },
+});
+
 const main = defineCommand({
   meta: {
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, new: newCmd, ui, bootstrap, migrate },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, new: newCmd, ui, bootstrap, migrate, reconcile },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。

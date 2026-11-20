@@ -90,7 +90,7 @@
   - **depends-on**: T2.1 (#242)
   - **负责模块**: `packages/core/src/conflicts.ts`(新增), `packages/core/src/reconcile.ts`(新增), `packages/core/src/index.ts`
   - **复用资产**: `createBackupSnapshot`, `verifyBackupSnapshot`, `adoptSkillFolder`, `applyLinkSet`, `moveDirSafe`, `writeFileAtomicSafe`, `migrateVersionedData`, `reconcile-scan.ts`
-- [ ] **T2.3** `[cli]` `reconcile` 命令、`bootstrap` 接管闭环与 `/api/reconcile/*` HTTP 端点 — [#244](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/244) | [PRD.md#L243-L260](./PRD.md#L243-L260)
+- [x] **T2.3** `[cli]` `reconcile` 命令、`bootstrap` 接管闭环与 `/api/reconcile/*` HTTP 端点 — [#244](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/244) | [PRD.md#L243-L260](./PRD.md#L243-L260)
   - **depends-on**: T2.2 (#243), T1.2 (#240)
   - **负责模块**: `packages/cli/src/reconcile-cmds.ts`(新增), `ui-reconcile.ts`(新增), `bootstrap.ts`, `ui-server.ts`, `index.ts`, `exports.ts`
   - **复用资产**: `planReconcile`, `executeReconcile`, `scanClientDriftL1`, `inspectDriftL2`, `requireWriteAuth`, `emitOk`, `emitError`

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -44,9 +44,9 @@ function answers(seq: string[]): ((p: string) => Promise<string>) & { called: st
 }
 
 describe("runBootstrap", () => {
-  it("全流程:默认路径 + 备份 Y + 迁移 Y → 备份目录/库存/收录齐全", async () => {
+  it("全流程:确认备份与接管 → 备份、库存和纯软链接齐全", async () => {
     const home = await newHome();
-    const ask = answers(["", "Y", "Y"]);
+    const ask = answers(["", "Y"]);
     await runBootstrap({ home }, { readLine: ask as never, ui: false });
     const store = path.join(home, ".skills-hub");
     const pointer = JSON.parse(await readFile(path.join(store, "config.json"), "utf8")) as { storeRoot: string };
@@ -64,29 +64,32 @@ describe("runBootstrap", () => {
     await expect(
       readFile(path.join(restored, "claude", "sample-a", "SKILL.md"), "utf8"),
     ).resolves.toContain("name: sample-a");
-    expect(ask.called.length).toBe(3);
+    expect(ask.called.length).toBe(2);
+    const linked = path.join(home, ".claude", "skills", "sample-a");
+    expect((await lstat(linked)).isSymbolicLink()).toBe(true);
+    expect(await realpath(linked)).toBe(await realpath(path.join(store, "skills", "sample-a")));
   });
 
-  it("备份确认 N:跳过备份,仍迁移", async () => {
+  it("--yes 仍强制创建备份，并替换客户端真实目录", async () => {
     const home = await newHome();
-    const ask = answers(["", "N", "Y"]);
-    await runBootstrap({ home }, { readLine: ask as never, ui: false });
-    const backupsDir = path.join(home, ".skills-hub", STORE_BACKUPS_DIR);
-    await expect(import("node:fs/promises").then((m) => m.readdir(backupsDir))).rejects.toThrow();
-    const skills = await import("node:fs/promises").then((m) => m.readdir(path.join(home, ".skills-hub", "skills")));
-    expect(skills.length).toBeGreaterThanOrEqual(2);
+    const ask = answers([]);
+    await runBootstrap({ home, yes: true }, { readLine: ask, ui: false });
+    const backups = await snapshotIds(path.join(home, ".skills-hub"));
+    expect(backups).toHaveLength(1);
+    expect(ask.called).toEqual([]);
+    expect((await lstat(path.join(home, ".cursor", "skills", "sample-b"))).isSymbolicLink()).toBe(true);
   });
 
   it("迁移确认 N:取消,不做任何改动", async () => {
     const home = await newHome();
-    const ask = answers(["", "Y", "N"]);
+    const ask = answers(["", "N"]);
     await runBootstrap({ home }, { readLine: ask as never, ui: false });
-    await expect(import("node:fs/promises").then((m) => m.readFile(path.join(home, ".skills-hub", "config.json"), "utf8"))).rejects.toThrow();
+    expect(await readdir(home)).toEqual([".claude", ".cursor"]);
   });
 
   it("幂等:库存已就绪时零交互,直接返回", async () => {
     const home = await newHome();
-    await runBootstrap({ home }, { readLine: answers(["", "Y", "Y"]) as never, ui: false });
+    await runBootstrap({ home }, { readLine: answers(["", "Y"]) as never, ui: false });
     const snaps1 = await snapshotIds(path.join(home, ".skills-hub"));
     const ask2 = answers(["should-not-be-called"]);
     await runBootstrap({ home }, { readLine: ask2 as never, ui: false });
@@ -104,7 +107,7 @@ describe("runBootstrap", () => {
     const home = await newHome();
     const storeRoot = path.join(home, "hub-store");
     const captured: { port?: number; home?: string }[] = [];
-    const ask = answers([storeRoot, "N", "Y"]);
+    const ask = answers([storeRoot, "Y"]);
     await runBootstrap({ home }, {
       readLine: ask as never,
       ui: async (opts) => {
@@ -116,7 +119,7 @@ describe("runBootstrap", () => {
     expect(captured[0]!.home).not.toBe(path.resolve(storeRoot));
     const pointer = JSON.parse(await readFile(path.join(home, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string; skillsRoot: string };
     expect(pointer.storeRoot).toBe(path.join(home, ".skills-hub"));
-    expect(pointer.skillsRoot).toBe(path.resolve(storeRoot));
+    expect(pointer.skillsRoot).toBe(await realpath(storeRoot));
     expect(captured[0]!.home).not.toBe(pointer.storeRoot);
     expect(await resolveUiStoreRoot(captured[0]!.home!)).toBe(pointer.storeRoot);
   });
@@ -140,7 +143,7 @@ describe("runBootstrap", () => {
     await writeFile(path.join(realDir, "SKILL.md"), ["---", "name: linked-skill", "description: linked test skill", "---", "", "# linked"].join("\n") + "\n", "utf8");
     await symlink(realDir, path.join(home, ".claude", "skills", "linked-skill"), "junction");
     await symlink(path.join(home, ".agents", "skills", "ghost"), path.join(home, ".claude", "skills", "dangling-skill"), "junction");
-    const ask = answers(["", "Y", "Y"]);
+    const ask = answers(["", "Y"]);
     await runBootstrap({ home }, { readLine: ask as never, ui: false });
     const snaps = await snapshotIds(path.join(home, ".skills-hub"));
     const manifest = await readBackupManifest(path.join(home, ".skills-hub", STORE_BACKUPS_DIR, snaps[0]!));

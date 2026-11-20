@@ -42,7 +42,8 @@
 | `new commit <name>` | 校验 `SKILL.md` 达标后定稿：算哈希、从 `drafts[]` 移入 `skills[]`。不要求 `--yes`。**`--enable` 未实现**（§2.1 表格是授权分级草案，不是已交付参数）；挂链走独立的 `enable` 或面板 | AI / 面板 |
 | `new discard <name>` | 放弃草稿：目录移入 `archive/drafts/`，从 `drafts[]` 清除。不引入真删除——半成品原样保留 | AI |
 | `new list` | 列出当前草稿（`drafts[]`），只读 | AI / 面板 |
-| `bootstrap` | 一键体验：交互确认（真源位置/备份/收录）→ 自动备份 → 收录全部本机 skills → 收录并启用自身 skill → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
+| `bootstrap` | 选择真源、预览并确认接管，备份校验后入库和建软链接，再启用自身 skill 并启动面板；已初始化时直接启动 | 人 |
+| `reconcile` | `--dry-run` 预演，确认后备份、接管与建纯软链接；可用 `--include-external-links` 显式纳入外链 | 人 / AI |
 
 新库存的 `--home <X>` 或 `SKILLS_HUB_HOME=<X>` 用于重定向客户端发现和控制中心，指针位于 `<X>/.skills-hub/config.json`。旧沙箱仍支持直接使用含 `manifest.json` 的单根布局。修订缘由是让 `init`、`bootstrap` 和运行时读取遵循同一双目录契约。
 
@@ -50,12 +51,11 @@
 
 > 以下为 v0.3 正式定案的预留命令名，各 Sub-Issue 实现并注册至 `packages/cli/src/index.ts` 后，同步移入 §1 命令表（§1 表格受 `spec-conformance.test.ts` 严格校验，确保表内命令均已落地）：
 >
-> - `reconcile [--include-external-links]`（T2.3）：L1/L2 扫描野生非软链接与冲突 skill → 备份校验 → 精准移出客户端真目录（冲突入 `conflicts/`）→ 原地挂回纯软链接（写操作，需 `--yes` / TTY）
 > - `conflicts list` / `conflicts diff <name>` / `conflicts resolve <name> --mode pick|merge|split`（T3.2）：列出、对比与无损解决同名多版本冲突（`list`/`diff` 只读，`resolve` 需 `--yes` / TTY）
 > - `git status | enable | disable | log [name] | commit [-m msg]`（T5.2）：检测/开关唯一真源目录 Git 版本控制、查看历史、执行规范化提交（`status`/`log` 只读，其余需 `--yes` / TTY）
 > - `git cloud init [--private|--public] [--repo <name>]` / `git cloud push`（T5.2）：经 `gh` CLI 设备码登录、安全扫描、一键创建 GitHub 仓库并推送云端备份（写操作，需 `--yes` / TTY，绝不 `--force`）
 
-> **bootstrap 的流程与铁律**：每一步确认都是显式授权（写操作铁律不变）；备份 = 调用与 `backup` 同一套内核（`<库存根>/backups/blobs` 共享池 + 快照 manifest；源目录只读；库存内链接只记引用）；库存已就绪的幂等启动不重新备份；迁移 = 与 `init`+`adopt` 同一套布局与去重/冲突判定；非 TTY 环境需 `--yes`（跳过全部确认，库存位置取默认）。拉起面板时只把 **home 基座**交给 `ui`（发现客户端、读 `<home>/.skills-hub/config.json`），库存位置以指针为准，不能把 home 当成 storeRoot。
+> **bootstrap 的流程与铁律**：先预览再显式确认。备份和校验是接管的前置条件，外链默认保持原状。非 TTY 环境需 `--yes`，采用默认真源并授权完整流程。启动面板时传入 home 基座，读取该 home 下的控制中心指针。库存已就绪时直接启动面板，不重新接管。
 
 ## 2. 铁律
 
