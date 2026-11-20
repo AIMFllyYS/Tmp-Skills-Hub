@@ -143,13 +143,10 @@ export async function discoverClientRootsAt(base: string, opts?: DiscoverRootsOp
   };
 
   // 同名真实路径只保留第一个(确定性顺序下先到者胜,clientId 取先到者)
-  const addRoot = async (clientId: string, skillsDir: string): Promise<void> => {
-    if (isExcludedRoot(skillsDir, base, paths)) return;
+  const resolveRoot = async ({ clientId, skillsDir }: ClientRoot): Promise<ClientRoot | null> => {
+    if (isExcludedRoot(skillsDir, base, paths) || !await isDirectory(skillsDir)) return null;
     const real = await realpath(skillsDir).catch(() => skillsDir);
-    if (canonical && isExcludedRoot(real, base, canonical)) return;
-    if (!found.has(real)) {
-      found.set(real, { clientId, skillsDir: real });
-    }
+    return canonical && isExcludedRoot(real, base, canonical) ? null : { clientId, skillsDir: real };
   };
 
   // 1. 直接子目录形状:<base>/<client>/skills
@@ -158,19 +155,14 @@ export async function discoverClientRootsAt(base: string, opts?: DiscoverRootsOp
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort(); // 确定性
-  for (const name of dirNames) {
-    const skillsDir = path.join(base, name, "skills");
-    if (await isDirectory(skillsDir)) {
-      await addRoot(name.replace(/^\.+/, ""), skillsDir); // 去前导点:.claude → claude
-    }
-  }
+  const candidates = dirNames.map((name) => ({
+    clientId: name.replace(/^\.+/, ""),
+    skillsDir: path.join(base, name, "skills"),
+  }));
 
   // 2. 已知嵌套惯例(存在才算)
   for (const c of NESTED_CONVENTIONS) {
-    const skillsDir = path.join(base, c.relDir);
-    if (await isDirectory(skillsDir)) {
-      await addRoot(c.clientId, skillsDir);
-    }
+    candidates.push({ clientId: c.clientId, skillsDir: path.join(base, c.relDir) });
   }
 
   // 3. XDG 风格:<base>/.config/<client>/skills(Devin CLI / OpenCode 官方全局目录)
@@ -182,13 +174,13 @@ export async function discoverClientRootsAt(base: string, opts?: DiscoverRootsOp
       .map((e) => e.name)
       .sort();
     for (const name of configNames) {
-      const skillsDir = path.join(configDir, name, "skills");
-      if (await isDirectory(skillsDir)) {
-        await addRoot(name, skillsDir);
-      }
+      candidates.push({ clientId: name, skillsDir: path.join(configDir, name, "skills") });
     }
   }
 
+  for (const root of await Promise.all(candidates.map(resolveRoot))) {
+    if (root && !found.has(root.skillsDir)) found.set(root.skillsDir, root);
+  }
   return [...found.values()].sort((a, b) => a.clientId.localeCompare(b.clientId));
 }
 

@@ -1,6 +1,8 @@
 export type { SkillMeta, SkillHash, SkillSource, SkillSourceKind, SkillRecord, LinkScope } from "./types.js";
 export type { StorageProvider, SourceProvider, ClientAdapter, IdentityProvider } from "./interfaces.js";
 export { hashSkillFolder } from "./hash.js";
+export { scanClientDriftL1, inspectDriftL2 } from "./reconcile-scan.js";
+export type { DriftEntry, DriftEntryKind, DriftIncomplete, DriftL1Report, DriftL2Report, DriftSkill, DriftVariant } from "./reconcile-scan.js";
 export { isGitHubUrl, parseGitHubUrl } from "./github-url.js";
 export type { GitHubUrlParts } from "./github-url.js";
 export { isSafeRelativePath, writeGitHubEntries } from "./github-files.js";

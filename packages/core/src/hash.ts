@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { isIgnoredSkillEntry } from "./skill-ignore.js";
 
@@ -13,17 +13,43 @@ import { isIgnoredSkillEntry } from "./skill-ignore.js";
  *   而不是在哈希层做变换(见 docs/conventions/core-patterns.md)。
  */
 export async function hashSkillFolder(folderPath: string): Promise<string> {
+  return (await computeFingerprint(folderPath, false)).hash;
+}
+
+export interface SkillFingerprint {
+  hash: string;
+  fileCount: number;
+  totalBytes: number;
+  maxMtimeMs: number;
+}
+
+/** 巡检时复用哈希文件清单，同步计算体积和内容时间。 */
+export async function inspectSkillFingerprint(folderPath: string): Promise<SkillFingerprint> {
+  return computeFingerprint(folderPath, true);
+}
+
+async function computeFingerprint(folderPath: string, inspect: boolean): Promise<SkillFingerprint> {
   const files = await collectFiles(folderPath);
   files.sort();
 
   const hash = createHash("sha256");
+  let totalBytes = 0;
+  let maxMtimeMs = 0;
   for (const relPath of files) {
+    const absolute = path.join(folderPath, relPath);
+    if (inspect) {
+      const entry = await lstat(absolute);
+      if (!entry.isFile()) throw new Error("扫描期间文件形态发生变化: " + relPath);
+      maxMtimeMs = Math.max(maxMtimeMs, entry.mtimeMs);
+    }
+    const bytes = await readFile(absolute);
+    totalBytes += bytes.length;
     hash.update(relPath);
     hash.update("\0");
-    hash.update(await readFile(path.join(folderPath, relPath)));
+    hash.update(bytes);
     hash.update("\0");
   }
-  return hash.digest("hex");
+  return { hash: hash.digest("hex"), fileCount: files.length, totalBytes, maxMtimeMs };
 }
 
 /** 递归收集 POSIX 风格的相对文件路径,跳过忽略项。 */

@@ -82,7 +82,7 @@
 
 ### E2: 客户端精准接管与纯软链接收敛引擎 | Epic #235 | Block A + B | PRD L172-L283
 
-- [ ] **T2.1** `[core]` 两级极速扫描内核 (L1 浅扫 + L2 按需深扫) 与目录分类器 — [#242](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/242) | [PRD.md#L176-L199](./PRD.md#L176-L199)
+- [x] **T2.1** `[core]` 两级极速扫描内核 (L1 浅扫 + L2 按需深扫) 与目录分类器 — [#242](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/242) | [PRD.md#L176-L199](./PRD.md#L176-L199)
   - **depends-on**: T1.1 (#239)
   - **负责模块**: `packages/core/src/reconcile-scan.ts`(新增), `packages/core/src/index.ts`
   - **复用资产**: `discoverClientRoots`, `readLinksLedger`, `readLinkTarget`, `readStoreIndex`, `readSkillMeta`, `hashSkillFolder`, `isIgnoredSkillEntry`
