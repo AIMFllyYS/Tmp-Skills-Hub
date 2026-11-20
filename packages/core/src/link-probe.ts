@@ -59,15 +59,7 @@ export async function probeLinkTypes(workDir: string): Promise<LinkTypeProbe> {
  */
 export async function readLinkTarget(p: string): Promise<string | null> {
   try {
-    const st = await lstat(p);
-    if (st.isSymbolicLink()) {
-      return path.resolve(path.dirname(p), await readlink(p));
-    }
-    if (st.isDirectory()) {
-      // Windows junction:目录但 readlink 可解析
-      return path.resolve(path.dirname(p), await readlink(p));
-    }
-    return null;
+    return path.resolve(path.dirname(p), await readlink(p));
   } catch {
     return null;
   }
