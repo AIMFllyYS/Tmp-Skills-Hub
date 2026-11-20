@@ -18,14 +18,14 @@
 ## Key Commands
 
 - Install: `pnpm install` | Build all: `pnpm build` | Lint: `pnpm lint`
-- Typecheck: `pnpm typecheck`（覆盖源码与各包 `tsconfig.test.json` + web `tsc --noEmit`）
+- Typecheck: `pnpm typecheck`（覆盖全仓 4 包源码与各自的 `tsconfig.test.json`）
 - Test: `pnpm test`（全仓 Vitest 单元测试、契约测试与 AI 替身测试）
 - Web dev: `pnpm dev:web`（Vite，`/api` 代理到本地 4321）
 - CLI dev: `pnpm dev:cli scan` / `pnpm dev:cli ui`（tsx 直跑源码）
 - 构建后的 CLI: `node packages/cli/dist/index.js <command>`
 - 单包操作: `pnpm --filter @skills-hub/core <script>` / `@skills-hub/cli` / `@skills-hub/web` / `@skills-hub/desktop`
 - 面板冒烟: `pnpm smoke`（需先 `pnpm build`；本地无 Chrome 时跳过退出 0；CI 使用 `node scripts/smoke-panel.mjs --require-chrome` 强制门禁）
-- 桌面壳打包（`apps/desktop`）：先 `pnpm build`，再通过 `apps/desktop` 的 `esbuild` + `electron-builder` 脚本构建与打包（社团内部默认无签名分发，详见 [docs/designs/desktop-shell-v0.md](docs/designs/desktop-shell-v0.md)）
+- 桌面壳打包（`apps/desktop`）：先 `pnpm build`，再运行 `pnpm build:desktop`（`electron-builder --dir` 生成免签名目录包；或 `--filter @skills-hub/desktop package:win` 生成安装包，详见 [docs/designs/desktop-shell-v0.md](docs/designs/desktop-shell-v0.md)）
 
 ## Shell Environment
 

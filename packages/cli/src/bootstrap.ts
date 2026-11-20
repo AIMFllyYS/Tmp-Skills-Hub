@@ -197,6 +197,10 @@ function findSelfSkillDir(overrideDir?: string): string | null {
   if (overrideDir !== undefined && overrideDir !== "") {
     candidates.push(path.join(overrideDir, "SKILL.md"));
   }
+  const envDir = process.env.SKILLSHUB_SELF_SKILL_DIR;
+  if (envDir !== undefined && envDir !== "") {
+    candidates.push(path.join(envDir, "SKILL.md"));
+  }
   try {
     const thisFile = fileURLToPath(import.meta.url);
     const cliSrc = path.dirname(thisFile);

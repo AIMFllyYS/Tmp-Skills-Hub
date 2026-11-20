@@ -46,20 +46,21 @@ apps/desktop ──(import 编程接口)──→ packages/cli ──(import)─
 
 ## 四、进程内架构与资源打包
 
-### 4.1 进程内 Hono / Fetch 架构
+### 4.1 进程内 Fetch / 协议桥接与 HTTP 回退
 
-1. `packages/cli` 通过 `package.json` 的 `"exports"` 暴露独立编程入口（不触发 CLI `runMain` 命令行解析），导出 `createUiApp`、`startUiServer`、`resolveUiStoreRoot`、`loadEnvFile`、`performInit`、`DEFAULT_UI_PORT` 等。
-2. Electron 主进程启动时：
-   - 先执行 `loadEnvFile()`（支持工作目录 `.env` 与 `~/.skills-hub/.env` 兜底）载入可选的 `QINIU_API_KEY` / `GITHUB_TOKEN`；
-   - 解析默认库存或允许未配置状态下启动，通过 `startUiServer({ port, home, webRoot })` 在进程内启动 Hono HTTP 服务（绑定 `127.0.0.1`，支持端口占用时自动回落至 `port: 0` 动态空闲端口）；
-   - 创建 `BrowserWindow` 加载本地服务地址（如 `http://127.0.0.1:<port>/`），开启 `contextIsolation: true`、禁用 `nodeIntegration: false`。
-3. 窗口加载完成后与普通浏览器访问完全一致，遵守 [http-and-routing.md](../conventions/http-and-routing.md) 的 `Host`（含 `skills-hub`）、写请求 `Origin`（含 `app://skills-hub`）与 `Content-Type` 安全校验。
+1. `packages/cli` 通过 `package.json` 的 `"exports"` 暴露独立编程入口（`packages/cli/src/exports.ts`，不触发 CLI `runMain` 命令行解析），导出 `createUiApp`、`startUiServer`、`resolveUiStoreRoot`、`loadEnvFile`、`performInit`、`DEFAULT_UI_PORT` 等。
+2. Electron 主进程（`apps/desktop/src/main.ts`）启动时：
+   - 先执行 `loadEnvFile()`（支持 `~/.skills-hub/.env` 与工作目录 `.env`）载入可选的 `QINIU_API_KEY` / `GITHUB_TOKEN`，并设置 `SKILLSHUB_SELF_SKILL_DIR` 指向打包后的 `resources/self-skill`；
+   - **默认模式（`protocol`）**：构造 `createUiApp({ storeRoot, home, webRoot })`，注册受保护的自定义协议 `app://skills-hub/`（`protocol.handle("app", createAppProtocolHandler(honoApp))`），免去本机 TCP 端口占用与跨网页监听暴露面；
+   - **回退模式（`SKILLSHUB_DESKTOP_TRANSPORT=http`）**：通过 `startUiServer({ port: 0, home, webRoot })` 在进程内启动 `127.0.0.1` 随机空闲端口 Hono HTTP 服务；
+   - 创建 `BrowserWindow` 加载入口（默认 `app://skills-hub/`），开启 `contextIsolation: true`、`sandbox: true`、禁用 `nodeIntegration: false`，并拦截外链跳出系统浏览器。
+3. 请求与浏览器访问共用同一套本地安全校验（[http-and-routing.md](../conventions/http-and-routing.md) 的 `Host` 含 `skills-hub`、写请求 `Origin` 含 `app://skills-hub` 与 `Content-Type` 校验）。
 4. 首次未初始化库存时，Web 壳引导卡片可直接调用 `POST /api/store/init` 完成库存初始化与指针写入，服务端动态更新 `ctx.storeRoot`，无需重启桌面端。
 
 ### 4.2 静态资源与 `extraResources`
 
-- `apps/web/dist` 作为渲染层静态资源打包进桌面应用，由内置 `startUiServer({ webRoot })` 托管。
-- `packages/cli/self-skill/`（即 `skills-hub` 自身的 `SKILL.md`）随 `extraResources` 打入桌面安装包资源目录，使桌面端触发 `bootstrap` 时也能定位并收录自身 skill。
+- `apps/web/dist` 作为渲染层静态资源打包进桌面应用 `resources/web`，由内置 `createUiApp` / `startUiServer` 托管。
+- `packages/cli/self-skill/`（即 `skills-hub` 自身的 `SKILL.md`）随 `extraResources` 打入 `resources/self-skill`，使桌面端触发 `bootstrap` 时也能定位并收录自身 skill。
 
 ## 五、与 PATH 上 CLI 的共存策略
 
@@ -71,7 +72,7 @@ apps/desktop ──(import 编程接口)──→ packages/cli ──(import)─
 
 ## 六、构建、打包与无签名社团分发权衡
 
-- **打包链路**：使用 `esbuild` 将 Electron 主进程与预加载脚本编译打包为单产物，再通过 `electron-builder` 生成各平台安装包/便携版（Windows NSIS / portable exe，macOS dmg / zip）。
+- **打包链路**：使用 `esbuild` 将 Electron 主进程与预加载脚本编译打包为单产物，再通过 `electron-builder` 生成各平台安装包/便携版（`apps/desktop/electron-builder.yml`：Windows `nsis` / `portable`、macOS `dmg`、Linux `AppImage`）。
 - **无签名（unsigned）默认策略的权衡**：
   - 现阶段定位是**社团内部试验分发**，购置商业 Windows EV 代码签名证书与 Apple Developer 公证账号会产生持续费用并阻塞自动化打包链路。
   - 因此默认输出**无代码签名**产物；代价是 Windows SmartScreen 或 macOS Gatekeeper 首次运行会提示「未知发布者」，需在社团安装指引中说明首次放行步骤。

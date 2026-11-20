@@ -83,6 +83,19 @@ export default tseslint.config(
     rules: { "no-console": "off" },
   },
   {
+    files: ["apps/desktop/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["@skills-hub/core", "@skills-hub/core/*"], message: "desktop src 不直接 import core——请通过 @skills-hub/cli 编程入口（project-structure.md §二）" },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["apps/desktop/src/main.ts"],
     rules: { "no-console": "off" },
   },
