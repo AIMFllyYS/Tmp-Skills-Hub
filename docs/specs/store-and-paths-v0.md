@@ -22,7 +22,8 @@
 - **`config.json` 演进与向后兼容**：
   - **v1（旧版单根，保持只读兼容）**：`{ "storeRoot": "D:\\...\\Hubs" }`——当未显式区分 `stateRoot`/`skillsRoot` 时，内核按旧单根布局解析（`stateRoot = storeRoot`, `skillsRoot = <storeRoot>/skills`），绝不破坏存量用户库存；
   - **v2（新版分离布局）**：`{ "version": 2, "stateRoot": "<home>/.skills-hub", "skillsRoot": "<home>/.skills-hub/skills", "git": { "enabled": false }, "autoLaunch": false }`（保留 `storeRoot` 兼容派生字段或由 `normalizeHubPaths()` 统一转换）。
-- **跨盘写入铁律（`EXDEV` 防护）**：当 `skillsRoot` 与 `stateRoot` 位于不同磁盘分区（如 `D:` vs `C:`）时，对 `skillsRoot` 内部的原子写不得先落盘至 `stateRoot/tmp` 再跨盘 `rename`，必须就近使用目标目录同分区的隐藏临时文件再 `rename`（失败则安全降级为拷贝校验后清理）。
+- **跨盘写入铁律（`EXDEV` 防护）**：单文件替换由 `writeFileAtomicSafe` 在目标文件同目录落临时文件再重命名。目录移动由 `moveDirSafe` 先尝试重命名，遇到 `EXDEV` 则复制到目标分区的临时目录，逐项校验目录结构、文件字节和链接目标，再发布到目标路径并摘除原目录。校验失败保留源目录，目录统计不沿链接读取外部内容。
+- **沙箱指针优先级**：`resolveHubPaths` 优先读取显式 `--home <X>` 下的 `<X>/.skills-hub/config.json`。无该指针时沿用旧单根 `<X>`，包括直接在 `<X>/manifest.json` 初始化的沙箱。显式沙箱指针存在但损坏时返回错误，避免误用其他库存。CLI 与 HTTP 初始化及迁移接线见 T1.2。
 
 解析顺序（先命中者胜；适用于 CLI 命令）：
 

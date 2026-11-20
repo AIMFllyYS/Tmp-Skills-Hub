@@ -1,5 +1,7 @@
-import { cp, lstat, mkdir, readdir, readFile, rename, rmdir, stat, symlink, unlink, utimes, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, readFile, rename, symlink, utimes, writeFile } from "node:fs/promises";
+import { copyTreeJunctionSafe, unlinkNoFollow } from "./fs-atomic.js";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { discoverClientRoots, isOwnClientId } from "./clients.js";
 import { readLinkTarget } from "./link-probe.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
@@ -86,22 +88,7 @@ const RETRYABLE_RENAME_CODES = new Set(["EXDEV", "EPERM", "EACCES", "EBUSY", "EE
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** 摘链接不跟随;普通目录逐条摘内部链接后再删。 */
-export async function unlinkNoFollow(p: string): Promise<void> {
-  if (!(await exists(p))) return;
-  if ((await readLinkTarget(p)) !== null) {
-    await unlink(p);
-    return;
-  }
-  const st = await lstat(p);
-  if (st.isDirectory()) {
-    const names = await readdir(p);
-    for (const name of names) await unlinkNoFollow(path.join(p, name));
-    await rmdir(p);
-    return;
-  }
-  await unlink(p);
-}
+export { unlinkNoFollow } from "./fs-atomic.js";
 
 export interface AsideOps {
   renameFn?: (oldPath: string, newPath: string) => Promise<void>;
@@ -130,26 +117,6 @@ async function uniqueAsideDest(dir: string, name: string): Promise<string> {
     if (!(await exists(candidate))) return candidate;
   }
   return path.join(dir, `${name}-${uniqueSuffix()}`);
-}
-
-async function copyTreeJunctionSafe(src: string, dest: string): Promise<void> {
-  const linkTarget = await readLinkTarget(src);
-  if (linkTarget !== null) {
-    const targetStat = await stat(linkTarget).catch(() => null);
-    const type = process.platform === "win32" && targetStat?.isDirectory() ? "junction" : undefined;
-    await symlink(linkTarget, dest, type);
-    return;
-  }
-  const st = await lstat(src);
-  if (st.isDirectory()) {
-    await mkdir(dest, { recursive: true });
-    const names = await readdir(src);
-    for (const name of names) {
-      await copyTreeJunctionSafe(path.join(src, name), path.join(dest, name));
-    }
-    return;
-  }
-  await cp(src, dest, { verbatimSymlinks: true });
 }
 
 /**
@@ -234,7 +201,7 @@ export async function asideSkill(
 
 async function resolveSkillsDir(
   home: string,
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   clientId: string,
   skill: string,
 ): Promise<string> {
@@ -261,17 +228,17 @@ async function resolveSkillsDir(
   return (canonical ?? matches[0]!).skillsDir;
 }
 
-function snapshotDirOf(storeRoot: string, snapshotId: string): string {
-  return path.join(storeRoot, STORE_BACKUPS_DIR, snapshotId);
+function snapshotDirOf(storeRoot: string | HubPaths, snapshotId: string): string {
+  return path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_BACKUPS_DIR, snapshotId);
 }
 
-export async function resolveRestoreSnapshotId(storeRoot: string, snapshotId?: string): Promise<string | null> {
+export async function resolveRestoreSnapshotId(storeRoot: string | HubPaths, snapshotId?: string): Promise<string | null> {
   if (snapshotId !== undefined && snapshotId !== "") return snapshotId;
   return readLatestSnapshotId(storeRoot);
 }
 
 async function previewBlob(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   home: string,
   snapshotId: string,
   manifest: BackupManifest,
@@ -387,7 +354,7 @@ async function previewRoots(snapshotDir: string, home: string, snapshotId: strin
 }
 
 export async function previewRestoreClientSkills(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   home: string,
   snapshotId?: string,
 ): Promise<RestoreResult> {
@@ -417,11 +384,11 @@ export async function previewRestoreClientSkills(
 }
 
 async function writeBlobFiles(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   destSkill: string,
   files: BackupFileEntry[],
 ): Promise<void> {
-  const blobsDir = path.join(storeRoot, STORE_BACKUPS_DIR, "blobs");
+  const blobsDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_BACKUPS_DIR, "blobs");
   await mkdir(destSkill, { recursive: true });
   for (const f of files) {
     const dest = path.join(path.dirname(destSkill), ...f.rel.split("/"));
@@ -441,7 +408,7 @@ async function recreateLink(dest: string, target: string, _kind: BackupLinkEntry
 }
 
 async function applyBlobRestore(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   runId: string,
   asideRoot: string,
   manifest: BackupManifest,
@@ -500,7 +467,7 @@ async function findOldSkillSrc(rootsDir: string, item: RestoreSkillItem): Promis
 
 /** 按快照逐条写回客户端 skill 落点。禁止整目录 rename 客户端 skills。 */
 export async function restoreClientSkills(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   home: string,
   snapshotId?: string,
 ): Promise<RestoreResult> {
@@ -508,7 +475,7 @@ export async function restoreClientSkills(
   if (!preview.ok) return preview;
   const snapshotDir = snapshotDirOf(storeRoot, preview.snapshotId);
   const runId = preview.snapshotId + "-" + uniqueSuffix();
-  const asideDir = path.join(storeRoot, STORE_TMP_DIR, "restore-aside-" + runId);
+  const asideDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR, "restore-aside-" + runId);
   try {
     const raw = await readRawManifest(snapshotDir);
     if (isBlobBackupManifest(raw)) await applyBlobRestore(storeRoot, runId, asideDir, raw, preview);

@@ -1,9 +1,10 @@
 import { lstat, mkdir, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { unlinkNoFollow } from "./backup-restore.js";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
+import { unlinkNoFollow } from "./fs-atomic.js";
 import { readLinkTarget } from "./link-probe.js";
 import { readLinksLedger, writeLinksLedger, type LinkEntry } from "./links.js";
-import { STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
+import { STORE_TMP_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 
 /**
@@ -46,7 +47,7 @@ export type LinkSetResult = LinkSetOk | LinkSetFailed;
 
 /** journal:记录本次将做的全部磁盘动作,失败时按它逆序回滚。 */
 interface Journal {
-  storeRoot: string;
+  skillsRoot: string;
   targetDir: string;
   /** 本次将新建/替换的条目(回滚时逐个摘掉) */
   created: LinkEntry[];
@@ -60,7 +61,7 @@ export interface ApplyOptions {
 }
 
 export async function applyLinkSet(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   plan: LinkSetPlan,
   options?: ApplyOptions,
 ): Promise<LinkSetResult> {
@@ -113,11 +114,12 @@ export async function applyLinkSet(
   }
 
   // 4. journal 先行(库存 tmp 区)
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
+  const { stateRoot, skillsRoot } = normalizeHubPaths(storeRoot);
+  const tmpDir = path.join(stateRoot, STORE_TMP_DIR);
   await mkdir(tmpDir, { recursive: true });
   const journalFile = path.join(tmpDir, "switch." + uniqueTmpId() + ".json");
   const journal: Journal = {
-    storeRoot,
+    skillsRoot,
     targetDir: plan.targetDir,
     created: [],
     removed: [...replacedEntries, ...removedEntries],
@@ -157,7 +159,7 @@ export async function applyLinkSet(
         }
         removedPaths.push(p);
       }
-      const storeSkill = path.join(storeRoot, STORE_SKILLS_DIR, entry.entryName);
+      const storeSkill = path.join(skillsRoot, entry.entryName);
       if (entry.kind === "copy") {
         await copyDir(storeSkill, p);
       } else {
@@ -197,7 +199,7 @@ async function rollback(journal: Journal, createdPaths: string[]): Promise<void>
   for (const old of journal.removed) {
     const p = path.join(old.targetDir, old.entryName);
     if (await exists(p)) continue;
-    const storeSkill = path.join(journal.storeRoot, STORE_SKILLS_DIR, old.entryName);
+    const storeSkill = path.join(journal.skillsRoot, old.entryName);
     if (old.kind === "copy") {
       await copyDir(storeSkill, p).catch(() => undefined);
     } else {

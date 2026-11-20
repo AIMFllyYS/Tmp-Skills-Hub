@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 
@@ -34,7 +35,7 @@ export const BUILTIN_GROUPS: GroupDef[] = [
   { id: "research", name: "调研", description: "信息检索与调研", memberHashes: [] },
 ];
 
-const file = (storeRoot: string): string => path.join(storeRoot, "groups.json");
+const file = (storeRoot: string | HubPaths): string => path.join(normalizeHubPaths(storeRoot).stateRoot, "groups.json");
 
 function parse(raw: string, p: string): GroupsFile {
   let data: unknown;
@@ -61,7 +62,7 @@ function parse(raw: string, p: string): GroupsFile {
 }
 
 /** 读分组定义;缺失或占位 {} → 空分组;损坏抛错(绝不静默重置)。 */
-export async function readGroups(storeRoot: string): Promise<GroupsFile> {
+export async function readGroups(storeRoot: string | HubPaths): Promise<GroupsFile> {
   let raw: string;
   try {
     raw = await readFile(file(storeRoot), "utf8");
@@ -72,9 +73,9 @@ export async function readGroups(storeRoot: string): Promise<GroupsFile> {
 }
 
 /** 原子写分组定义:先写 tmp 再 rename。 */
-export async function writeGroups(storeRoot: string, groups: GroupsFile): Promise<void> {
+export async function writeGroups(storeRoot: string | HubPaths, groups: GroupsFile): Promise<void> {
   const target = file(storeRoot);
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
+  const tmpDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR);
   await mkdir(tmpDir, { recursive: true });
   const tmp = path.join(tmpDir, "groups." + uniqueTmpId() + ".tmp");
   await writeFile(tmp, JSON.stringify({ version: GROUPS_FILE_VERSION, groups: groups.groups }, null, 2) + "\n", "utf8");
@@ -85,7 +86,7 @@ export async function writeGroups(storeRoot: string, groups: GroupsFile): Promis
  * 确保内置分组存在:仅当文件缺失或为 init 占位 {} 时写入;
  * 用户已修改(含删空)的分组定义绝不覆盖。
  */
-export async function ensureBuiltinGroups(storeRoot: string): Promise<{ wrote: boolean }> {
+export async function ensureBuiltinGroups(storeRoot: string | HubPaths): Promise<{ wrote: boolean }> {
   let raw: string | null = null;
   try {
     raw = await readFile(file(storeRoot), "utf8");
@@ -98,7 +99,7 @@ export async function ensureBuiltinGroups(storeRoot: string): Promise<{ wrote: b
 }
 
 /** 把 skill(s) 加入若干分组(去重;已存在则跳过)。返回实际变更数。 */
-export async function addSkillToGroups(storeRoot: string, skillHashes: string | string[], groupIds: string[]): Promise<number> {
+export async function addSkillToGroups(storeRoot: string | HubPaths, skillHashes: string | string[], groupIds: string[]): Promise<number> {
   const hashes = Array.isArray(skillHashes) ? skillHashes : [skillHashes];
   let total = 0;
   for (const h of hashes) {
@@ -119,7 +120,7 @@ export async function addSkillToGroups(storeRoot: string, skillHashes: string | 
 }
 
 /** 把 skill(s) 移出若干分组。返回实际变更数。 */
-export async function removeSkillFromGroups(storeRoot: string, skillHashes: string | string[], groupIds: string[]): Promise<number> {
+export async function removeSkillFromGroups(storeRoot: string | HubPaths, skillHashes: string | string[], groupIds: string[]): Promise<number> {
   const hashes = Array.isArray(skillHashes) ? skillHashes : [skillHashes];
   let total = 0;
   for (const h of hashes) {
@@ -141,7 +142,7 @@ export async function removeSkillFromGroups(storeRoot: string, skillHashes: stri
 }
 
 /** 新建分组;id 已存在则抛错。 */
-export async function createGroup(storeRoot: string, def: { id: string; name: string; description: string }): Promise<void> {
+export async function createGroup(storeRoot: string | HubPaths, def: { id: string; name: string; description: string }): Promise<void> {
   const current = await readGroups(storeRoot);
   if (current.groups.some((g) => g.id === def.id)) throw new Error("分组已存在: " + def.id);
   current.groups.push({ id: def.id, name: def.name, description: def.description, memberHashes: [] });
@@ -149,7 +150,7 @@ export async function createGroup(storeRoot: string, def: { id: string; name: st
 }
 
 /** 重命名分组;不存在则抛错。 */
-export async function renameGroup(storeRoot: string, id: string, name: string): Promise<void> {
+export async function renameGroup(storeRoot: string | HubPaths, id: string, name: string): Promise<void> {
   const current = await readGroups(storeRoot);
   const g = current.groups.find((x) => x.id === id);
   if (g === undefined) throw new Error("分组不存在: " + id);
@@ -158,7 +159,7 @@ export async function renameGroup(storeRoot: string, id: string, name: string): 
 }
 
 /** 删除分组(仅删定义,不删任何 skill)。返回该组当时的成员数。 */
-export async function deleteGroup(storeRoot: string, id: string): Promise<number> {
+export async function deleteGroup(storeRoot: string | HubPaths, id: string): Promise<number> {
   const current = await readGroups(storeRoot);
   const g = current.groups.find((x) => x.id === id);
   if (g === undefined) throw new Error("分组不存在: " + id);

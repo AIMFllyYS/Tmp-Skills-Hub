@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 
@@ -33,7 +34,7 @@ export interface UsageRankEntry {
   total: number;
 }
 
-const file = (storeRoot: string): string => path.join(storeRoot, "stats.json");
+const file = (storeRoot: string | HubPaths): string => path.join(normalizeHubPaths(storeRoot).stateRoot, "stats.json");
 
 function empty(): StatsFile {
   return { version: STATS_FILE_VERSION, counters: {} };
@@ -62,7 +63,7 @@ function parse(raw: string): StatsFile {
 }
 
 /** 读统计;任何异常(缺失/损坏/占位)都降级为空统计,不抛错。 */
-export async function readUsageStats(storeRoot: string): Promise<StatsFile> {
+export async function readUsageStats(storeRoot: string | HubPaths): Promise<StatsFile> {
   try {
     return parse(await readFile(file(storeRoot), "utf8"));
   } catch {
@@ -70,9 +71,9 @@ export async function readUsageStats(storeRoot: string): Promise<StatsFile> {
   }
 }
 
-async function writeStats(storeRoot: string, stats: StatsFile): Promise<void> {
+async function writeStats(storeRoot: string | HubPaths, stats: StatsFile): Promise<void> {
   const target = file(storeRoot);
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
+  const tmpDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR);
   await mkdir(tmpDir, { recursive: true });
   const tmp = path.join(tmpDir, "stats." + uniqueTmpId() + ".tmp");
   await writeFile(tmp, JSON.stringify({ version: STATS_FILE_VERSION, counters: stats.counters }, null, 2) + "\n", "utf8");
@@ -86,8 +87,8 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  * 先确保 tmp 目录存在,避免缺失 tmp/ 时 ENOENT 死循环;
  * 锁僵死(进程崩溃)超过 5s 强制夺锁。
  */
-async function withStatsLock<T>(storeRoot: string, fn: () => Promise<T>): Promise<T> {
-  const lockDir = path.join(storeRoot, STORE_TMP_DIR, "stats.lock");
+async function withStatsLock<T>(storeRoot: string | HubPaths, fn: () => Promise<T>): Promise<T> {
+  const lockDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR, "stats.lock");
   await mkdir(path.dirname(lockDir), { recursive: true });
   const started = Date.now();
   for (;;) {
@@ -118,7 +119,7 @@ async function withStatsLock<T>(storeRoot: string, fn: () => Promise<T>): Promis
  * 记一次使用(锁内读-改-写,并发安全;任何失败静默降级,统计不影响主流程)。
  * 预演模式不计数由调用方保证——只在真实操作后调用。
  */
-export async function recordUsage(storeRoot: string, skillHash: string, kind: UsageKind): Promise<void> {
+export async function recordUsage(storeRoot: string | HubPaths, skillHash: string, kind: UsageKind): Promise<void> {
   try {
     await withStatsLock(storeRoot, async () => {
       const stats = await readUsageStats(storeRoot); // 缺失/损坏降级为空
@@ -137,7 +138,7 @@ export async function recordUsage(storeRoot: string, skillHash: string, kind: Us
  * 若 oldHash 无记录则不写入。
  */
 export async function migrateSkillStatsHash(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   oldHash: string,
   newHash: string,
 ): Promise<void> {
