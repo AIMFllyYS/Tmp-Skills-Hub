@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { getAction } from "../actions/registry.js";
+import { GitSettingsPanel } from "../git/GitSettingsPanel.js";
 import { formatResetPreview } from "../skills/catalog.js";
 import type { ClientInfo } from "../skills/types.js";
 import { groupClientIds } from "./apps-layout.js";
@@ -28,6 +29,7 @@ interface SettingsDialogProps {
   latestSnapshotId: string | null;
   backupsLoading?: boolean;
   onResetDone: () => void;
+  onGitEnabledChange: (enabled: boolean) => void;
 }
 
 /** 左下角设置覆盖层：只读路径、折叠应用名单、重置确认。 */
@@ -40,6 +42,7 @@ export function SettingsDialog({
   latestSnapshotId,
   backupsLoading = false,
   onResetDone,
+  onGitEnabledChange,
 }: SettingsDialogProps): React.JSX.Element {
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -124,6 +127,11 @@ export function SettingsDialog({
             ) : settingsError !== null ? (
               <p role="alert" className="text-sm text-ink-mid">{settingsError}</p>
             ) : <Skeleton className="h-28 w-full" />}
+            {open && storeRoot !== "" && (
+              <div className="mt-6">
+                <GitSettingsPanel onEnabledChange={onGitEnabledChange} />
+              </div>
+            )}
             {maintenance.health !== null && storeRoot !== "" && (
               <SelfHealSection className="mt-6" {...maintenance.health} onPruneDangling={maintenance.onPruneDangling} onAcceptDrifted={maintenance.onAcceptDrifted} />
             )}

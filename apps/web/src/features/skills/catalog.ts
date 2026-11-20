@@ -24,7 +24,7 @@ import type {
 export type CatalogLoadState = "loading" | "ready" | "unconfigured" | "offline";
 
 export type PrimaryCatalogResult =
-  | { kind: "ready"; storeRoot: string; skills: SkillRecord[]; clients: ClientInfo[] }
+  | { kind: "ready"; storeRoot: string; skills: SkillRecord[]; clients: ClientInfo[]; gitEnabled: boolean }
   | { kind: "unconfigured"; clients: ClientInfo[] };
 
 export interface CatalogSnapshot {
@@ -47,6 +47,7 @@ export async function loadPrimaryCatalog(): Promise<PrimaryCatalogResult> {
       kind: "ready",
       storeRoot: catalogResult.value.storeRoot,
       skills: catalogResult.value.skills,
+      gitEnabled: catalogResult.value.gitEnabled,
       clients,
     };
   }
@@ -84,6 +85,7 @@ export async function loadCatalogRefresh(selectedClientId: string | null): Promi
   storeRoot: string;
   skills: SkillRecord[];
   groups: GroupDef[];
+  gitEnabled: boolean;
   clientStates: ClientSkillStatesResponse | null;
 }> {
   const [catalog, clientStates, groups] = await Promise.all([
@@ -91,7 +93,7 @@ export async function loadCatalogRefresh(selectedClientId: string | null): Promi
     selectedClientId === null ? Promise.resolve(null) : fetchClientSkillStates(selectedClientId),
     fetchGroups().catch(() => []),
   ]);
-  return { storeRoot: catalog.storeRoot, skills: catalog.skills, groups, clientStates };
+  return { storeRoot: catalog.storeRoot, skills: catalog.skills, gitEnabled: catalog.gitEnabled, groups, clientStates };
 }
 
 export function patchSkillVisibility(

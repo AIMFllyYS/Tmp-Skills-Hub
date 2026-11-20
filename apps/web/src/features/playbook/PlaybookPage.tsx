@@ -652,7 +652,7 @@ export function PlaybookPage(): React.JSX.Element {
                   loading={historyLoading}
                   gitEnabled={gitStatus.enabled}
                   selectedDiffFiles={DEMO_COMMIT_DIFF}
-                  onSelectCommit={(hash) => toast("加载提交 " + hash.slice(0, 7) + " Diff")}
+                  onSelectCommit={(hash) => { if (hash !== null) toast("加载提交 " + hash.slice(0, 7) + " Diff"); }}
                 />
               </div>
             )}

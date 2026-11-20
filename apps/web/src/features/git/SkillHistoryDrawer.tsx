@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, Clock, FileDiff, GitCommitHorizontal, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DeferredReveal, StaggerItem } from "@/components/ui/deferred-reveal";
 import { DiffViewer, type UnifiedDiffFile } from "@/components/ui/diff-viewer";
 import { Drawer } from "@/components/ui/drawer";
@@ -19,8 +20,11 @@ export interface SkillHistoryDrawerProps {
   commits: readonly GitCommitEntry[];
   loading?: boolean;
   gitEnabled: boolean;
-  onSelectCommit?: (hash: string) => void;
-  selectedDiffFiles?: readonly UnifiedDiffFile[];
+  onSelectCommit?: (hash: string | null) => void;
+  selectedDiffFiles?: readonly UnifiedDiffFile[] | undefined;
+  historyError?: string | undefined;
+  diffError?: string | undefined;
+  onRetry?: () => void;
 }
 
 /** 单 Skill 的 Git 提交历史抽屉：晚加载骨架过渡 + 交错时间线 + 点击展开嵌入 DiffViewer。 */
@@ -33,6 +37,9 @@ export function SkillHistoryDrawer({
   gitEnabled,
   onSelectCommit,
   selectedDiffFiles,
+  historyError,
+  diffError,
+  onRetry,
 }: SkillHistoryDrawerProps): React.JSX.Element {
   const [expandedHash, setExpandedHash] = useState<string | null>(() =>
     selectedDiffFiles !== undefined && selectedDiffFiles.length > 0
@@ -43,6 +50,7 @@ export function SkillHistoryDrawer({
   const toggleCommit = (hash: string): void => {
     if (expandedHash === hash) {
       setExpandedHash(null);
+      onSelectCommit?.(null);
       return;
     }
     setExpandedHash(hash);
@@ -64,7 +72,7 @@ export function SkillHistoryDrawer({
           <Badge tone={gitEnabled ? "success" : "neutral"} dot>
             {gitEnabled ? "Git 版本追踪已开启" : "未启用 Git"}
           </Badge>
-          {gitEnabled && !loading && (
+          {gitEnabled && !loading && historyError === undefined && (
             <Badge tone="slate">{String(commits.length)} 条提交</Badge>
           )}
         </div>
@@ -80,6 +88,11 @@ export function SkillHistoryDrawer({
           title="尚未开启 Git 版本控制"
           description="开启后，每次保存、收录、冲突合并与归档都会自动生成确定性提交记录。请前往左下角「设置 → Git 版本控制」开启。"
         />
+      ) : historyError !== undefined ? (
+        <div className="space-y-3">
+          <StatusBanner tone="danger" surface="card" title="无法加载提交历史" description={historyError} />
+          <Button type="button" size="sm" variant="outline" onClick={onRetry}>重试</Button>
+        </div>
       ) : (
         <DeferredReveal
           loading={loading}
@@ -185,7 +198,9 @@ export function SkillHistoryDrawer({
 
                       {expanded && (
                         <div className="motion-reveal mt-2.5" data-testid={"history-diff-" + shortHash}>
-                          {selectedDiffFiles !== undefined ? (
+                          {diffError !== undefined ? (
+                            <StatusBanner tone="danger" surface="card" title="无法加载提交差异" description={diffError} />
+                          ) : selectedDiffFiles !== undefined ? (
                             <DiffViewer
                               key={commit.hash}
                               files={selectedDiffFiles}

@@ -1,5 +1,5 @@
 import { Folder, GitBranch } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ export interface DualPathOnboardingViewProps {
   gitDetected?: boolean;
   gitVersion?: string;
   showGitOptions?: boolean;
+  gitOptions?: ReactNode;
   onInit: (opts: DualPathInitOptions) => Promise<void>;
   onOpenAgent: () => void;
   className?: string;
@@ -40,6 +41,7 @@ export function DualPathOnboardingView({
   gitDetected = true,
   gitVersion,
   showGitOptions = true,
+  gitOptions,
   onInit,
   onOpenAgent,
   className,
@@ -144,6 +146,13 @@ export function DualPathOnboardingView({
               ，也可指定到 D 盘等位置的独立目录。
             </p>
           </section>
+
+          {gitOptions !== undefined && (
+            <>
+              <Separator />
+              {gitOptions}
+            </>
+          )}
 
           {showGitOptions && (
             <>

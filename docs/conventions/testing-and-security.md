@@ -29,6 +29,7 @@
 [scripts/smoke-panel.mjs](../../scripts/smoke-panel.mjs) 使用原生 Chrome DevTools Protocol（不额外引入 Playwright/Puppeteer 运行时重依赖），在完全隔离的临时沙箱中拉起 `skills-hub ui` 与 headless Chrome，执行端到端功能与性能回归断言：
 
 - **功能断言**：侧栏四个导航（`nav-overview`、`nav-stats`、`nav-skills`、`nav-agent`）与左下角设置（`nav-settings`）全部存在；Skills 内容查看器成功渲染正文（非卡在加载态）；客户端启用开关可渲染；设置弹窗含重置入口。
+- **Git 历史断言**：使用本机 Git 在临时真源初始化版本库。打开 Skill 时不请求历史，点击「历史记录」后只请求一次并显示时间线。Git 和 gh 配置路径均指向沙箱。
 - **性能与规模门禁**：点击 skill 后 4 秒内 `fetch ≤ 2`；静置 10 秒 CPU 增量 `≤ 0.1s`；单长任务 `≤ 200ms`；写入 1000 条虚拟库存后可见行 `≤ 80` 且文档 DOM 节点 `≤ 3000`。
 - **跳过 vs 强制失败策略**：
   - 本地开发运行 `pnpm smoke` 时，若本机未安装 Chrome 且未设置 `CHROME_PATH`，脚本输出提示并退出 `0`。

@@ -27,9 +27,9 @@ import type {
 } from "./types.js";
 
 /** 拉取库存列表;HTTP 失败抛 ApiRequestError(含结构化 code,如 store-not-configured)。 */
-export async function fetchCatalog(): Promise<{ storeRoot: string; skills: SkillRecord[] }> {
+export async function fetchCatalog(): Promise<{ storeRoot: string; skills: SkillRecord[]; gitEnabled: boolean }> {
   const body = await apiRequest<SkillsResponse>("/api/skills");
-  return { storeRoot: body.storeRoot, skills: body.skills };
+  return { storeRoot: body.storeRoot, skills: body.skills, gitEnabled: body.gitEnabled === true };
 }
 
 /** 初始化技能库存(未配置时由前端引导页触发)。 */

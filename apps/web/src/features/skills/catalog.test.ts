@@ -123,7 +123,7 @@ describe("loadPrimaryCatalog", () => {
       const url = String(input);
       urls.push(url);
       if (url === "/api/skills") {
-        return jsonRes({ ok: true, command: "skills", storeRoot: "/s", total: 0, skills: [] });
+        return jsonRes({ ok: true, command: "skills", storeRoot: "/s", total: 0, skills: [], gitEnabled: true });
       }
       if (url === "/api/clients") {
         return jsonRes({ ok: true, command: "clients", clients: [{ clientId: "cursor", skillsDir: "/c" }] });
@@ -135,6 +135,7 @@ describe("loadPrimaryCatalog", () => {
       kind: "ready",
       storeRoot: "/s",
       skills: [],
+      gitEnabled: true,
       clients: [{ clientId: "cursor", skillsDir: "/c" }],
     });
     expect(urls.sort()).toEqual(["/api/clients", "/api/skills"]);

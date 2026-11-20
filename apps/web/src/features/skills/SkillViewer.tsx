@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ChevronRight,
   File,
@@ -8,9 +8,11 @@ import {
   Folder,
   FolderOpen,
   Layers,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ICON_STROKE } from "@/components/ui/icon";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SegmentedTabs } from "@/components/ui/tabs";
@@ -132,15 +134,19 @@ function MetaCell({ label, value }: { label: string; value: string }): React.JSX
   );
 }
 
+const SkillHistory = lazy(() => import("../git/SkillHistory.js").then((module) => ({ default: module.SkillHistory })));
+
 interface SkillViewerProps {
   hash: string;
   skill: SkillRecord;
   actions: ReactNode;
+  gitEnabled: boolean;
   onSaved: (oldHash: string, newHash: string) => void;
 }
 
 /** skill 内容:左侧层级树,右侧元信息 / 描述 / 正文。目录列仍在 SkillsPage。 */
-export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps): React.JSX.Element {
+export function SkillViewer({ hash, skill, actions, gitEnabled, onSaved }: SkillViewerProps): React.JSX.Element {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [entries, setEntries] = useState<SkillFileEntry[]>([]);
   const [selected, setSelected] = useState("SKILL.md");
   const [content, setContent] = useState("");
@@ -421,6 +427,12 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
                   )}
                 </>
               )}
+              {gitEnabled && (
+                <Button type="button" variant="outline" size="sm" data-testid="skill-history-button" onClick={() => setHistoryOpen(true)}>
+                  <History className="size-3.5" strokeWidth={ICON_STROKE} aria-hidden />
+                  历史记录
+                </Button>
+              )}
               {actions}
             </div>
           </div>
@@ -479,6 +491,11 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
           </section>
         </div>
       </ScrollArea>
+      {gitEnabled && historyOpen && (
+        <Suspense fallback={null}>
+          <SkillHistory skillName={skill.dirName} close={() => setHistoryOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

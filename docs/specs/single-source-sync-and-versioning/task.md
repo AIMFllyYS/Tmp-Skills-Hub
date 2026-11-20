@@ -135,7 +135,7 @@
   - **depends-on**: T5.1 (#251), T2.3 (#244), T3.2 (#247)
   - **负责模块**: `packages/cli/src/git/gh-cloud.ts`(新增), `git-cmds.ts`(新增), `ui-git.ts`(新增), `ui-server.ts`, `agent/tools.ts`, `index.ts`
   - **复用资产**: `git-runner.ts`, `git-repo.ts`, `secret-scan.ts`, `safeToolExecute`, `WRITE_TOOL_NAMES`, `requireWriteAuth`
-- [ ] **T5.3** `[web]` Git 版本控制设置、提交历史查看、`gh` 设备码登录向导与一键云端备份 UI（直引 `/playbook` 组件） — [#253](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/253) | [PRD.md#L424-L445](./PRD.md#L424-L445)
+- [x] **T5.3** `[web]` Git 版本控制设置、提交历史查看、`gh` 设备码登录向导与一键云端备份 UI（直引 `/playbook` 组件） — [#253](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/253) | [PRD.md#L424-L445](./PRD.md#L424-L445)
   - **depends-on**: T5.2 (#252), T1.3 (#241)
   - **负责模块**: `apps/web/src/features/git/api.ts`(新增), `SettingsDialog.tsx`, `StoreOnboarding.tsx`, `SkillViewer.tsx`
   - **复用资产**: `/playbook` 预制 `GitSettingsSection`, `GhLoginDialog`, `CloudBackupDialog`, `SkillHistoryDrawer`, `git/types.ts`
