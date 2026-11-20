@@ -101,7 +101,7 @@
 
 ### E3: 同名多版本冲突解决中心 + Agent 智能合并 | Epic #236 | Block A + B | PRD L285-L349
 
-- [ ] **T3.1** `[core]` 冲突变体逐文件 Diff 引擎与安全决议落盘内核 — [#246](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/246) | [PRD.md#L287-L304](./PRD.md#L287-L304)
+- [x] **T3.1** `[core]` 冲突变体逐文件 Diff 引擎与安全决议落盘内核 — [#246](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/246) | [PRD.md#L287-L304](./PRD.md#L287-L304)
   - **depends-on**: T2.2 (#243)
   - **负责模块**: `packages/core/src/conflict-diff.ts`(新增), `packages/core/src/conflict-resolve.ts`(新增), `conflicts.ts`, `index.ts`
   - **复用资产**: `listSkillFiles`, `readSkillFile`, `saveSkillFile`, `hashSkillFolder`, `zipDirectory`, `readStoreIndex`, `writeStoreIndex`, `readGroups`, `writeGroups`, `readUsageStats`, `readLinksLedger`, `writeLinksLedger`

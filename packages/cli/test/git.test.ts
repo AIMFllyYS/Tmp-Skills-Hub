@@ -10,6 +10,8 @@ import {
 let sandbox: string;
 let root: string;
 const enabled = { git: { enabled: true } };
+// Each integration case starts several real Git processes, which can exceed 5 s on the Windows runner.
+const gitIntegration = { timeout: 25_000 };
 
 beforeEach(async () => {
   sandbox = await mkdtemp(path.join(os.tmpdir(), "skills-hub-git-"));
@@ -21,12 +23,12 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllEnvs();
-  await rm(sandbox, { recursive: true, force: true });
+  await rm(sandbox, { recursive: true, force: true, maxRetries: 3 });
 });
 
 const paths = () => ({ stateRoot: path.join(sandbox, "state"), skillsRoot: root, layoutMode: "split" as const });
 
-it("creates a baseline, stages one asset edit, reads log and diff, and skips unchanged assets", async () => {
+it("creates a baseline, stages one asset edit, reads log and diff, and skips unchanged assets", gitIntegration, async () => {
   const skill = path.join(root, "writing");
   await mkdir(skill);
   await writeFile(path.join(skill, "SKILL.md"), "original\n");
@@ -56,7 +58,7 @@ it("creates a baseline, stages one asset edit, reads log and diff, and skips unc
   expect(await getGitStatus(root)).toMatchObject({ dirtyCount: 0 });
 });
 
-it("uses local identity, does not attach to a parent repository, and keeps a clean index on failure", async () => {
+it("uses local identity, does not attach to a parent repository, and keeps a clean index on failure", gitIntegration, async () => {
   await initSkillsGitRepo(sandbox);
   expect(await getGitStatus(root)).toMatchObject({ initialized: false });
   await initSkillsGitRepo(root);
@@ -81,7 +83,7 @@ it("skips disabled or unavailable Git without touching a repository", async () =
   expect(runner).toHaveBeenCalledExactlyOnceWith(root, ["--version"]);
 });
 
-it("refuses tracked ignored files and linked paths without committing them", async () => {
+it("refuses tracked ignored files and linked paths without committing them", gitIntegration, async () => {
   await initSkillsGitRepo(root);
   const sampleEnv = path.join(root, ".env");
   await writeFile(sampleEnv, "synthetic placeholder");

@@ -33,7 +33,7 @@ export interface SkillTreeOk {
 export type SkillTreeResult = SkillTreeOk | { ok: false; code: "not-found" | "io-error"; message: string };
 
 /** 递归收集文件树(限制条目数,超出标记 truncated 并停止)。 */
-export async function listSkillFiles(skillDir: string): Promise<SkillTreeResult> {
+export async function listSkillFiles(skillDir: string, ignoreEntry?: (name: string) => boolean): Promise<SkillTreeResult> {
   const entries: SkillFileEntry[] = [];
   let truncated = false;
   const walk = async (dir: string): Promise<boolean> => {
@@ -45,6 +45,7 @@ export async function listSkillFiles(skillDir: string): Promise<SkillTreeResult>
     }
     names.sort();
     for (const name of names) {
+      if (ignoreEntry?.(name)) continue;
       if (truncated || entries.length >= MAX_TREE_ENTRIES) {
         truncated = true;
         return false;
