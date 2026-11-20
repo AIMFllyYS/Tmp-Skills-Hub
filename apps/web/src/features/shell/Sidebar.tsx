@@ -1,5 +1,6 @@
 import { BarChart3, Blocks, Bot, LayoutDashboard, PanelLeft, PanelLeftClose, Settings } from "lucide-react";
 import type { CSSProperties } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -30,6 +31,7 @@ interface SidebarProps {
   onSettings: () => void;
   onToggleCollapsed: () => void;
   rescan?: RescanTriggerButtonProps | undefined;
+  conflictCount?: number;
 }
 
 function NavButton({
@@ -39,6 +41,7 @@ function NavButton({
   collapsed,
   icon: Icon,
   onClick,
+  count = 0,
 }: {
   label: string;
   active: boolean;
@@ -46,6 +49,7 @@ function NavButton({
   collapsed: boolean;
   icon: typeof LayoutDashboard;
   onClick: () => void;
+  count?: number;
 }): React.JSX.Element {
   return (
     <Tooltip label={label} side="right" disabled={!collapsed}>
@@ -54,7 +58,7 @@ function NavButton({
         data-testid={testId}
         variant="ghost"
         aria-current={active ? "page" : undefined}
-        aria-label={label}
+        aria-label={count > 0 ? label + "，" + String(count) + " 个冲突待处理" : label}
         onClick={onClick}
         style={RAIL_GRID}
         className={cn(
@@ -65,7 +69,10 @@ function NavButton({
         <span className="flex items-center justify-center">
           <Icon className="size-4 text-ink-mid" aria-hidden />
         </span>
-        <span className="sidebar-copy pr-3 text-left text-sm">{label}</span>
+        <span className="sidebar-copy flex items-center gap-2 pr-3 text-left text-sm">
+          {label}
+          {count > 0 && <Badge tone="warning" data-testid="sidebar-conflict-count">{count}</Badge>}
+        </span>
       </Button>
     </Tooltip>
   );
@@ -80,6 +87,7 @@ export function Sidebar({
   onSettings,
   onToggleCollapsed,
   rescan,
+  conflictCount = 0,
 }: SidebarProps): React.JSX.Element {
   return (
     <aside
@@ -118,6 +126,7 @@ export function Sidebar({
               collapsed={collapsed}
               icon={item.icon}
               active={page === item.id}
+              count={item.id === "skills" ? conflictCount : 0}
               onClick={() => onPage(item.id)}
             />
           ))}

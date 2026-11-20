@@ -3,6 +3,7 @@ import {
   buildConflictAgentPrompt,
   formatConflictBytes,
   isActiveConflictVariant,
+  selectConflictTarget,
   validateSplitSkillName,
   type ConflictRecordView,
 } from "./types.js";
@@ -38,6 +39,18 @@ function makeConflict(overrides: Partial<ConflictRecordView> = {}): ConflictReco
     ...overrides,
   };
 }
+
+it("falls back to the next available skill and its non-active variant after resolution", () => {
+  const first = makeConflict();
+  const next = makeConflict({ skillName: "deploy" });
+  expect(selectConflictTarget([first, next], { skillName: "deploy", variantId: "def987654321" })).toEqual({
+    record: next, variantId: "def987654321",
+  });
+  expect(selectConflictTarget([next], { skillName: "code-review", variantId: "removed" })).toEqual({
+    record: next, variantId: "def987654321",
+  });
+  expect(selectConflictTarget([], { skillName: "deploy", variantId: "def987654321" })).toEqual({ record: null, variantId: null });
+});
 
 describe("buildConflictAgentPrompt", () => {
   it("包含冲突 Skill 名、工具指导与所有变体摘要", () => {

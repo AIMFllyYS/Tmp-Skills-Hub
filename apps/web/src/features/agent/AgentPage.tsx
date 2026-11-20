@@ -25,7 +25,10 @@ function textOf(message: UIMessage): string {
     .join("");
 }
 
-export function AgentPage({ onMutated }: { onMutated?: () => void } = {}): React.JSX.Element {
+export function AgentPage({ onMutated, initialPrompt }: {
+  onMutated?: () => void;
+  initialPrompt?: string | undefined;
+}): React.JSX.Element {
   const {
     messages,
     busy,
@@ -40,11 +43,16 @@ export function AgentPage({ onMutated }: { onMutated?: () => void } = {}): React
     reset,
     approve,
     deny,
-  } = useAgentChat({ onMutated });
+  } = useAgentChat({ onMutated, initialWritePolicy: initialPrompt === undefined ? undefined : "ask" });
   const [models, setModels] = useState<AgentModel[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialPrompt ?? "");
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const scrollViewportRef = useRef<HTMLDivElement | null>(null);
   const lastErrorRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (initialPrompt !== undefined) inputRef.current?.focus();
+  }, [initialPrompt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +175,7 @@ export function AgentPage({ onMutated }: { onMutated?: () => void } = {}): React
       <div className="shrink-0 border-t border-line p-4">
         <div className="flex items-end gap-2">
           <Textarea
+            ref={inputRef}
             data-testid="agent-input"
             rows={2}
             value={input}

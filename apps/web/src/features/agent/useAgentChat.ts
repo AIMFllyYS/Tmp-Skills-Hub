@@ -53,6 +53,7 @@ function loadWritePolicy(): WritePolicy {
 export interface UseAgentChatOptions {
   /** 当助手写工具成功落盘(output-available)时触发目录刷新。 */
   onMutated?: (() => void) | undefined;
+  initialWritePolicy?: WritePolicy | undefined;
 }
 
 export interface UseAgentChat {
@@ -71,10 +72,10 @@ export interface UseAgentChat {
   deny: (approvalId: string) => void;
 }
 
-export function useAgentChat({ onMutated }: UseAgentChatOptions = {}): UseAgentChat {
+export function useAgentChat({ onMutated, initialWritePolicy }: UseAgentChatOptions = {}): UseAgentChat {
   const [initialMessages] = useState<UIMessage[]>(loadMessages);
   const [model, setModelState] = useState<string>(loadStoredModel);
-  const [writePolicy, setWritePolicyState] = useState<WritePolicy>(loadWritePolicy);
+  const [writePolicy, setWritePolicyState] = useState<WritePolicy>(() => initialWritePolicy ?? loadWritePolicy());
   const onMutatedRef = useRef(onMutated);
   const [seenWriteCalls] = useState<Set<string>>(() => new Set(collectCompletedWriteToolIds(initialMessages)));
 

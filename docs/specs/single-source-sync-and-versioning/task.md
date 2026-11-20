@@ -109,7 +109,7 @@
   - **depends-on**: T3.1 (#246)
   - **负责模块**: `packages/cli/src/conflict-cmds.ts`(新增), `ui-conflicts.ts`(新增), `agent/tools.ts`, `agent/prompt.ts`, `ui-server.ts`, `index.ts`
   - **复用资产**: `conflicts.ts`, `conflict-diff.ts`, `conflict-resolve.ts`, `safeToolExecute`, `dump`, `WRITE_TOOL_NAMES`, `requireWriteAuth`
-- [ ] **T3.3** `[web]` WebUI & 桌面 GUI 共享「冲突处理」板块与一键 Agent 分析合并联动（直引 `/playbook` 组件） — [#248](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/248) | [PRD.md#L329-L349](./PRD.md#L329-L349)
+- [x] **T3.3** `[web]` WebUI & 桌面 GUI 共享「冲突处理」板块与一键 Agent 分析合并联动（直引 `/playbook` 组件） — [#248](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/248) | [PRD.md#L329-L349](./PRD.md#L329-L349)
   - **depends-on**: T3.2 (#247), T2.4 (#245)
   - **负责模块**: `apps/web/src/features/conflicts/api.ts`(新增), `features/shell/{page.ts,SkillsPage.tsx,Sidebar.tsx,OverviewPage.tsx}`, `features/agent/AgentPage.tsx`
   - **复用资产**: `/playbook` 预制 `ConflictsView`, `ConflictDiffViewer`, `buildConflictAgentPrompt`, `SegmentedTabs`(带徽章), `useCatalog`, `useAgentChat`

@@ -8,6 +8,8 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import type { ConflictAgentHandoff } from "./features/conflicts/types.js";
+import { useConflictCatalog } from "./features/conflicts/use-conflict-catalog.js";
 import { ReconcileBanner } from "./features/reconcile/ReconcileBanner.js";
 import { useReconcile } from "./features/reconcile/use-reconcile.js";
 import { Sidebar } from "./features/shell/Sidebar.js";
@@ -70,6 +72,7 @@ function MainShellApp() {
   const [prefs] = useState<ShellPrefs>(readShellPrefs);
   const [page, setPage] = useState<AppPage>("overview");
   const [skillsTab, setSkillsTab] = useState<SkillsTab>("apps");
+  const [agentHandoff, setAgentHandoff] = useState<ConflictAgentHandoff | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [desktopReconcileRequest, setDesktopReconcileRequest] = useState(
     () => window.skillsHubDesktop?.isDesktop === true && window.location.hash === "#reconcile" ? 1 : 0,
@@ -85,7 +88,15 @@ function MainShellApp() {
   const sidebarMotionRef = useRef(false);
   const catalog = useCatalog({ loadClientStates: page === "skills" && skillsTab === "apps" });
   const maintenance = useStoreMaintenance(catalog.status === "ready" && (page === "overview" || settingsOpen), catalog.storeRoot, catalog.reload);
-  const reconcile = useReconcile(catalog.status === "ready" ? catalog.storeRoot : null, catalog.reload, () => {
+  const conflictCatalog = useConflictCatalog(catalog.status === "ready" ? catalog.storeRoot : null);
+  const refreshConflictState = async () => {
+    catalog.refresh();
+    await conflictCatalog.refresh();
+  };
+  const reconcile = useReconcile(catalog.status === "ready" ? catalog.storeRoot : null, () => {
+    catalog.reload();
+    void conflictCatalog.refresh();
+  }, () => {
     setSkillsTab("conflicts");
     setPage("skills");
   });
@@ -139,7 +150,10 @@ function MainShellApp() {
       setSettingsOpen(true);
       return;
     }
-    if (target.page !== undefined) setPage(target.page);
+    if (target.page !== undefined) {
+      setAgentHandoff(target.agentHandoff ?? null);
+      setPage(target.page);
+    }
     if (target.tab !== undefined) setSkillsTab(target.tab);
     if (target.clientId !== undefined) catalog.setSelectedClientId(target.clientId);
     if (target.hash !== undefined) catalog.setFocusedHash(target.hash);
@@ -206,10 +220,11 @@ function MainShellApp() {
               page={page}
               collapsed={collapsed}
               settingsOpen={settingsOpen}
-              onPage={setPage}
+              onPage={(next) => go({ page: next })}
               onSettings={() => setSettingsOpen(true)}
               onToggleCollapsed={toggleCollapsed}
               rescan={rescan}
+              conflictCount={conflictCatalog.records.length}
             />
           </ResizablePanel>
           <ResizableHandle
@@ -279,6 +294,7 @@ function MainShellApp() {
                           backupsLoading={catalog.backupsLoading}
                           onGo={go}
                           rescan={rescan}
+                          conflictCount={conflictCatalog.records.length}
                         />
                       )}
                       {page === "stats" && (
@@ -312,9 +328,14 @@ function MainShellApp() {
                           onRestore={catalog.restore}
                           onArchive={catalog.archive}
                           onNotice={(text) => toast(text)}
+                          conflictCatalog={conflictCatalog}
+                          onConflictResolved={refreshConflictState}
+                          onAgentHandoff={(handoff) => go({ page: "agent", agentHandoff: handoff })}
                         />
                       )}
-                      {page === "agent" && <AgentPage onMutated={catalog.refresh} />}
+                      {page === "agent" && (
+                        <AgentPage onMutated={() => void refreshConflictState()} initialPrompt={agentHandoff?.prompt} />
+                      )}
                     </div>
                   </Suspense>
                 </ErrorBoundary>
