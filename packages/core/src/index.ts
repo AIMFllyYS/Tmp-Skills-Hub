@@ -10,7 +10,7 @@ export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot, isOwnClient
 export type { ClientRoot, DiscoverRootsOptions } from "./clients.js";
 export { resolveStoreRoot, readPointerStoreRoot, normalizeHubPaths, resolveHubPaths, readHubConfig, writeHubConfig } from "./store-location.js";
 export type { HubPaths, HubConfig, HubConfigV2, HubPathsResolution, StoreRootOptions, StoreRootResolution, StoreRootSource } from "./store-location.js";
-export { writeFileAtomicSafe, moveDirSafe, computeDirDiskUsage } from "./fs-atomic.js";
+export { writeFileAtomicSafe, moveDirSafe, computeDirDiskUsage, copyTreeJunctionSafe } from "./fs-atomic.js";
 export {
   initializeStoreLayout,
   STORE_ARCHIVE_DIR,
@@ -99,7 +99,7 @@ export {
   GROUPS_FILE_VERSION,
 } from "./groups.js";
 export type { GroupDef, GroupsFile } from "./groups.js";
-export { readUsageStats, recordUsage, usageRanking, STATS_FILE_VERSION } from "./stats.js";
+export { readUsageStats, writeUsageStats, recordUsage, usageRanking, STATS_FILE_VERSION } from "./stats.js";
 export type { StatsFile, UsageCounters, UsageKind, UsageRankEntry } from "./stats.js";
 export { listSkillFiles, readSkillFile, saveSkillFile, MAX_FILE_BYTES, MAX_TREE_ENTRIES } from "./skill-files.js";
 export type { SkillFileEntry, SkillFileReadResult, SkillSaveResult, SkillTreeResult } from "./skill-files.js";

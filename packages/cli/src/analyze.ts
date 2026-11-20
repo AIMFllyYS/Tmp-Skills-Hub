@@ -5,6 +5,7 @@
 
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import { type HubPaths } from "@skills-hub/core";
 import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/core";
 import path from "node:path";
 import { emitError, emitOk } from "./json-out.js";
@@ -110,7 +111,7 @@ export type AnalyzeOutcome =
   | { ok: true; target: string; similar: AnalyzeReportItem[]; conflict: AnalyzeReportItem[] }
   | { ok: false; code: AnalyzeFailureCode; message: string };
 
-export async function performAnalyze(storeRoot: string, input: string, opts: RunAnalyzeOptions = {}): Promise<AnalyzeOutcome> {
+export async function performAnalyze(storeRoot: string | HubPaths, input: string, opts: RunAnalyzeOptions = {}): Promise<AnalyzeOutcome> {
   const needle = input.trim();
   if (needle === "") return { ok: false, code: "bad-usage", message: "需要 target(hash 前缀或 dirName)" };
   const records = await readStoreIndex(storeRoot);

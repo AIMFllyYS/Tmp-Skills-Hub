@@ -15,12 +15,9 @@
 
 | 命令 | 作用 | 主要使用者 |
 |---|---|---|
-| `init` | 设置库存位置，写入指针文件 | 人（一次性） |
+| `init` | 初始化控制中心，`--skills-root <absPath>` 可自定义唯一真源 | 人（一次性） |
 | `doctor` | 环境自检：库存可达性、客户端 root、链接能力、悬空链接 | 人 / AI |
-
-> **init 的 `--home` 是双重语义，最容易踩坑**：它既是「库存根目录」（目录布局建在这里），又是「home 基座」（指针文件写在 `<home>/.skills-hub/config.json`）。因此：
-> - 用 `init --home <X> --yes` 初始化后，**后续所有命令必须传相同的 `--home <X>`**（或设 `SKILLS_HUB_HOME=<X>`），否则命令会去真实 home 找指针文件而报「库存未配置」；
-> - 想让日常命令免带参数：`init` 不带 `--home`（交互输入库存根，指针落在真实 home），或先 `$env:SKILLS_HUB_HOME="<X>"` 再 `init --yes`。
+| `doctor --prune` | 从台账清理悬空记录。支持 `--dry-run`、`--yes` 和 `--json` | 人 / AI |
 | `scan` | 只读发现各客户端目录里的 skill，不入库 | 人 / AI |
 | `adopt <来源>` | 收录进库存。来源 = 本地路径 / GitHub 链接 / skills.sh 链接 | 人 / AI |
 | `list` | 列库存。已实现：`--source`、`--enabled`。**`--group` 未实现**，分组过滤走 `group` 命令与面板，不要把文档当已交付 | 人 / AI / 面板 |
@@ -32,6 +29,8 @@
 | `archive restore <name>` | 从归档区恢复到活跃区（内容与归档前一致；不恢复链接） | 人 / 面板 |
 | `analyze <来源>` | 相近/冲突分析报告：给定本地 skill 目录或库存名，让模型对照库存 description 给出相近与可能冲突的清单与理由（只建议，不写盘；无密钥时明确降级提示） | AI / 人 |
 | `verify` | 重算哈希，报告漂移 | 人 / AI |
+| `verify --accept` | 接受全部漂移或指定技能的外部编辑并刷新四份元数据。支持 `--dry-run`、`--yes` 和 `--json` | 人 / AI |
+| `migrate --to` | 将唯一真源迁至绝对路径，校验内容、切换受管链接并保留原资产旁路。支持 `--dry-run`、`--yes` 和 `--json` | 人 / AI |
 | `backup [--full]` | 建客户端 skills 基线快照（默认增量：共享 blob 池只补新内容；`--full` 强制新建快照并完整遍历） | 人 / AI |
 | `backup list` | 列已有快照与最近备份时间 | 人 / AI |
 | `backup verify [snapshotId]` | 用 manifest 重算 blob 哈希，报告损坏/缺失 | 人 / AI |
@@ -43,15 +42,14 @@
 | `new commit <name>` | 校验 `SKILL.md` 达标后定稿：算哈希、从 `drafts[]` 移入 `skills[]`。不要求 `--yes`。**`--enable` 未实现**（§2.1 表格是授权分级草案，不是已交付参数）；挂链走独立的 `enable` 或面板 | AI / 面板 |
 | `new discard <name>` | 放弃草稿：目录移入 `archive/drafts/`，从 `drafts[]` 清除。不引入真删除——半成品原样保留 | AI |
 | `new list` | 列出当前草稿（`drafts[]`），只读 | AI / 面板 |
-| `bootstrap` | 一键体验：交互确认（库存位置/备份/迁移）→ 自动备份 → 收录全部本机 skills → 收录并启用自身 skill → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
+| `bootstrap` | 一键体验：交互确认（真源位置/备份/收录）→ 自动备份 → 收录全部本机 skills → 收录并启用自身 skill → 自动启动面板；库存已就绪时跳过全部交互直接启动面板 | 人 |
+
+新库存的 `--home <X>` 或 `SKILLS_HUB_HOME=<X>` 用于重定向客户端发现和控制中心，指针位于 `<X>/.skills-hub/config.json`。旧沙箱仍支持直接使用含 `manifest.json` 的单根布局。修订缘由是让 `init`、`bootstrap` 和运行时读取遵循同一双目录契约。
 
 ### 1.1 v0.3 演进预留命令（见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
 
 > 以下为 v0.3 正式定案的预留命令名，各 Sub-Issue 实现并注册至 `packages/cli/src/index.ts` 后，同步移入 §1 命令表（§1 表格受 `spec-conformance.test.ts` 严格校验，确保表内命令均已落地）：
 >
-> - `doctor --prune`（T1.2）：清理 `links.json` 中指向已不存在磁盘路径的死链接记录（写操作，需 `--yes` / TTY）
-> - `verify --accept [name...]`（T1.2）：确认外部修改合法，重算哈希并原子同步四份元数据（写操作，需 `--yes` / TTY）
-> - `migrate --to <absPath>`（T1.2）：将唯一真源目录迁至新路径，校验并按 journal 重指全机软链接，旧目录旁路留底（写操作，需 `--yes` / TTY）
 > - `reconcile [--include-external-links]`（T2.3）：L1/L2 扫描野生非软链接与冲突 skill → 备份校验 → 精准移出客户端真目录（冲突入 `conflicts/`）→ 原地挂回纯软链接（写操作，需 `--yes` / TTY）
 > - `conflicts list` / `conflicts diff <name>` / `conflicts resolve <name> --mode pick|merge|split`（T3.2）：列出、对比与无损解决同名多版本冲突（`list`/`diff` 只读，`resolve` 需 `--yes` / TTY）
 > - `git status | enable | disable | log [name] | commit [-m msg]`（T5.2）：检测/开关唯一真源目录 Git 版本控制、查看历史、执行规范化提交（`status`/`log` 只读，其余需 `--yes` / TTY）

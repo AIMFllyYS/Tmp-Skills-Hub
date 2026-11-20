@@ -10,12 +10,14 @@ import {
   discoverClientRoots,
   ensureBuiltinGroups,
   initializeStoreLayout,
-  readPointerStoreRoot,
+  type HubPaths,
   readSkillMeta,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { performLinkChange } from "./link-actions.js";
-import { performAdopt, POINTER_REL, printAdoptSummary, writePointerFile } from "./store-cmds.js";
+import { planInitialPaths, resolveConfiguredHubPaths } from "./store-shared.js";
+import { validateSkillsRoot } from "./store-migrate.js";
+import { performAdopt, printAdoptSummary, writePointerFile } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
 
 /**
@@ -64,7 +66,7 @@ function defaultReadLine(): { ask: (prompt: string) => Promise<string>; close: (
 /** 发现并收录:扫描 base 下全部客户端 root,收集达标 skill 目录,一次批量 adopt。 */
 export async function migrateAllSkills(
   baseHome: string,
-  storeRoot: string,
+  storeRoot: string | HubPaths,
 ): Promise<{ discovered: number; adopted: number; dryRun: boolean }> {
   await initializeStoreLayout(storeRoot);
   await ensureBuiltinGroups(storeRoot);
@@ -92,11 +94,10 @@ export async function migrateAllSkills(
 export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions = {}): Promise<void> {
   const port = args.port ?? DEFAULT_UI_PORT;
   const base = resolveHome(args.home);
-  // 幂等检测:读指针文件(注意不能用 resolveStoreRoot 的 cliHome 直通——它永远 ok)。
-  const existingRoot = await readPointerStoreRoot(path.join(base, POINTER_REL));
-
-  if (existingRoot !== null) {
-    console.log("库存已就绪:" + existingRoot + " — 跳过初始化,直接启动面板。");
+  const existing = await resolveConfiguredHubPaths(base);
+  if (!existing.ok && existing.reason === "invalid-pointer") throw new Error(existing.message);
+  if (existing.ok) {
+    console.log("库存已就绪:" + existing.paths.skillsRoot + " — 跳过初始化,直接启动面板。");
     await launchUi(port, base, opts);
     return;
   }
@@ -111,19 +112,20 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
   const rlHandle = opts.readLine === undefined ? defaultReadLine() : null;
   const ask = opts.readLine ?? rlHandle!.ask;
 
-  let storeRoot: string;
+  const defaults = planInitialPaths(base);
+  let storeRoot: HubPaths;
   try {
-    // 1. 库存位置(默认:--home 直用,否则 ~/.skills-hub)
-    const defaultRoot = args.home !== undefined && args.home !== "" ? path.resolve(args.home) : path.join(base, ".skills-hub");
-    const rawRoot = args.yes === true ? defaultRoot : (await ask(`库存将保存在哪个目录?(直接回车使用默认: ${defaultRoot}) > `)).trim();
-    storeRoot = rawRoot === "" ? defaultRoot : path.resolve(rawRoot);
-
+    console.log("控制与备份中心（固定）: " + defaults.stateRoot);
+    const requested = args.yes === true ? "" : (await ask(`唯一真源目录（回车使用 ${defaults.skillsRoot}） > `)).trim();
+    storeRoot = planInitialPaths(base, requested === "" ? {} : { skillsRoot: requested });
+    const validation = await validateSkillsRoot(base, storeRoot.stateRoot, storeRoot.skillsRoot);
+    if (!validation.ok) throw new Error(validation.message);
     // 2. 备份确认
     const doBackup = args.yes === true ||
       (await ask(`\n${RED}${BOLD}⚠ 即将把本机全部客户端(如 .claude/.cursor/.codex 等)的 skills 收录进统一库存。${RESET}\n先帮你备份一份保险,如果出现问题可以一键恢复。\n是否自动备份?(Y=备份后继续 / N=跳过备份) > `)).trim().toUpperCase() === "Y";
 
     if (doBackup) {
-      const backupDir = path.join(storeRoot, "backups");
+      const backupDir = path.join(storeRoot.stateRoot, "backups");
       console.log("正在备份(只读源目录,写入 " + backupDir + ")…");
       const bak = await createBackupSnapshot(storeRoot, base);
       warn(
@@ -137,7 +139,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
 
     // 3. 迁移确认
     const doMigrate = args.yes === true ||
-      (await ask(`${RED}${BOLD}⚠ 即将把全部 skills 收录进库存 ${storeRoot}(重复内容自动去重,冲突绝不覆盖)。${RESET}\n输入 Y 开始迁移,输入其他任意键取消 > `)).trim().toUpperCase() === "Y";
+      (await ask(`${RED}${BOLD}⚠ 即将把全部 skills 收录进库存 ${storeRoot.skillsRoot}(重复内容自动去重,冲突绝不覆盖)。${RESET}\n输入 Y 开始迁移,输入其他任意键取消 > `)).trim().toUpperCase() === "Y";
     if (!doMigrate) {
       console.log("已取消,未做任何改动。");
       return;
@@ -148,7 +150,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
 
   // 4. 自动执行:建布局 → 收录全部 → 完成提示
   const result = await migrateAllSkills(base, storeRoot);
-  warn(`✓ 全部完成:库存位于 ${storeRoot},收录 ${result.adopted} 份(新增/重复/冲突见上方统计)。`);
+  warn(`✓ 全部完成:库存位于 ${storeRoot.skillsRoot},收录 ${result.adopted} 份(新增/重复/冲突见上方统计)。`);
   if (result.discovered === 0) console.log("未发现任何达标 skill(缺 name/description 的目录不计入)。");
 
   // 4b. 收录并启用自身 skill(#169)
@@ -167,7 +169,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
  */
 export async function adoptAndEnableSelfSkill(
   home: string,
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   selfSkillDirOverride?: string,
 ): Promise<void> {
   const selfSkillDir = findSelfSkillDir(selfSkillDirOverride);

@@ -27,17 +27,20 @@ export interface HubPaths {
   layoutMode: "legacy" | "split";
 }
 
-export interface HubConfigV2 {
-  version: 2;
-  stateRoot: string;
-  skillsRoot: string;
-  storeRoot: string;
+interface HubPreferences {
   git?: { enabled: boolean; remoteUrl?: string; branch?: string };
   autoLaunch?: boolean;
   silentTray?: boolean;
 }
 
-export type HubConfig = { version?: 1; storeRoot: string } | HubConfigV2;
+export interface HubConfigV2 extends HubPreferences {
+  version: 2;
+  stateRoot: string;
+  skillsRoot: string;
+  storeRoot: string;
+}
+
+export type HubConfig = ({ version?: 1; storeRoot: string } & HubPreferences) | HubConfigV2;
 
 export function normalizeHubPaths(input: string | HubPaths): HubPaths {
   return typeof input === "string"
@@ -144,25 +147,25 @@ export async function readHubConfig(configPath: string): Promise<HubConfig | nul
     return null;
   }
   if (data === null) return null;
+  const preferences: HubPreferences = {};
+  const git = objectRecord(data.git);
+  if (typeof git?.enabled === "boolean") {
+    preferences.git = { enabled: git.enabled };
+    if (typeof git.remoteUrl === "string") preferences.git.remoteUrl = git.remoteUrl;
+    if (typeof git.branch === "string") preferences.git.branch = git.branch;
+  }
+  if (typeof data.autoLaunch === "boolean") preferences.autoLaunch = data.autoLaunch;
+  if (typeof data.silentTray === "boolean") preferences.silentTray = data.silentTray;
   if (data.version !== 2) {
     const storeRoot = nonempty(data.storeRoot);
     return storeRoot === null || (data.version !== undefined && data.version !== 1)
       ? null
-      : { storeRoot };
+      : { storeRoot, ...preferences };
   }
   const stateRoot = nonempty(data.stateRoot);
   const skillsRoot = nonempty(data.skillsRoot);
   if (stateRoot === null || skillsRoot === null) return null;
-  const config: HubConfigV2 = { version: 2, stateRoot, skillsRoot, storeRoot: stateRoot };
-  const git = objectRecord(data.git);
-  if (typeof git?.enabled === "boolean") {
-    config.git = { enabled: git.enabled };
-    if (typeof git.remoteUrl === "string") config.git.remoteUrl = git.remoteUrl;
-    if (typeof git.branch === "string") config.git.branch = git.branch;
-  }
-  if (typeof data.autoLaunch === "boolean") config.autoLaunch = data.autoLaunch;
-  if (typeof data.silentTray === "boolean") config.silentTray = data.silentTray;
-  return config;
+  return { version: 2, stateRoot, skillsRoot, storeRoot: stateRoot, ...preferences };
 }
 
 export async function writeHubConfig(configPath: string, config: HubConfigV2): Promise<void> {

@@ -15,13 +15,14 @@ import {
   readLinksLedger,
   readStoreIndex,
   readUsageStats,
-  resolveStoreRoot,
+  normalizeHubPaths,
+  type HubPaths,
   usageRanking,
-  type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { performAdopt, performInit, performVerify, POINTER_REL } from "./store-cmds.js";
 import { resolveSkill } from "./resolve-skill.js";
+import { resolveConfiguredHubPaths } from "./store-shared.js";
 import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze, type AnalyzeGenerate } from "./analyze.js";
 import { performShare } from "./share.js";
@@ -43,11 +44,12 @@ import { readTranslation, writeTranslation } from "./translations.js";
 import { createSkillsHubAgent, parseWritePolicy } from "./agent/agent.js";
 import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
 import { createAgentTools, type ToolEnv } from "./agent/tools.js";
-import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, withStore, type UiRouteContext } from "./ui-http.js";
+import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, setUiPaths, withStore, type UiRouteContext } from "./ui-http.js";
 import { registerGroupRoutes } from "./ui-groups.js";
 import { registerDraftRoutes } from "./ui-drafts.js";
 import { registerContentRoutes } from "./ui-content.js";
 import { registerLinkRoutes } from "./ui-links.js";
+import { registerSettingsRoutes } from "./ui-settings.js";
 
 export const DEFAULT_UI_PORT = 4321;
 
@@ -125,6 +127,8 @@ async function measureBodyBytes(
 export interface UiAppOptions {
   /** 库存根;null = 未配置(端点返回 store-not-configured) */
   storeRoot?: string | null;
+  paths?: HubPaths | null;
+  desktop?: boolean;
   /** home 解析基座(沙箱测试注入;缺省 resolveHome()) */
   home?: string;
   /** web 静态产物根(缺省 apps/web/dist;测试注入临时目录) */
@@ -233,10 +237,8 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const analyzeGenerate = opts.analyzeGenerate;
   const fetchImpl = opts.fetchImpl;
   const webRoot = opts.webRoot ?? defaultWebRoot();
-  const ctx: UiRouteContext = {
-    storeRoot: opts.storeRoot === undefined ? null : opts.storeRoot,
-    home,
-  };
+  const ctx: UiRouteContext = { storeRoot: null, paths: null, home, desktop: opts.desktop === true };
+  setUiPaths(ctx, opts.paths === undefined && opts.storeRoot ? normalizeHubPaths(opts.storeRoot) : opts.paths ?? null);
 
   app.onError((e, c) => {
     const message = scrub(e instanceof Error ? e.message : String(e));
@@ -270,23 +272,39 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     await next();
   });
 
+  // Let settings or content writes finish before migrating the paths they use.
+  let pendingWrite = Promise.resolve();
+  app.use("/api/*", async (c, next) => {
+    if (!WRITE_METHODS.has(c.req.method.toUpperCase())) return next();
+    const previous = pendingWrite;
+    let release!: () => void;
+    pendingWrite = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      await next();
+    } finally {
+      release();
+    }
+  });
+
   registerGroupRoutes(app, ctx);
   registerDraftRoutes(app, ctx);
   registerContentRoutes(app, ctx);
   registerLinkRoutes(app, ctx);
+  registerSettingsRoutes(app, ctx);
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 
   app.post("/api/store/init", async (c) => {
     const text = await c.req.text().catch(() => "");
-    let raw: { storeRoot?: unknown } = {};
+    let raw: { storeRoot?: unknown; skillsRoot?: unknown } = {};
     if (text.trim() !== "") {
       try {
         const parsed = JSON.parse(text) as unknown;
         if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-          return err(c, "store-init", "bad-usage", "body 需要 JSON 对象 { storeRoot?: string }");
+          return err(c, "store-init", "bad-usage", "body 需要 JSON 对象 { skillsRoot?: string }");
         }
-        raw = parsed as { storeRoot?: unknown };
+        raw = parsed as { storeRoot?: unknown; skillsRoot?: unknown };
       } catch {
         return err(c, "store-init", "bad-usage", "body 需要合法 JSON");
       }
@@ -294,13 +312,17 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     if (raw.storeRoot !== undefined && typeof raw.storeRoot !== "string") {
       return err(c, "store-init", "bad-usage", "storeRoot 必须为字符串路径");
     }
-    const res = await performInit(home, raw.storeRoot);
+    if (raw.skillsRoot !== undefined && (typeof raw.skillsRoot !== "string" || raw.storeRoot !== undefined)) {
+      return err(c, "store-init", "bad-usage", "skillsRoot 必须单独提供字符串路径");
+    }
+    const res = await performInit(home, typeof raw.skillsRoot === "string" ? { skillsRoot: raw.skillsRoot } : raw.storeRoot);
     if (!res.ok) return err(c, "store-init", res.code, res.message);
-    ctx.storeRoot = res.storeRoot;
+    setUiPaths(ctx, res.paths);
     return c.json({
       ok: true,
       command: "store-init",
       storeRoot: res.storeRoot,
+      ...res.paths,
       pointerFile: res.pointerFile,
       layoutCreated: res.layoutCreated,
       builtinGroupsWrote: res.builtinGroupsWrote,
@@ -310,7 +332,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   app.get("/api/skills", (c) =>
     withStore(ctx, c, "skills", async (root) => {
       const skills = attachVisibleIn(await readStoreIndex(root), await readLinksLedger(root));
-      return c.json({ ok: true, command: "skills", storeRoot: root, total: skills.length, skills });
+      return c.json({ ok: true, command: "skills", storeRoot: root.stateRoot, total: skills.length, skills });
     }),
   );
 
@@ -349,14 +371,14 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     withStore(ctx, c, "backup", async (root) => {
       const latest = await readLatestSnapshotId(root);
       const snapshots = await listBackupSnapshots(root);
-      return c.json({ ok: true, command: "backup", verb: "list", storeRoot: root, latest, snapshots });
+      return c.json({ ok: true, command: "backup", verb: "list", storeRoot: root.stateRoot, latest, snapshots });
     }),
   );
 
   app.get("/api/archive", (c) =>
     withStore(ctx, c, "archive", async (root) => {
       const archived = await listArchivedSkills(root);
-      return c.json({ ok: true, command: "archive", verb: "list", archiveDir: path.join(root, "archive"), archived });
+      return c.json({ ok: true, command: "archive", verb: "list", archiveDir: path.join(root.stateRoot, "archive"), archived });
     }),
   );
 
@@ -401,7 +423,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       if (!hit.ok) return skillLookupErr(c, "skill-translation", hit);
       const rel = c.req.query("path") ?? "";
       if (rel === "") return err(c, "skill-translation", "bad-usage", "缺少 path 查询参数(?path=SKILL.md)");
-      const res = await readTranslation(root, hit.skill.hash, rel);
+      const res = await readTranslation(root.stateRoot, hit.skill.hash, rel);
       if (!res.ok) return err(c, "skill-translation", res.code, res.message, res.code === "translation-not-found" ? 404 : 400);
       return c.json({ ok: true, command: "skill-translation", hash: hit.skill.hash, path: rel, translated: res.content });
     }),
@@ -425,10 +447,11 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     const modelId = resolveAgentModel(raw?.model);
     const writePolicy = parseWritePolicy(raw?.writePolicy);
     const currentRoot = ctx.storeRoot;
-    const clients = (await discoverClientRoots(home, clientDiscoverOpts(currentRoot))).map((r) => r.clientId);
+    const clients = (await discoverClientRoots(home, clientDiscoverOpts(ctx.paths))).map((r) => r.clientId);
     const env: ToolEnv = {
       home,
       storeRoot: currentRoot,
+      paths: ctx.paths,
     };
     if (fetchImpl !== undefined) env.fetchImpl = fetchImpl;
     if (analyzeGenerate !== undefined) env.analyzeGenerate = analyzeGenerate;
@@ -493,10 +516,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
         : await previewRestoreClientSkills(root, home, snapshotId);
       if (!preview.ok) return err(c, "backups-preview", preview.code, preview.message);
       const pointerDir = path.dirname(path.join(home, POINTER_REL));
-      const asideStore = root + ".pre-reinit";
-      const pointerRel = path.relative(root, pointerDir);
+      const asideStore = root.stateRoot + ".pre-reinit";
+      const pointerRel = path.relative(root.stateRoot, pointerDir);
       const pointerMovesWithStore =
-        path.resolve(root) === path.resolve(home) ||
+        path.resolve(root.stateRoot) === path.resolve(home) ||
         pointerRel === "" ||
         (!pointerRel.startsWith("..") && !path.isAbsolute(pointerRel));
       return c.json({
@@ -525,7 +548,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const { performReset } = await import("./reset-cmds.js");
       const result = await performReset(snapshotId === undefined ? { home } : { home, snapshotId });
       if (!result.ok) return err(c, "reset", result.code, result.message);
-      ctx.storeRoot = result.storeRoot;
+      setUiPaths(ctx, await resolveUiHubPaths(home));
       return c.json({
         ok: true,
         command: "reset",
@@ -539,7 +562,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   );
 
   app.get("/api/clients", (c) =>
-    discoverClientRoots(home, clientDiscoverOpts(ctx.storeRoot)).then((roots) =>
+    discoverClientRoots(home, clientDiscoverOpts(ctx.paths)).then((roots) =>
       c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),
     ),
   );
@@ -557,7 +580,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
         ok: true,
         command: "adopt",
         dryRun: false,
-        storeRoot: root,
+        storeRoot: root.stateRoot,
         adopted: report.adopted,
         duplicates: report.duplicates,
         conflicts: report.conflicts,
@@ -609,6 +632,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
 /** 启动参数具名,避免把 storeRoot 按位置误传成 home(见 #95)。 */
 export interface StartUiServerOptions {
+  desktop?: boolean;
   port?: number;
   /** 客户端发现的 home 基座,不是库存根 */
   home?: string;
@@ -622,24 +646,20 @@ export interface UiServerHandle {
   close: () => Promise<void>;
 }
 
-/**
- * 面板库存定位:home 只作指针基座,不当 storeRoot。
- * `resolveStoreRoot` 的 cliHome 会直通成库存根;bootstrap / `ui --home` 传入的是用户目录,
- * 库存与 home 分离时(本机默认形态)会把主目录当成空库存。
- */
+export async function resolveUiHubPaths(home: string): Promise<HubPaths | null> {
+  const resolved = await resolveConfiguredHubPaths(home);
+  return resolved.ok ? resolved.paths : null;
+}
+
 export async function resolveUiStoreRoot(home: string): Promise<string | null> {
-  const storeOpts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
-  const envHome = process.env.SKILLS_HUB_HOME;
-  if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
-  const resolved = await resolveStoreRoot(storeOpts);
-  return resolved.ok ? resolved.storeRoot : null;
+  return (await resolveUiHubPaths(home))?.stateRoot ?? null;
 }
 
 export async function startUiServer(opts: StartUiServerOptions = {}): Promise<UiServerHandle> {
   const port = opts.port ?? DEFAULT_UI_PORT;
   const h = opts.home ?? resolveHome();
-  const storeRoot = await resolveUiStoreRoot(h);
-  const appOpts: UiAppOptions = { storeRoot, home: h };
+  const paths = await resolveUiHubPaths(h);
+  const appOpts: UiAppOptions = { paths, home: h, desktop: opts.desktop === true };
   if (opts.webRoot !== undefined) appOpts.webRoot = opts.webRoot;
   const app = createUiApp(appOpts);
   const server = createAdaptorServer({ fetch: app.fetch, hostname: "127.0.0.1" });
@@ -658,7 +678,7 @@ export async function startUiServer(opts: StartUiServerOptions = {}): Promise<Ui
       const addr = server.address();
       const actualPort = typeof addr === "object" && addr !== null ? addr.port : port;
       const url = "http://127.0.0.1:" + actualPort;
-      console.log("skill-hub ui: " + url + "/api/skills" + (storeRoot === null ? " (库存未配置)" : ""));
+      console.log("skill-hub ui: " + url + "/api/skills" + (paths === null ? " (库存未配置)" : ""));
       resolve({
         port: actualPort,
         url,

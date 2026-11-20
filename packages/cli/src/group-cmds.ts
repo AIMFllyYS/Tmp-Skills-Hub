@@ -1,3 +1,4 @@
+import { type HubPaths } from "@skills-hub/core";
 import {
   addSkillToGroups,
   createGroup,
@@ -47,7 +48,7 @@ export type GroupMembersOk = {
 };
 
 export async function performCreateGroup(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   input: { id: string; name?: string; description?: string },
 ): Promise<GroupCreateOk | GroupFail> {
   const id = input.id.trim();
@@ -67,7 +68,7 @@ export async function performCreateGroup(
 }
 
 export async function performUpdateGroup(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   input: { id: string; name?: string; description?: string },
 ): Promise<GroupUpdateOk | GroupFail> {
   const id = input.id.trim();
@@ -85,7 +86,7 @@ export async function performUpdateGroup(
   return { ok: true, id, name: g.name, description: g.description };
 }
 
-export async function performDeleteGroup(storeRoot: string, id: string): Promise<GroupDeleteOk | GroupFail> {
+export async function performDeleteGroup(storeRoot: string | HubPaths, id: string): Promise<GroupDeleteOk | GroupFail> {
   try {
     const memberCount = await deleteGroup(storeRoot, id);
     return { ok: true, id, memberCount };
@@ -116,7 +117,7 @@ export function resolveGroupNeedles(needles: string[], skills: SkillRecord[]): {
 }
 
 export async function performGroupMembers(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   input: { id: string; needles: string[]; action: "add" | "remove" },
 ): Promise<GroupMembersOk | GroupFail> {
   const id = input.id.trim();

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { normalizeHubPaths } from "@skills-hub/core";
 import {
   archiveSkill,
   listArchivedSkills,
@@ -61,14 +62,14 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
   if (names.length === 0) {
     const archived = await listArchivedSkills(storeRoot);
     if (args.json) {
-      emitOk("archive", { verb: "list", archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), archived });
+      emitOk("archive", { verb: "list", archiveDir: path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_ARCHIVE_DIR), archived });
       return;
     }
     if (archived.length === 0) {
-      console.log("归档区为空: " + path.join(storeRoot, STORE_ARCHIVE_DIR));
+      console.log("归档区为空: " + path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_ARCHIVE_DIR));
       return;
     }
-    console.log("归档区(" + archived.length + "): " + path.join(storeRoot, STORE_ARCHIVE_DIR));
+    console.log("归档区(" + archived.length + "): " + path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_ARCHIVE_DIR));
     for (const a of archived) console.log("  " + a.name + "  " + a.sizeBytes + " B  " + a.file);
     return;
   }
@@ -111,10 +112,10 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
     }
   }
   if (args.json) {
-    emitOk("archive", { archiveDir: path.join(storeRoot, STORE_ARCHIVE_DIR), results, failed });
+    emitOk("archive", { archiveDir: path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_ARCHIVE_DIR), results, failed });
   } else {
     console.log("归档完成:" + (dirNames.length - failed) + " 成功 / " + failed + " 失败。");
-    console.log("本工具没有真删除。如需彻底删除,请自行处理归档区文件:" + path.join(storeRoot, STORE_ARCHIVE_DIR));
+    console.log("本工具没有真删除。如需彻底删除,请自行处理归档区文件:" + path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_ARCHIVE_DIR));
   }
   if (failed > 0) process.exitCode = 2;
 }

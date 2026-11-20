@@ -1525,7 +1525,7 @@ describe("AI SDK v7 流式边界、本地安全加固与动态 storeInit", () =>
     const initBody = (await inited.json()) as { ok: boolean; command: string; storeRoot: string };
     expect(initBody.ok).toBe(true);
     expect(initBody.command).toBe("store-init");
-    expect(initBody.storeRoot).toBe(path.join(freshHome, ".skills-hub", "store"));
+    expect(initBody.storeRoot).toBe(path.join(freshHome, ".skills-hub"));
 
     const after = await bare.request("/api/skills");
     expect(after.status).toBe(200);

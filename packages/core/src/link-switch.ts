@@ -58,6 +58,10 @@ interface Journal {
 export interface ApplyOptions {
   /** 测试用:执行第 N 步后注入失败(0 = 第一步前)。缺省不注入。 */
   failAfter?: number;
+  /** 根目录迁移仅重定向软链接，已登记的历史副本原地保留。 */
+  preserveCopies?: boolean;
+  /** 重定向期间失败时，用原真源重建已摘除的条目。 */
+  previousSkillsRoot?: string;
 }
 
 export async function applyLinkSet(
@@ -76,6 +80,9 @@ export async function applyLinkSet(
 
   const oldLedger = await readLinksLedger(storeRoot);
   const sameDir = (e: LinkEntry) => e.targetDir === plan.targetDir;
+  const entries = options?.preserveCopies
+    ? plan.entries.filter((entry) => entry.kind !== "copy")
+    : plan.entries;
 
   // 0. 计划合法性:全部条目必须落在 plan.targetDir
   for (const entry of plan.entries) {
@@ -85,7 +92,7 @@ export async function applyLinkSet(
   }
 
   // 1. 预检 create:落点已存在 → 必须是被台账登记过的条目(更新),否则中止
-  for (const entry of plan.entries) {
+  for (const entry of entries) {
     const p = path.join(entry.targetDir, entry.entryName);
     if (!(await exists(p))) continue;
     const registered = oldLedger.some((e) => e.targetDir === entry.targetDir && e.entryName === entry.entryName);
@@ -97,7 +104,7 @@ export async function applyLinkSet(
   // 2. 计算摘除集 = 旧台账中该落点、不在新计划里的条目 + 被更新替换的旧条目
   const newIds = new Set(plan.entries.map((e) => e.id));
   const removedEntries = oldLedger.filter((e) => sameDir(e) && !newIds.has(e.id));
-  const replacedEntries = oldLedger.filter((e) => sameDir(e) && newIds.has(e.id));
+  const replacedEntries = oldLedger.filter((e) => sameDir(e) && newIds.has(e.id) && !(options?.preserveCopies && e.kind === "copy"));
 
   // 3. 预检摘除:磁盘上必须是链接(或已缺失),或台账显式登记为 kind === "copy";用户占名 → 中止
   for (const entry of [...removedEntries, ...replacedEntries]) {
@@ -119,7 +126,7 @@ export async function applyLinkSet(
   await mkdir(tmpDir, { recursive: true });
   const journalFile = path.join(tmpDir, "switch." + uniqueTmpId() + ".json");
   const journal: Journal = {
-    skillsRoot,
+    skillsRoot: options?.previousSkillsRoot ?? skillsRoot,
     targetDir: plan.targetDir,
     created: [],
     removed: [...replacedEntries, ...removedEntries],
@@ -144,7 +151,7 @@ export async function applyLinkSet(
       removedPaths.push(p);
     }
     // 6. 建立新条目(按 kind:junction/symlink 建链接,copy 复制目录)
-    for (const entry of plan.entries) {
+    for (const entry of entries) {
       step();
       const p = path.join(entry.targetDir, entry.entryName);
       if (await exists(p)) {
@@ -168,25 +175,23 @@ export async function applyLinkSet(
       }
       createdPaths.push(p);
     }
+    const kept = oldLedger.filter((e) => !sameDir(e));
+    const next = [...kept, ...plan.entries];
+    await writeLinksLedger(storeRoot, next);
+    await rm(journalFile, { force: true }).catch(() => undefined);
+    return { ok: true, created: createdPaths, removed: removedPaths, ledger: next };
   } catch (e) {
     // 7. 回滚:摘掉本次新建(逆序),按 journal 旧条目重建已摘除项
-    await rollback(journal, createdPaths);
+    await rollback(journal, createdPaths, new Set(removedPaths));
     await rm(journalFile, { force: true });
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, code: "io-error", message, at: message };
   }
 
-  // 8. 成功:更新台账,清 journal 与 tmp 残留
-  // 本落点条目的最终形态 = 计划集合(摘除/替换的旧条目已在磁盘摘除);其余落点保留
-  const kept = oldLedger.filter((e) => !sameDir(e));
-  const next = [...kept, ...plan.entries];
-  await writeLinksLedger(storeRoot, next);
-  await rm(journalFile, { force: true });
-  return { ok: true, created: createdPaths, removed: removedPaths, ledger: next };
 }
 
 /** 回滚:摘掉本次新建;按 journal 重建已摘除的链接/副本。单条失败不阻断其余(尽力而为)。 */
-async function rollback(journal: Journal, createdPaths: string[]): Promise<void> {
+async function rollback(journal: Journal, createdPaths: string[], removedPaths: ReadonlySet<string>): Promise<void> {
   // 摘掉新建:copy 是真实目录,用 unlinkNoFollow 不跟随内部链接;链接直接 unlink
   for (const p of [...createdPaths].reverse()) {
     if ((await readLinkTarget(p)) !== null) {
@@ -198,7 +203,7 @@ async function rollback(journal: Journal, createdPaths: string[]): Promise<void>
   // 重建已摘除的旧条目
   for (const old of journal.removed) {
     const p = path.join(old.targetDir, old.entryName);
-    if (await exists(p)) continue;
+    if (!removedPaths.has(p) || await exists(p)) continue;
     const storeSkill = path.join(journal.skillsRoot, old.entryName);
     if (old.kind === "copy") {
       await copyDir(storeSkill, p).catch(() => undefined);

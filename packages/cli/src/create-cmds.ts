@@ -1,10 +1,10 @@
+import { normalizeHubPaths, type HubPaths } from "@skills-hub/core";
 import {
   allocateDraft,
   commitDraft,
   createAndCommit,
   discardDraft,
   listDrafts,
-  STORE_SKILLS_DIR,
   type AllocateOutcome,
   type CommitOutcome,
   type SkillSource,
@@ -56,7 +56,7 @@ function failFromAllocate(result: Extract<AllocateOutcome, { kind: "conflict" }>
 }
 
 export async function performAllocate(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   dirName: string,
   opts: { description?: string; origin?: SkillSource } = {},
 ): Promise<DraftAllocateOk | DraftFail> {
@@ -71,7 +71,7 @@ export async function performAllocate(
   return { ok: true, verb: "allocate", dirName: result.draft.dirName, storeDir: result.storeDir };
 }
 
-export async function performCommit(storeRoot: string, dirName: string): Promise<DraftCommitOk | DraftFail> {
+export async function performCommit(storeRoot: string | HubPaths, dirName: string): Promise<DraftCommitOk | DraftFail> {
   const name = dirName.trim();
   if (name === "") return { ok: false, code: "bad-usage", message: "需要 dirName" };
   const result = await commitDraft(storeRoot, name);
@@ -81,7 +81,7 @@ export async function performCommit(storeRoot: string, dirName: string): Promise
 
 /** 一键创建:allocate + commit。HTTP POST /api/drafts 在 description 非空时走这里。 */
 export async function performCreate(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   dirName: string,
   description: string,
   origin?: SkillSource,
@@ -94,10 +94,10 @@ export async function performCreate(
   if (result.kind === "conflict") return failFromAllocate(result);
   if (result.kind === "allocated") return { ok: false, code: "io-error", message: "未知结果" };
   if (result.kind !== "committed") return failFromCommit(result, name);
-  return { ok: true, verb: "create", dirName: name, hash: result.record.hash, storeDir: path.join(storeRoot, STORE_SKILLS_DIR, name) };
+  return { ok: true, verb: "create", dirName: name, hash: result.record.hash, storeDir: path.join(normalizeHubPaths(storeRoot).skillsRoot, name) };
 }
 
-export async function performDiscard(storeRoot: string, dirName: string): Promise<DraftDiscardOk | DraftFail> {
+export async function performDiscard(storeRoot: string | HubPaths, dirName: string): Promise<DraftDiscardOk | DraftFail> {
   const name = dirName.trim();
   if (name === "") return { ok: false, code: "bad-usage", message: "需要 dirName" };
   const result = await discardDraft(storeRoot, name);

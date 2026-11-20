@@ -105,7 +105,7 @@ describe("json 契约 v0(#28)", () => {
     expect(out.command).toBe("doctor");
     expect(out.store.resolved).toBe(true);
     expect(out.store.reachable).toBe(true);
-    expect(out.store.storeRoot).toBe(home);
+    expect(out.store.storeRoot).toBe(path.join(home, ".skills-hub"));
     expect(Array.isArray(out.roots)).toBe(true);
     expect(typeof out.linkTypes.junction).toBe("boolean");
   });
@@ -149,7 +149,7 @@ describe("json 契约 v0(#28)", () => {
     const lo = JSON.parse(list.stdout) as { skills: Array<{ visibleIn: string[]; origins: unknown[] }> };
     expect(lo.skills[0]!.visibleIn).toContain("claude");
     expect(lo.skills[0]!.origins).toHaveLength(1);
-    const index = JSON.parse(await readFile(path.join(home, "index.json"), "utf8")) as { skills: Array<{ visibleIn: string[] }> };
+    const index = JSON.parse(await readFile(path.join(home, ".skills-hub", "index.json"), "utf8")) as { skills: Array<{ visibleIn: string[] }> };
     expect(index.skills[0]!.visibleIn).toEqual([]);
   });
 
@@ -198,7 +198,7 @@ describe("json 契约 v0(#28)", () => {
     const rd = JSON.parse(resetDry.stdout) as { command: string; dryRun: boolean; storeRoot: string; snapshotId: string };
     expect(rd.command).toBe("reset");
     expect(rd.dryRun).toBe(true);
-    expect(rd.storeRoot).toBe(home);
+    expect(rd.storeRoot).toBe(path.join(home, ".skills-hub"));
     expect(rd.snapshotId).toEqual(expect.any(String));
   });
 

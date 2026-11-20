@@ -12,7 +12,7 @@
 - 默认端口:4321;HTTP/JSON,UTF-8
 - 成功信封:`{ ok: true, command: "<命令>", ...数据 }`;失败信封:`{ ok: false, command, code, message }`(code 枚举见 json-contract-v0.md §3 与本文 §4)
 - 写端点(body JSON)无需 `--yes`:面板按钮即用户显式操作;授权边界 = 只绑本机 + 安全中间件校验
-- `ctx.storeRoot` 支持运行时动态更新:解析失败(未 init)时,依赖库存的业务端点返回 `503 store-not-configured`;调用 `POST /api/store/init` 成功后即时生效
+- `ctx.paths` 保存状态和唯一真源路径，`ctx.storeRoot` 保留状态目录字符串。依赖库存的端点在未初始化时返回 `503 store-not-configured`。初始化或迁移成功后，运行中的服务即时使用新路径。
 - **本机安全中间件(`/api/*`)**:
   - **Host 白名单**:仅允许 `127.0.0.1`、`localhost`、`[::1]`（可带端口）及桌面端受控域名 `skills-hub`;否则返回 `403 forbidden` JSON 信封
   - **写请求 Origin 校验**:`POST` / `PUT` / `PATCH` / `DELETE` 若携带 `Origin` 头,仅允许 `http://127.0.0.1(:port)`、`http://localhost(:port)`、`http://[::1](:port)`、`app://skills-hub`（无 `Origin` 的本机 CLI/测试直调放行）;跨站请求返回 `403 forbidden` JSON 信封
@@ -65,7 +65,12 @@
 
 | 端点 | body | 成功响应 | 失败 |
 | --- | --- | --- | --- |
-| POST /api/store/init | `{ storeRoot? }`（缺省用 `<home>/.skills-hub/store` 或预设位置） | `{ ok, command: "store-init", storeRoot, pointerFile, layoutCreated, builtinGroupsWrote }`（同时更新 `ctx.storeRoot`） | 400 bad-usage（非法/相对路径）; 500 io-error |
+| POST /api/store/init | `{ skillsRoot? }`（缺省 `<home>/.skills-hub/skills`；兼容旧 `{ storeRoot? }` 请求） | `{ ok, command: "store-init", stateRoot, skillsRoot, layoutMode, storeRoot, pointerFile, layoutCreated, builtinGroupsWrote }` | 400 bad-usage（非法路径或已初始化后更换真源）; 500 io-error |
+| GET /api/settings | — | `{ ok, command: "settings", stateRoot, skillsRoot, layoutMode, stateDiskBytes, git, autoLaunch, silentTray, isDesktop }` | 503 store-not-configured |
+| PATCH /api/settings | `{ gitEnabled?, autoLaunch?, silentTray? }`（仅布尔值） | 同 GET，配置原子写回 | 400 bad-usage; 503 store-not-configured |
+| POST /api/store/migrate | `{ targetSkillsRoot, dryRun? }` | `{ ok, command: "store-migrate", paths, skills, movedLinks, aside, dryRun }` | 400 bad-usage; 409 conflict; 500 io-error; 503 store-not-configured |
+| POST /api/doctor/prune | `{ dryRun? }` | `{ ok, command: "doctor-prune", count, pruned, dryRun }`，只修改台账 | 400 bad-usage; 503 store-not-configured |
+| POST /api/verify/accept | `{ names?, dryRun? }` | `{ ok, command: "verify-accept", count, accepted, missing, dryRun }`，缺失项跳过 | 400 bad-usage; 404 not-found; 409 conflict; 503 store-not-configured |
 | POST /api/skills/:hash/enable | `{ clientId, scope? }` | `{ ok, command: "enable", clientId, scope, targetDir, created, removed }` | 400 bad-usage(缺 clientId); 404 not-found(客户端或 skill 不存在); 409 link-failed; 503 |
 | POST /api/skills/:hash/disable | 同上 | `{ ok, command: "disable", ... }` | 同上 |
 | POST /api/links/preview | `{ hashes, clientIds, action: enable\|disable, scope? }` | `{ ok, command: "links-preview", action, add, remove, conflictCount, wouldCreate, wouldRemove, conflicts }`(不写盘) | 400 bad-usage; 404 not-found; 503 |
@@ -94,10 +99,6 @@
 
 | 端点 | 方法 / 参数 | 响应与用途 | 关键失败码 |
 | --- | --- | --- | --- |
-| `/api/settings` | `GET` / `PATCH { gitEnabled?, autoLaunch? }` | 读取与更新 `~/.skills-hub/config.json`（含 `stateRoot`、`skillsRoot`、磁盘占用、Git/自启开关） | 400 bad-usage; 503 |
-| `/api/store/migrate` | `POST { targetSkillsRoot }` | 迁移唯一真源目录并按 journal 重指全机软链接 | 400; 409; 500 |
-| `/api/doctor/prune` | `POST` | 清理 `links.json` 死链接记录 | 503 |
-| `/api/verify/accept` | `POST { names?: string[] }` | 认领外部编辑漂移并刷新四份元数据哈希 | 404; 503 |
 | `/api/reconcile/scan` | `GET` | L1 浅扫 + L2 按需深扫，返回野生真目录、被覆盖链接、外部链接与冲突摘要 | 503 |
 | `/api/reconcile/preview` | `POST { includeExternalLinks? }` | 返回接管计划预览（只读） | 503 |
 | `/api/reconcile/apply` | `POST { includeExternalLinks? }` | 执行备份校验 → 精准移出/入冲突池 → 原地挂回纯软链接 | 409 link-failed; 500; 503 |

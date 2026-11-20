@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 import path from "node:path";
-import { createInterface } from "node:readline/promises";
 import { defineCommand, runMain } from "citty";
 import {
   discoverClientRoots,
-  resolveStoreRoot,
-  type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { scanKnownClients } from "./scan.js";
-import { collectDoctorReport } from "./doctor.js";
+import { planInitialPaths, resolveConfiguredHubPaths, resolveStoreRootOrFail } from "./store-shared.js";
+import { performMigrate } from "./store-migrate.js";
+import { collectDoctorReport, performPrune } from "./doctor.js";
 import { runGroup } from "./group-cmds.js";
 import { performInit, POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
@@ -30,12 +29,8 @@ const scan = defineCommand({
   },
   async run({ args }) {
     const home = resolveHome(args.home);
-    const storeOpts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
-    if (args.home !== undefined && args.home !== "") storeOpts.cliHome = args.home;
-    const envHome = process.env.SKILLS_HUB_HOME;
-    if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
-    const resolved = await resolveStoreRoot(storeOpts);
-    const storeRoot = resolved.ok ? resolved.storeRoot : undefined;
+    const resolved = await resolveConfiguredHubPaths(home);
+    const storeRoot = resolved.ok ? resolved.paths : undefined;
     const roots = await discoverClientRoots(home, storeRoot !== undefined ? { storeRoot } : undefined);
     const skills = await scanKnownClients(home, storeRoot);
     if (args.json) {
@@ -66,7 +61,8 @@ const scan = defineCommand({
 const init = defineCommand({
   meta: { name: "init", description: "设置库存位置,写入指针文件,并建立目录布局" },
   args: {
-    home: { type: "string", description: "库存根目录,同时作为 home 基座(指针文件写入 <home>/.skills-hub/config.json;后续命令需传相同 --home 或设 SKILLS_HUB_HOME)" },
+    home: { type: "string", description: "重定向 home 基座，控制与备份中心固定在其下的 .skills-hub" },
+    "skills-root": { type: "string", description: "唯一真源目录的绝对路径" },
     yes: { type: "boolean", description: "非交互环境下显式授权写操作" },
     dryRun: { type: "boolean", description: "只打印将要发生的变更,不写盘" },
     json: { type: "boolean", description: "机器可读输出" },
@@ -74,22 +70,27 @@ const init = defineCommand({
   async run({ args }) {
     // 写操作铁律(cli-commands-v0.md §2):非交互环境必须显式 --yes,否则拒绝执行
     if (!args.dryRun && !requireWriteAuth(args, "init")) return;
-    const storeRoot = await resolveStoreRootForInit(args);
-    if (storeRoot === null) return;
     const home = resolveHome(args.home);
-    const pointerFile = path.join(home, POINTER_REL);
-    const plan = { storeRoot, pointerFile };
+    const requested = args["skills-root"];
+    const input = requested === undefined ? undefined : { skillsRoot: requested };
     if (args.dryRun) {
-      if (args.json) {
-        emitOk("init", { dryRun: true, ...plan });
-      } else {
-        console.log("将要写入:");
-        console.log("  指针文件: " + pointerFile);
-        console.log("  库存根目录: " + storeRoot + " (目录布局: skills/ archive/ tmp/ + 清单文件)");
+      try {
+        const planned = planInitialPaths(home, input);
+        const existing = await resolveConfiguredHubPaths(home);
+        if (!existing.ok && existing.reason === "invalid-pointer") throw new Error(existing.message);
+        if (existing.ok && requested && path.relative(existing.paths.skillsRoot, planned.skillsRoot) !== "") {
+          throw new Error("库存已初始化。请用 migrate 更换真源路径。");
+        }
+        const paths = existing.ok ? existing.paths : planned;
+        const pointerFile = path.join(home, POINTER_REL);
+        if (args.json) emitOk("init", { dryRun: true, ...paths, storeRoot: paths.stateRoot, pointerFile });
+        else console.log("控制与备份中心: " + paths.stateRoot + "\n唯一真源目录: " + paths.skillsRoot);
+      } catch (error) {
+        emitError(args.json === true, "init", "bad-usage", error instanceof Error ? error.message : String(error));
       }
       return;
     }
-    const res = await performInit(home, storeRoot);
+    const res = await performInit(home, input);
     if (!res.ok) {
       emitError(args.json === true, "init", res.code, res.message);
       return;
@@ -97,6 +98,7 @@ const init = defineCommand({
     if (args.json) {
       emitOk("init", {
         storeRoot: res.storeRoot,
+        ...res.paths,
         pointerFile: res.pointerFile,
         layoutCreated: res.layoutCreated,
         builtinGroupsWrote: res.builtinGroupsWrote,
@@ -104,7 +106,8 @@ const init = defineCommand({
       });
     } else {
       console.log("初始化完成:");
-      console.log("  库存根目录: " + res.storeRoot);
+      console.log("  控制与备份中心（固定）: " + res.paths.stateRoot);
+      console.log("  唯一真源目录: " + res.paths.skillsRoot);
       console.log("  指针文件: " + res.pointerFile);
       if (res.layoutCreated) console.log("  目录布局: 新建");
       else console.log("  目录布局: 已存在,未改动");
@@ -113,46 +116,27 @@ const init = defineCommand({
   },
 });
 
-/** 解析 init 的库存位置:--home → SKILLS_HUB_HOME → 交互提示 → 报错。写操作需 --yes 或 TTY。 */
-async function resolveStoreRootForInit(args: {
-  home: string | undefined;
-  yes: boolean | undefined;
-  json: boolean | undefined;
-}): Promise<string | null> {
-  let storeRoot = args.home?.trim() ?? "";
-  if (storeRoot === "") storeRoot = process.env.SKILLS_HUB_HOME?.trim() ?? "";
-  if (storeRoot === "" && process.stdin.isTTY && !args.yes) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    try {
-      storeRoot = (await rl.question("库存位置(绝对路径): ")).trim();
-    } finally {
-      rl.close();
-    }
-  }
-  if (storeRoot === "") {
-    emitError(args.json === true, "init", "bad-usage", "未指定库存位置。请用 --home <path> 或设置 SKILLS_HUB_HOME(写操作需 --yes 授权)。");
-    return null;
-  }
-  if (!path.isAbsolute(storeRoot)) {
-    emitError(args.json === true, "init", "bad-usage", "库存根目录必须是绝对路径,收到: " + storeRoot);
-    return null;
-  }
-  return storeRoot;
-}
-
 const doctor = defineCommand({
   meta: { name: "doctor", description: "环境自检:库存可达性、客户端 root、链接能力、悬空链接" },
   args: {
     home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    prune: { type: "boolean", description: "从台账清理悬空记录" },
+    "dry-run": { type: "boolean", description: "仅报告将清理的台账条目" },
+    yes: { type: "boolean", description: "显式授权写操作" },
     json: { type: "boolean", description: "机器可读输出" },
   },
   async run({ args }) {
     const home = resolveHome(args.home);
-    const storeOpts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
-    if (args.home !== undefined && args.home !== "") storeOpts.cliHome = args.home;
-    const envHome = process.env.SKILLS_HUB_HOME;
-    if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
-    const report = await collectDoctorReport(home, undefined, storeOpts);
+    if (args.prune) {
+      if (!args["dry-run"] && !requireWriteAuth(args, "doctor")) return;
+      const paths = await resolveStoreRootOrFail(args, "doctor");
+      if (paths === null) return;
+      const result = await performPrune(paths, args["dry-run"] === true);
+      if (args.json) emitOk("doctor", { verb: "prune", ...result });
+      else console.log((result.dryRun ? "将清理 " : "已清理 ") + result.count + " 条悬空记录。");
+      return;
+    }
+    const report = await collectDoctorReport(home);
 
     if (args.json) {
       console.log(JSON.stringify({ ok: true, command: "doctor", ...report }, null, 2));
@@ -218,10 +202,13 @@ const verify = defineCommand({
   meta: { name: "verify", description: "重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改写" },
   args: {
     home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
+    accept: { type: "boolean", description: "接受已确认的外部编辑并刷新台账" },
+    "dry-run": { type: "boolean", description: "预览漂移处理结果" },
+    yes: { type: "boolean", description: "显式授权写操作" },
     json: { type: "boolean", description: "机器可读输出" },
   },
   run({ args }) {
-    return runVerify(args);
+    return runVerify({ ...args, dryRun: args["dry-run"] });
   },
 });
 
@@ -379,7 +366,7 @@ const newCmd = defineCommand({
 const bootstrap = defineCommand({
   meta: { name: "bootstrap", description: "一键初始化:备份 → 收录全部本机 skills → 自动启动面板(交互式;库存已就绪时直接启动面板)" },
   args: {
-    home: { type: "string", description: "库存根目录/基座(默认 ~/.skills-hub)" },
+    home: { type: "string", description: "重定向 home 基座" },
     port: { type: "string", description: "面板端口", default: String(DEFAULT_UI_PORT) },
     yes: { type: "boolean", description: "非交互环境显式授权全部写操作(跳过全部确认)" },
   },
@@ -390,12 +377,46 @@ const bootstrap = defineCommand({
   },
 });
 
+const migrate = defineCommand({
+  meta: { name: "migrate", description: "校验并迁移唯一真源，原目录旁路留底" },
+  args: {
+    home: { type: "string", description: "重定向 home 基座" },
+    to: { type: "string", description: "目标绝对路径" },
+    yes: { type: "boolean", description: "显式授权写操作" },
+    "dry-run": { type: "boolean", description: "仅预览迁移计划" },
+    json: { type: "boolean", description: "机器可读输出" },
+  },
+  async run({ args }) {
+    if (!args["dry-run"] && !requireWriteAuth(args, "migrate")) return;
+    if (!args.to) {
+      emitError(args.json === true, "migrate", "bad-usage", "用法: skills-hub migrate --to <absPath>");
+      return;
+    }
+    const paths = await resolveStoreRootOrFail(args, "migrate");
+    if (paths === null) return;
+    try {
+      const result = await performMigrate({
+        home: resolveHome(args.home), paths, targetSkillsRoot: args.to, dryRun: args["dry-run"] === true,
+      });
+      if (!result.ok) {
+        emitError(args.json === true, "migrate", result.code, result.message);
+        return;
+      }
+      const { dryRun, paths: next, movedLinks, skills, aside } = result;
+      if (args.json) emitOk("migrate", { dryRun, ...next, movedLinks, skills, aside });
+      else console.log((dryRun ? "将迁移到 " : "已迁移到 ") + next.skillsRoot + (aside === null ? "" : "\n原目录保留在 " + aside));
+    } catch (error) {
+      emitError(args.json === true, "migrate", "io-error", error instanceof Error ? error.message : String(error));
+    }
+  },
+});
+
 const main = defineCommand({
   meta: {
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, new: newCmd, ui, bootstrap },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, new: newCmd, ui, bootstrap, migrate },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { type HubPaths } from "@skills-hub/core";
 import {
   discoverClientRoots,
   discoverClientRootsAt,
@@ -47,10 +48,12 @@ export interface LinkCmdArgs {
 export async function resolveClientSkillsDir(
   args: LinkCmdArgs,
   command: "enable" | "disable" = "enable",
+  paths?: HubPaths,
 ): Promise<{ clientId: string; skillsDir: string } | null> {
   const scope = args.scope === "project" ? "project" : "global";
   const base = scope === "project" ? process.cwd() : resolveHome(args.home);
-  const roots = scope === "project" ? await discoverClientRootsAt(base) : await discoverClientRoots(base);
+  const options = paths === undefined ? undefined : { storeRoot: paths };
+  const roots = scope === "project" ? await discoverClientRootsAt(base, options) : await discoverClientRoots(base, options);
   if (args.client === undefined || args.client === "") {
     const list = roots.length > 0 ? roots.map((r) => r.clientId).join(", ") : "(无)";
     emitError(
@@ -74,7 +77,7 @@ export async function resolveClientSkillsDir(
 async function resolveLinkTargets(
   args: LinkCmdArgs,
   skills: Awaited<ReturnType<typeof readStoreIndex>>,
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   command: "enable" | "disable",
 ): Promise<string[] | null> {
   const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
@@ -115,7 +118,7 @@ export async function runEnable(args: LinkCmdArgs): Promise<void> {
   if (!dryRun && !requireWriteAuth(args, "enable")) return;
   const storeRoot = await resolveStoreRootOrFail(args, "enable");
   if (storeRoot === null) return;
-  const client = await resolveClientSkillsDir(args, "enable");
+  const client = await resolveClientSkillsDir(args, "enable", storeRoot);
   if (client === null) return;
   const scope = args.scope === "project" ? "project" : "global";
 
@@ -159,7 +162,7 @@ export async function runDisable(args: LinkCmdArgs): Promise<void> {
   if (!dryRun && !requireWriteAuth(args, "disable")) return;
   const storeRoot = await resolveStoreRootOrFail(args, "disable");
   if (storeRoot === null) return;
-  const client = await resolveClientSkillsDir(args, "disable");
+  const client = await resolveClientSkillsDir(args, "disable", storeRoot);
   if (client === null) return;
   const scope = args.scope === "project" ? "project" : "global";
 

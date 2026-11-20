@@ -1,5 +1,6 @@
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "@skills-hub/core";
 import {
   adoptMany,
   isGitHubUrl,
@@ -41,8 +42,8 @@ export interface AdoptPerformResult {
 }
 
 /** 清掉库存临时区里本次会话遗留的 github.* 目录(adopt 已入位的 adopt.* 已 rename,不受影响)。 */
-async function cleanupGithubTmp(storeRoot: string): Promise<void> {
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
+async function cleanupGithubTmp(storeRoot: string | HubPaths): Promise<void> {
+  const tmpDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR);
   let names: string[];
   try {
     names = await readdir(tmpDir);
@@ -58,7 +59,7 @@ async function cleanupGithubTmp(storeRoot: string): Promise<void> {
 
 /** CLI 与 HTTP 共用的收录执行层:去重/冲突仍走 adoptMany,不另写一套。 */
 export async function performAdopt(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   sources: string[],
   opts: { dryRun?: boolean; fetchImpl?: typeof fetch } = {},
 ): Promise<AdoptPerformResult> {
@@ -78,7 +79,7 @@ export async function performAdopt(
   const urlPaths = sources.filter((p) => isGitHubUrl(p) || isSkillsShUrl(p));
   if (urlPaths.length > 0) {
     const github = new GitHubSourceProvider(
-      storeRoot,
+      normalizeHubPaths(storeRoot).stateRoot,
       opts.fetchImpl !== undefined ? { fetchImpl: opts.fetchImpl } : {},
     );
     const skillsSh = new SkillsShSourceProvider({ github });
@@ -103,7 +104,7 @@ export async function performAdopt(
 
   return {
     dryRun,
-    storeRoot,
+    storeRoot: normalizeHubPaths(storeRoot).stateRoot,
     adopted: report.adopted,
     duplicates: report.duplicates,
     conflicts: report.conflicts,
@@ -153,7 +154,7 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
     }
     emitOk("adopt", {
       dryRun,
-      storeRoot,
+      storeRoot: report.storeRoot,
       outcomes: report.outcomes,
       adopted: report.adopted,
       duplicates: report.duplicates,
