@@ -27,7 +27,7 @@
     "@ai-sdk/openai-compatible": "^3.0.35",
     "@hono/node-server": "^2.1.1",
     "@skills-hub/core": "workspace:^",
-    "ai": "^7.0.77",
+    "ai": "^7.0.173",
     "citty": "^0.2.2",
     "hono": "^4.13.2",
     "zod": "^4.4.3"
