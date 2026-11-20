@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { PLAYBOOK_SECTIONS } from "./registry.js";
 
 describe("playbook registry", () => {
-  it("covers design system foundations and all four v0.3 frontend sub-issues", () => {
+  it("covers complete design system foundations (incl. icons & deferred motion) and all four v0.3 frontend sub-issues", () => {
     const ids = PLAYBOOK_SECTIONS.map((s) => s.id);
     expect(ids).toEqual([
       "foundations",
+      "icons",
       "atoms",
       "motion",
       "shell-chrome",

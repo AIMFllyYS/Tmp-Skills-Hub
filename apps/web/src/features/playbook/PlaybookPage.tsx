@@ -1,9 +1,25 @@
-import { ArrowLeft, Check, Copy, History, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Code2, History, RefreshCw, Sparkles } from "lucide-react";
+import { useState, type ComponentType } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CopyButton } from "@/components/ui/copy-button";
+import {
+  ComponentsGridGlyph,
+  ConflictConvergeGlyph,
+  GitVaultGlyph,
+  HubBrandMark,
+  ICON_STROKE,
+  IconBadge,
+  IconCraftGlyph,
+  LayersFrameGlyph,
+  MotionCurveGlyph,
+  ShellWindowGlyph,
+  SingleSourceGlyph,
+  SymlinkMeshGlyph,
+  type GlyphProps,
+} from "@/components/ui/icon";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SegmentedTabs, type SegmentedTabItem } from "@/components/ui/tabs";
@@ -43,13 +59,25 @@ const GIT_PRESET_TABS: SegmentedTabItem<"connected" | "no-git" | "diverged">[] =
   { id: "diverged", label: "远端分叉" },
 ];
 
+const SECTION_GLYPH: Record<PlaybookSectionId, ComponentType<GlyphProps>> = {
+  foundations: LayersFrameGlyph,
+  icons: IconCraftGlyph,
+  atoms: ComponentsGridGlyph,
+  motion: MotionCurveGlyph,
+  "shell-chrome": ShellWindowGlyph,
+  "t1-settings": SingleSourceGlyph,
+  "t2-reconcile": SymlinkMeshGlyph,
+  "t3-conflicts": ConflictConvergeGlyph,
+  "t5-git": GitVaultGlyph,
+};
+
 /**
- * `/playbook` 活体组件与 v0.3 目标页面原型路由。
+ * `/playbook` 活体商务设计系统与 v0.3 目标页面原型路由。
  * 所有页面与弹窗均直接引用真实业务组件（零一次性死代码），供前端 Sub-Issue（T1.3 / T2.4 / T3.3 / T5.3）直接 import 接线。
  */
 export function PlaybookPage(): React.JSX.Element {
-  const [section, setSection] = useState<PlaybookSectionId>("t1-settings");
-  const [copiedImport, setCopiedImport] = useState(false);
+  const [section, setSection] = useState<PlaybookSectionId>("foundations");
+  const [showImportCode, setShowImportCode] = useState(false);
 
   // T1.3 interactive preview state
   const [skillsRoot, setSkillsRoot] = useState("C:\\Users\\AIMFl\\.skills-hub\\skills");
@@ -63,6 +91,7 @@ export function PlaybookPage(): React.JSX.Element {
   // T2.4 interactive preview state
   const [bannerVisible, setBannerVisible] = useState(true);
   const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileLoading, setReconcileLoading] = useState(false);
   const [includeExternalLinks, setIncludeExternalLinks] = useState(false);
   const [scanning, setScanning] = useState(false);
 
@@ -74,6 +103,7 @@ export function PlaybookPage(): React.JSX.Element {
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
     DEMO_CONFLICTS[0]?.variants[1]?.variantId ?? null,
   );
+  const [diffLoading, setDiffLoading] = useState(false);
   const [lastAgentPrompt, setLastAgentPrompt] = useState<string | null>(null);
 
   // T5.3 interactive preview state
@@ -84,20 +114,12 @@ export function PlaybookPage(): React.JSX.Element {
   const [cloudBackupOpen, setCloudBackupOpen] = useState(false);
   const [showSecretFixture, setShowSecretFixture] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const activeMeta = PLAYBOOK_SECTIONS.find((s) => s.id === section) ?? PLAYBOOK_SECTIONS[0]!;
+  const ActiveGlyph = SECTION_GLYPH[activeMeta.id];
   const designSections = PLAYBOOK_SECTIONS.filter((s) => s.group === "design-system");
   const targetSections = PLAYBOOK_SECTIONS.filter((s) => s.group === "v03-targets");
-
-  const copyImport = (): void => {
-    void navigator.clipboard.writeText(activeMeta.importHint).then(
-      () => {
-        setCopiedImport(true);
-        window.setTimeout(() => setCopiedImport(false), 1200);
-      },
-      () => toast.error("复制失败"),
-    );
-  };
 
   const activeConflict =
     conflicts.find((c) => c.skillName === selectedConflictName) ?? conflicts[0] ?? null;
@@ -106,65 +128,113 @@ export function PlaybookPage(): React.JSX.Element {
     activeConflict?.variants.find((v) => v.isActive !== true)?.variantId ??
     null;
 
+  const openReconcileWithLateLoad = (): void => {
+    setReconcileOpen(true);
+    setReconcileLoading(true);
+    window.setTimeout(() => setReconcileLoading(false), 620);
+  };
+
+  const openHistoryWithLateLoad = (): void => {
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    window.setTimeout(() => setHistoryLoading(false), 580);
+  };
+
   return (
-    <div className="flex h-full min-h-0 w-full bg-white" data-testid="playbook-root">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-white">
-        <div className="flex h-14 shrink-0 items-center justify-between px-4">
-          <div>
-            <p className="text-sm font-medium text-ink-strong">skill-hub / playbook</p>
-            <p className="text-xs text-ink-faint">v0.3 活体组件与目标页真源</p>
+    <div className="flex h-full min-h-0 w-full bg-canvas" data-testid="playbook-root">
+      <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-canvas">
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2.5 border-b border-line bg-white/80 px-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <IconBadge size="sm" tone="obsidian">
+              <HubBrandMark size={17} />
+            </IconBadge>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold tracking-tight text-ink-strong">
+                Skills Hub
+              </p>
+              <p className="truncate text-[11px] text-ink-faint">Design System &amp; Playbook</p>
+            </div>
           </div>
-          <Badge>v0.3</Badge>
+          <Badge tone="slate" className="shrink-0 font-mono text-[11px]">
+            v0.3
+          </Badge>
         </div>
-        <Separator />
+
         <ScrollArea className="min-h-0 flex-1">
-          <nav className="flex flex-col gap-5 p-3" aria-label="Playbook 导航">
+          <nav className="flex flex-col gap-6 p-3.5" aria-label="Playbook 导航">
             <div className="space-y-1">
-              <p className="px-2 pb-1 text-xs font-medium text-ink-faint">原子设计与动效系统</p>
-              {designSections.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-testid={"playbook-nav-" + item.id}
-                  onClick={() => setSection(item.id)}
-                  className={cn(
-                    "motion-row flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm outline-none",
-                    section === item.id
-                      ? "bg-surface font-medium text-ink-strong"
-                      : "text-ink-mid hover:bg-surface/60 hover:text-ink-strong",
-                  )}
-                >
-                  <span className="truncate">{item.label}</span>
-                </button>
-              ))}
+              <p className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                商务极简设计系统
+              </p>
+              {designSections.map((item) => {
+                const Glyph = SECTION_GLYPH[item.id];
+                const active = section === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-testid={"playbook-nav-" + item.id}
+                    onClick={() => setSection(item.id)}
+                    className={cn(
+                      "motion-row flex w-full items-center gap-2.5 rounded-[10px] border px-2.5 py-2 text-left text-sm outline-none",
+                      active
+                        ? "border-line bg-white font-medium text-ink-strong shadow-[var(--shadow-thumb)]"
+                        : "border-transparent text-ink-mid hover:bg-white/65 hover:text-ink-strong",
+                    )}
+                  >
+                    <Glyph
+                      size={16}
+                      className={active ? "text-ink-strong" : "text-ink-faint"}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="space-y-1">
-              <p className="px-2 pb-1 text-xs font-medium text-ink-faint">v0.3 目标页面与弹窗</p>
-              {targetSections.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-testid={"playbook-nav-" + item.id}
-                  onClick={() => setSection(item.id)}
-                  className={cn(
-                    "motion-row flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none",
-                    section === item.id
-                      ? "bg-surface font-medium text-ink-strong"
-                      : "text-ink-mid hover:bg-surface/60 hover:text-ink-strong",
-                  )}
-                >
-                  <span className="truncate">{item.label}</span>
-                  {item.issueTag !== undefined && (
-                    <Badge className="shrink-0 font-mono text-[11px]">{item.issueTag}</Badge>
-                  )}
-                </button>
-              ))}
+              <p className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                v0.3 目标页面与弹窗
+              </p>
+              {targetSections.map((item) => {
+                const Glyph = SECTION_GLYPH[item.id];
+                const active = section === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-testid={"playbook-nav-" + item.id}
+                    onClick={() => setSection(item.id)}
+                    className={cn(
+                      "motion-row flex w-full items-center justify-between gap-2 rounded-[10px] border px-2.5 py-2 text-left text-sm outline-none",
+                      active
+                        ? "border-line bg-white font-medium text-ink-strong shadow-[var(--shadow-thumb)]"
+                        : "border-transparent text-ink-mid hover:bg-white/65 hover:text-ink-strong",
+                    )}
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden">
+                      <Glyph
+                        size={16}
+                        className={active ? "text-ink-strong" : "text-ink-faint"}
+                      />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    {item.issueTag !== undefined && (
+                      <Badge
+                        tone={active ? "slate" : "neutral"}
+                        className="shrink-0 px-1.5 py-0 font-mono text-[10px]"
+                      >
+                        {item.issueTag}
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </nav>
         </ScrollArea>
-        <Separator />
-        <div className="p-3">
+
+        <div className="border-t border-line bg-white/75 p-3">
           <Button
             type="button"
             variant="outline"
@@ -174,44 +244,62 @@ export function PlaybookPage(): React.JSX.Element {
               window.location.assign("/");
             }}
           >
-            <ArrowLeft className="size-4 text-ink-mid" aria-hidden />
+            <ArrowLeft className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
             返回主应用（/）
           </Button>
         </div>
       </aside>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-        <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-line px-6 py-4">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight text-ink-strong">{activeMeta.label}</h1>
-              {activeMeta.issueTag !== undefined && (
-                <Badge tone="success" className="font-mono">
-                  {activeMeta.issueTag}
-                </Badge>
-              )}
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-canvas">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-line bg-white px-7 py-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3.5">
+            <IconBadge size="md" tone={activeMeta.group === "v03-targets" ? "obsidian" : "neutral"}>
+              <ActiveGlyph size={18} />
+            </IconBadge>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg font-semibold tracking-tight text-ink-strong">{activeMeta.label}</h1>
+                {activeMeta.issueTag !== undefined && (
+                  <Badge tone="success" dot className="font-mono">
+                    {activeMeta.issueTag}
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-mid">{activeMeta.subtitle}</p>
             </div>
-            <p className="mt-1 text-sm text-ink-mid">{activeMeta.subtitle}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={copyImport}>
-              {copiedImport ? (
-                <Check className="size-3.5 text-green-700" aria-hidden />
-              ) : (
-                <Copy className="size-3.5 text-ink-mid" aria-hidden />
-              )}
-              {copiedImport ? "已复制 Import" : "复制组件 Import"}
+
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant={showImportCode ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setShowImportCode((v) => !v)}
+            >
+              <Code2 className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
+              {showImportCode ? "收起 Import" : "查看 Import"}
             </Button>
+            <CopyButton
+              value={activeMeta.importHint}
+              label="复制组件 Import"
+              copiedLabel="已复制 Import"
+              onError={() => toast.error("复制失败")}
+            />
           </div>
         </header>
 
-        <div className="shrink-0 border-b border-line bg-surface px-6 py-2">
-          <pre className="overflow-x-auto font-mono text-xs text-ink-mid">{activeMeta.importHint}</pre>
-        </div>
+        {showImportCode && (
+          <div className="motion-enter shrink-0 border-b border-line bg-surface/85 px-7 py-2.5">
+            <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-ink-strong">
+              {activeMeta.importHint}
+            </pre>
+          </div>
+        )}
 
-        <ScrollArea className="min-h-0 flex-1">
-          <div key={section} className="motion-enter mx-auto max-w-6xl space-y-6 px-6 py-6">
+        <ScrollArea key={section} className="min-h-0 flex-1">
+          <div className="motion-enter mx-auto max-w-6xl space-y-6 px-7 py-7">
             {(section === "foundations" ||
+              section === "icons" ||
               section === "atoms" ||
               section === "motion" ||
               section === "shell-chrome") && (
@@ -220,10 +308,12 @@ export function PlaybookPage(): React.JSX.Element {
 
             {section === "t1-settings" && (
               <div className="space-y-6">
-                <Card className="space-y-4">
+                <Card className="space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h2 className="text-base font-medium text-ink-strong">1. 设置面板 v0.3 分区（SettingsV3Panels）</h2>
+                      <h2 className="text-base font-semibold tracking-tight text-ink-strong">
+                        1. 设置面板 v0.3 分区（SettingsV3Panels）
+                      </h2>
                       <p className="mt-0.5 text-xs text-ink-mid">可直接嵌入现有 SettingsDialog.tsx 中</p>
                     </div>
                     <Button
@@ -247,11 +337,11 @@ export function PlaybookPage(): React.JSX.Element {
                     driftedSkills={driftedSkills}
                     onPruneDangling={async () => {
                       setDanglingCount(0);
-                      toast("已模拟清理 360 条悬空台账记录");
+                      toast.success("已模拟清理 360 条悬空台账记录");
                     }}
                     onAcceptDrifted={async (names) => {
                       setDriftedSkills([]);
-                      toast("已模拟认领并同步 " + String(names.length) + " 个漂移指纹");
+                      toast.success("已模拟认领并同步 " + String(names.length) + " 个漂移指纹");
                     }}
                   />
                   <Separator />
@@ -271,8 +361,9 @@ export function PlaybookPage(): React.JSX.Element {
                 </Card>
 
                 <Card className="overflow-hidden p-0">
-                  <div className="border-b border-line bg-surface px-4 py-2.5 text-xs font-medium text-ink-mid">
-                    2. 首次初始化双目录引导页预览（DualPathOnboardingView）
+                  <div className="flex items-center justify-between border-b border-line bg-canvas px-5 py-3 text-xs font-medium text-ink-mid">
+                    <span>2. 首次初始化双目录引导页预览（DualPathOnboardingView）</span>
+                    <Badge tone="slate">纯 Prop 驱动</Badge>
                   </div>
                   <DualPathOnboardingView
                     title="总览"
@@ -280,7 +371,7 @@ export function PlaybookPage(): React.JSX.Element {
                     gitDetected
                     gitVersion="2.47.1"
                     onInit={async (opts) => {
-                      toast(
+                      toast.success(
                         "初始化触发：skillsRoot=" +
                           (opts.skillsRoot ?? "~/.skills-hub/skills") +
                           "，enableGit=" +
@@ -298,7 +389,7 @@ export function PlaybookPage(): React.JSX.Element {
                   managedLinkCount={286}
                   onMigrate={async (target) => {
                     setSkillsRoot(target);
-                    toast("已模拟迁移唯一真源至 " + target);
+                    toast.success("已模拟迁移唯一真源至 " + target);
                   }}
                 />
               </div>
@@ -309,12 +400,14 @@ export function PlaybookPage(): React.JSX.Element {
                 <Card className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h2 className="text-base font-medium text-ink-strong">启动巡检提醒横幅 &amp; 手动重扫按钮</h2>
+                      <h2 className="text-base font-semibold tracking-tight text-ink-strong">
+                        启动巡检提醒横幅 &amp; 手动重扫按钮
+                      </h2>
                       <p className="mt-0.5 text-xs text-ink-mid">
-                        挂载在主区顶部；L1 浅扫耗时约 14ms，严禁定时器轮询。
+                        挂载在主区顶部；L1 浅扫耗时约 14ms，严禁定时器轮询。弹窗打开自带晚加载骨架过渡。
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <RescanTriggerButton
                         scanning={scanning}
                         onRescan={() => {
@@ -322,32 +415,41 @@ export function PlaybookPage(): React.JSX.Element {
                           window.setTimeout(() => {
                             setScanning(false);
                             setBannerVisible(true);
-                            toast("L1 极速重扫完成（14ms）：检出 92 处未接管目录与 6 项冲突");
+                            toast.success("L1 极速重扫完成（14ms）：检出 92 处未接管目录与 6 项冲突");
                           }, 500);
                         }}
                       />
-                      <Button size="sm" onClick={() => setReconcileOpen(true)}>
+                      <Button size="sm" variant="outline" onClick={openReconcileWithLateLoad}>
+                        演示弹窗晚加载骨架
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setReconcileLoading(false);
+                          setReconcileOpen(true);
+                        }}
+                      >
                         打开一键合并弹窗
                       </Button>
                     </div>
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-line">
+                  <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-[var(--shadow-card)]">
                     {bannerVisible ? (
                       <ReconcileBanner
                         summary={DEMO_RECONCILE_SUMMARY}
-                        onOpenDialog={() => setReconcileOpen(true)}
+                        onOpenDialog={openReconcileWithLateLoad}
                         onDismiss={() => setBannerVisible(false)}
                       />
                     ) : (
-                      <div className="flex items-center justify-between bg-surface px-4 py-3 text-xs text-ink-mid">
+                      <div className="flex items-center justify-between bg-canvas px-4 py-3 text-xs text-ink-mid">
                         <span>横幅已暂时收起，点击「重新扫描」可再次触发检查。</span>
                         <Button size="sm" variant="outline" onClick={() => setBannerVisible(true)}>
                           恢复显示横幅
                         </Button>
                       </div>
                     )}
-                    <div className="p-5 text-sm text-ink-mid">主区内容区域占位（横幅非阻塞显示在主区顶部）</div>
+                    <div className="p-6 text-sm text-ink-mid">主区内容区域占位（横幅非阻塞显示在主区顶部）</div>
                   </div>
                 </Card>
 
@@ -355,12 +457,13 @@ export function PlaybookPage(): React.JSX.Element {
                   open={reconcileOpen}
                   onOpenChange={setReconcileOpen}
                   preview={DEMO_RECONCILE_PREVIEW}
+                  loading={reconcileLoading}
                   includeExternalLinks={includeExternalLinks}
                   onIncludeExternalLinksChange={setIncludeExternalLinks}
                   onApply={async () => {
                     setReconcileOpen(false);
                     setBannerVisible(false);
-                    toast("已完成备份校验与纯软链接接管（其中 2 项进入冲突处理中心）");
+                    toast.success("已完成备份校验与纯软链接接管（其中 2 项进入冲突处理中心）");
                   }}
                 />
               </div>
@@ -369,21 +472,34 @@ export function PlaybookPage(): React.JSX.Element {
             {section === "t3-conflicts" && (
               <div className="space-y-4">
                 {lastAgentPrompt !== null && (
-                  <Card className="space-y-2 bg-surface">
+                  <Card className="space-y-2 bg-white">
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-xs font-medium text-ink-strong">
-                        <Sparkles className="size-3.5 text-ink-mid" aria-hidden />
+                        <Sparkles className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
                         已触发一键跳转 Agent 分析合并（预填提示词预览）
                       </span>
                       <Button size="sm" variant="ghost" onClick={() => setLastAgentPrompt(null)}>
                         关闭
                       </Button>
                     </div>
-                    <pre className="whitespace-pre-wrap font-mono text-xs text-ink-mid">{lastAgentPrompt}</pre>
+                    <pre className="whitespace-pre-wrap rounded-xl border border-line bg-canvas p-3 font-mono text-xs text-ink-mid">
+                      {lastAgentPrompt}
+                    </pre>
                   </Card>
                 )}
 
-                <div className="flex justify-end">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDiffLoading(true);
+                      window.setTimeout(() => setDiffLoading(false), 620);
+                    }}
+                  >
+                    <RefreshCw className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
+                    演示 Diff 晚加载骨架
+                  </Button>
                   {conflicts.length === 0 && (
                     <Button size="sm" variant="outline" onClick={() => setConflicts(DEMO_CONFLICTS)}>
                       重置示例冲突数据
@@ -391,7 +507,7 @@ export function PlaybookPage(): React.JSX.Element {
                   )}
                 </div>
 
-                <div className="h-[620px] overflow-hidden rounded-xl border border-line bg-white">
+                <div className="h-[640px] overflow-hidden rounded-2xl border border-line bg-white shadow-[var(--shadow-card)]">
                   <ConflictsView
                     conflicts={conflicts}
                     selectedSkillName={activeConflict?.skillName ?? null}
@@ -401,20 +517,25 @@ export function PlaybookPage(): React.JSX.Element {
                       setSelectedVariantId(next?.variants.find((v) => v.isActive !== true)?.variantId ?? null);
                     }}
                     selectedVariantId={effectiveVariantId}
-                    onSelectVariant={setSelectedVariantId}
+                    onSelectVariant={(variantId) => {
+                      setSelectedVariantId(variantId);
+                      setDiffLoading(true);
+                      window.setTimeout(() => setDiffLoading(false), 260);
+                    }}
                     diffFiles={
                       effectiveVariantId !== null ? (DEMO_CONFLICT_DIFFS[effectiveVariantId] ?? []) : []
                     }
+                    loadingDiff={diffLoading}
                     onKeepActive={async (skillName) => {
                       setConflicts((prev) => prev.filter((c) => c.skillName !== skillName));
-                      toast("已保留 " + skillName + " 当前真源，其余变体已归档至 archive/conflicts/");
+                      toast.success("已保留 " + skillName + " 当前真源，其余变体已归档至 archive/conflicts/");
                     }}
                     onPromoteVariant={async (skillName, variantId) => {
                       setConflicts((prev) => prev.filter((c) => c.skillName !== skillName));
-                      toast("已将变体 " + variantId + " 扶正为 " + skillName + " 唯一真源");
+                      toast.success("已将变体 " + variantId + " 扶正为 " + skillName + " 唯一真源");
                     }}
                     onSplitVariant={async (skillName, variantId, newName) => {
-                      toast("已将变体 " + variantId + " 拆分为独立 Skill: " + newName + "（原：" + skillName + "）");
+                      toast.success("已将变体 " + variantId + " 拆分为独立 Skill: " + newName + "（原：" + skillName + "）");
                     }}
                     onHandoffToAgent={(skillName, prompt) => {
                       setLastAgentPrompt(prompt);
@@ -427,11 +548,15 @@ export function PlaybookPage(): React.JSX.Element {
 
             {section === "t5-git" && (
               <div className="space-y-6">
-                <Card className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                <Card className="space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-base font-medium text-ink-strong">Git 版本控制与云端备份设置卡片</h2>
-                      <p className="mt-0.5 text-xs text-ink-mid">切换三种环境预设，验证安装提示、开关与远端分叉保护。</p>
+                      <h2 className="text-base font-semibold tracking-tight text-ink-strong">
+                        Git 版本控制与云端备份设置卡片
+                      </h2>
+                      <p className="mt-0.5 text-xs text-ink-mid">
+                        切换三种环境预设，验证安装提示、开关与远端分叉保护。
+                      </p>
                     </div>
                     <SegmentedTabs
                       size="sm"
@@ -458,11 +583,11 @@ export function PlaybookPage(): React.JSX.Element {
                     onOpenCloudSetup={() => setCloudBackupOpen(true)}
                     onPushBackup={async () => {
                       setGitStatus((prev) => ({ ...prev, aheadCount: 0 }));
-                      toast("已安全推送至 GitHub 云端备份仓");
+                      toast.success("已安全推送至 GitHub 云端备份仓");
                     }}
                   />
 
-                  <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
                     <Button
                       size="sm"
                       variant="outline"
@@ -483,9 +608,9 @@ export function PlaybookPage(): React.JSX.Element {
                     >
                       演示一键建仓（含 Public 密钥预检）
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)}>
-                      <History className="size-3.5 text-ink-mid" aria-hidden />
-                      演示单 Skill 提交历史抽屉
+                    <Button size="sm" variant="outline" onClick={openHistoryWithLateLoad}>
+                      <History className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
+                      演示单 Skill 历史抽屉（含晚加载）
                     </Button>
                   </div>
                 </Card>
@@ -498,7 +623,7 @@ export function PlaybookPage(): React.JSX.Element {
                     setGhSession(DEMO_GH_LOGIN_PENDING);
                   }}
                   onCopyAndOpen={(code) => {
-                    toast("已复制设备码 " + code + "；2 秒后模拟授权完成");
+                    toast("已复制设备码 " + code + "；1.5 秒后模拟授权完成");
                     window.setTimeout(() => {
                       setGhSession({
                         ...DEMO_GH_LOGIN_PENDING,
@@ -515,7 +640,7 @@ export function PlaybookPage(): React.JSX.Element {
                   {...(showSecretFixture ? { secretFindings: DEMO_SECRET_FINDINGS } : {})}
                   onCreateAndPush={async (input) => {
                     setCloudBackupOpen(false);
-                    toast("已模拟创建 " + input.visibility + " 备份仓：" + input.repoName);
+                    toast.success("已模拟创建 " + input.visibility + " 备份仓：" + input.repoName);
                   }}
                 />
 
@@ -524,6 +649,7 @@ export function PlaybookPage(): React.JSX.Element {
                   onOpenChange={setHistoryOpen}
                   skillName="hyperframes"
                   commits={DEMO_COMMITS}
+                  loading={historyLoading}
                   gitEnabled={gitStatus.enabled}
                   selectedDiffFiles={DEMO_COMMIT_DIFF}
                   onSelectCommit={(hash) => toast("加载提交 " + hash.slice(0, 7) + " Diff")}

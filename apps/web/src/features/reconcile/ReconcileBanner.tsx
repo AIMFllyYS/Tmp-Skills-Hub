@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ICON_STROKE } from "@/components/ui/icon";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -96,7 +97,8 @@ export function RescanTriggerButton({
       className={cn(className)}
     >
       <RefreshCw
-        className={cn("size-4 shrink-0 text-ink-mid", scanning && "motion-safe:animate-spin")}
+        className={cn("size-3.5 shrink-0 text-ink-mid", scanning && "motion-safe:animate-spin")}
+        strokeWidth={ICON_STROKE}
         aria-hidden
       />
       {!iconOnly && <span>{currentLabel}</span>}

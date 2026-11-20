@@ -1,22 +1,21 @@
 import { useState } from "react";
 import {
-  Check,
   Cloud,
   CloudUpload,
-  Copy,
   ExternalLink,
-  GitBranch,
   KeyRound,
   Terminal,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CopyButton } from "@/components/ui/copy-button";
+import { GitVaultGlyph, ICON_STROKE, IconBadge } from "@/components/ui/icon";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TruncateTip } from "@/components/ui/tooltip";
+import { TruncateTip } from "@/components/ui/tooltip";
 import {
   DEFAULT_GH_DOWNLOAD_URL,
   DEFAULT_GH_INSTALL_CMD,
@@ -38,34 +37,21 @@ function InstallHintRow({
   command,
   downloadUrl,
   toolName,
-  copied,
-  onCopy,
 }: {
   command: string;
   downloadUrl: string;
   toolName: string;
-  copied: boolean;
-  onCopy: (cmd: string) => void;
 }): React.JSX.Element {
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5">
+    <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-canvas px-2.5 py-1.5">
       <code className="min-w-0 flex-1 truncate font-mono text-xs text-ink-strong">{command}</code>
-      <Tooltip label={copied ? "已复制命令" : "复制安装命令"} side="top">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={"复制 " + toolName + " 安装命令"}
-          className="size-7 shrink-0 bg-white"
-          onClick={() => onCopy(command)}
-        >
-          {copied ? (
-            <Check className="size-4 text-green-700" aria-hidden />
-          ) : (
-            <Copy className="size-4 text-ink-mid" aria-hidden />
-          )}
-        </Button>
-      </Tooltip>
+      <CopyButton
+        value={command}
+        iconOnly
+        label="复制安装命令"
+        copiedLabel="已复制命令"
+        ariaLabel={"复制 " + toolName + " 安装命令"}
+      />
       <a
         href={downloadUrl}
         target="_blank"
@@ -73,7 +59,7 @@ function InstallHintRow({
         className="inline-flex items-center gap-1 text-xs font-medium text-ink-strong underline-offset-4 hover:underline"
       >
         官方下载
-        <ExternalLink className="size-4 text-ink-mid" aria-hidden />
+        <ExternalLink className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
       </a>
     </div>
   );
@@ -88,7 +74,6 @@ export function GitSettingsSection({
   onOpenCloudSetup,
   onPushBackup,
 }: GitSettingsSectionProps): React.JSX.Element {
-  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -99,19 +84,6 @@ export function GitSettingsSection({
   const ghUrl = status.ghDownloadUrl ?? DEFAULT_GH_DOWNLOAD_URL;
   const hasRemote = status.remoteUrl !== undefined && status.remoteUrl !== null && status.remoteUrl !== "";
   const aheadCount = status.aheadCount ?? 0;
-
-  const copyCommand = (cmd: string): void => {
-    if (typeof navigator === "undefined" || navigator.clipboard === undefined) return;
-    void navigator.clipboard.writeText(cmd).then(
-      () => {
-        setCopiedCmd(cmd);
-        window.setTimeout(() => {
-          setCopiedCmd((prev) => (prev === cmd ? null : prev));
-        }, 1200);
-      },
-      () => undefined,
-    );
-  };
 
   const handleToggle = async (next: boolean): Promise<void> => {
     setLocalBusy(true);
@@ -139,14 +111,16 @@ export function GitSettingsSection({
 
   return (
     <section className="space-y-4" data-testid="git-settings-section">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <GitBranch className="size-4 text-ink-mid" aria-hidden />
-          <h3 className="text-base font-medium text-ink-strong">Git 版本控制与云端备份</h3>
+      <div className="flex items-start gap-3">
+        <IconBadge size="md" tone="obsidian">
+          <GitVaultGlyph size={18} />
+        </IconBadge>
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <h3 className="text-base font-semibold tracking-tight text-ink-strong">Git 版本控制与云端备份</h3>
+          <p className="text-xs leading-relaxed text-ink-mid">
+            可选功能（可跳过，随时在设置中开启）：在唯一真源目录自动记录变更历史，并可通过官方 GitHub CLI 备份到个人仓库。
+          </p>
         </div>
-        <p className="text-xs text-ink-mid">
-          可选功能（可跳过，随时在设置中开启）：在唯一真源目录自动记录变更历史，并可通过官方 GitHub CLI 备份到个人仓库。
-        </p>
       </div>
 
       {actionError !== null && (
@@ -159,46 +133,44 @@ export function GitSettingsSection({
         />
       )}
 
-      <Card className="space-y-3" data-testid="git-env-card">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-ink-mid">
-          <Terminal className="size-4 text-ink-mid" aria-hidden />
+      <Card className="space-y-4" data-testid="git-env-card">
+        <div className="flex items-center gap-2 text-xs font-medium text-ink-mid">
+          <Terminal className="size-3.5 text-ink-faint" strokeWidth={ICON_STROKE} aria-hidden />
           <span>本机环境检测</span>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-line bg-white p-3" data-testid="git-env-git">
+          <div className="rounded-xl border border-line bg-canvas/60 p-3.5" data-testid="git-env-git">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-ink-strong">Git</span>
               {status.gitInstalled ? (
-                <Badge tone="success">
+                <Badge tone="success" dot>
                   {status.gitVersion !== undefined && status.gitVersion !== null && status.gitVersion !== ""
                     ? "已安装 " + status.gitVersion
                     : "已安装"}
                 </Badge>
               ) : (
-                <Badge tone="warning">未安装</Badge>
+                <Badge tone="warning" dot>
+                  未安装
+                </Badge>
               )}
             </div>
             {status.gitInstalled ? (
-              <p className="mt-1.5 text-xs text-ink-faint">可用于唯一真源本地自动提交与历史对比。</p>
+              <p className="mt-2 text-xs text-ink-faint">可用于唯一真源本地自动提交与历史对比。</p>
             ) : (
-              <InstallHintRow
-                command={gitCmd}
-                downloadUrl={gitUrl}
-                toolName="Git"
-                copied={copiedCmd === gitCmd}
-                onCopy={copyCommand}
-              />
+              <InstallHintRow command={gitCmd} downloadUrl={gitUrl} toolName="Git" />
             )}
           </div>
 
-          <div className="rounded-lg border border-line bg-white p-3" data-testid="git-env-gh">
+          <div className="rounded-xl border border-line bg-canvas/60 p-3.5" data-testid="git-env-gh">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-ink-strong">GitHub CLI (gh)</span>
               {!status.ghInstalled ? (
-                <Badge tone="warning">未安装</Badge>
+                <Badge tone="warning" dot>
+                  未安装
+                </Badge>
               ) : status.ghAuthenticated ? (
-                <Badge tone="success">
+                <Badge tone="success" dot>
                   {status.ghUsername !== undefined &&
                   status.ghUsername !== null &&
                   status.ghUsername !== ""
@@ -206,19 +178,15 @@ export function GitSettingsSection({
                     : "已登录"}
                 </Badge>
               ) : (
-                <Badge tone="neutral">未登录</Badge>
+                <Badge tone="neutral" dot>
+                  未登录
+                </Badge>
               )}
             </div>
             {!status.ghInstalled ? (
-              <InstallHintRow
-                command={ghCmd}
-                downloadUrl={ghUrl}
-                toolName="GitHub CLI"
-                copied={copiedCmd === ghCmd}
-                onCopy={copyCommand}
-              />
+              <InstallHintRow command={ghCmd} downloadUrl={ghUrl} toolName="GitHub CLI" />
             ) : (
-              <p className="mt-1.5 text-xs text-ink-faint">
+              <p className="mt-2 text-xs text-ink-faint">
                 {status.ghVersion !== undefined && status.ghVersion !== null && status.ghVersion !== ""
                   ? "版本 " + status.ghVersion + " · "
                   : ""}
@@ -256,20 +224,24 @@ export function GitSettingsSection({
       </Card>
 
       {status.enabled && status.gitInstalled && (
-        <Card className="space-y-3 bg-surface" data-testid="git-cloud-section">
+        <Card className="space-y-3.5 bg-canvas/70" data-testid="git-cloud-section">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Cloud className="size-4 text-ink-mid" aria-hidden />
+              <IconBadge size="xs" tone="neutral">
+                <Cloud className="size-3.5" strokeWidth={ICON_STROKE} />
+              </IconBadge>
               <span className="text-sm font-medium text-ink-strong">GitHub 云端备份</span>
             </div>
             {status.branch !== undefined && status.branch !== null && status.branch !== "" && (
-              <Badge className="font-mono">{status.branch}</Badge>
+              <Badge tone="slate" className="font-mono">
+                {status.branch}
+              </Badge>
             )}
           </div>
 
           {!status.ghAuthenticated && !hasRemote && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white p-3">
-              <p className="min-w-0 flex-1 text-xs text-ink-mid">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white p-3.5 shadow-[var(--shadow-control)]">
+              <p className="min-w-0 flex-1 text-xs leading-relaxed text-ink-mid">
                 {status.ghInstalled
                   ? "登录认证完全委托给本机官方 gh CLI，Skills Hub 不读取、不保存任何明文 Token。"
                   : "请先安装上方 GitHub CLI (gh) 后，再通过设备码登录 GitHub 完成一键云端备份。"}
@@ -282,15 +254,15 @@ export function GitSettingsSection({
                 disabled={!status.ghInstalled || effectiveBusy}
                 onClick={onOpenGhLogin}
               >
-                <KeyRound className="size-4 text-ink-mid" aria-hidden />
+                <KeyRound className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
                 通过 gh 登录 GitHub
               </Button>
             </div>
           )}
 
           {status.ghAuthenticated && !hasRemote && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white p-3">
-              <p className="min-w-0 flex-1 text-xs text-ink-mid">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white p-3.5 shadow-[var(--shadow-control)]">
+              <p className="min-w-0 flex-1 text-xs leading-relaxed text-ink-mid">
                 已连接账号{" "}
                 <span className="font-medium text-ink-strong">
                   {status.ghUsername !== undefined &&
@@ -309,7 +281,7 @@ export function GitSettingsSection({
                 disabled={effectiveBusy}
                 onClick={onOpenCloudSetup}
               >
-                <CloudUpload className="size-4 text-white" aria-hidden />
+                <CloudUpload className="size-3.5 text-white" strokeWidth={ICON_STROKE} aria-hidden />
                 一键创建云端备份仓库
               </Button>
             </div>
@@ -317,7 +289,7 @@ export function GitSettingsSection({
 
           {hasRemote && (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white p-3.5 shadow-[var(--shadow-control)]">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <a
@@ -327,9 +299,9 @@ export function GitSettingsSection({
                       className="inline-flex min-w-0 max-w-full items-center gap-1.5 font-mono text-xs font-medium text-ink-strong underline-offset-4 hover:underline"
                     >
                       <TruncateTip text={status.remoteUrl ?? ""} className="min-w-0 flex-1" />
-                      <ExternalLink className="size-4 shrink-0 text-ink-mid" aria-hidden />
+                      <ExternalLink className="size-3.5 shrink-0 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
                     </a>
-                    <Badge tone={aheadCount > 0 ? "warning" : "success"} data-testid="git-ahead-badge">
+                    <Badge tone={aheadCount > 0 ? "warning" : "success"} dot data-testid="git-ahead-badge">
                       {aheadCount > 0 ? "待推送 " + String(aheadCount) + " 个提交" : "已与远端同步"}
                     </Badge>
                   </div>
@@ -360,7 +332,7 @@ export function GitSettingsSection({
                     disabled={effectiveBusy}
                     onClick={() => void handlePush()}
                   >
-                    <CloudUpload className="size-4 text-white" aria-hidden />
+                    <CloudUpload className="size-3.5 text-white" strokeWidth={ICON_STROKE} aria-hidden />
                     {effectiveBusy ? "推送中…" : "立即推送备份"}
                   </Button>
                 </div>

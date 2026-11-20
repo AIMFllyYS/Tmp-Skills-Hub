@@ -9,6 +9,7 @@
 > **批 16 修订（2026-08-20）**：150ms 线性过渡让切页、Tab、图表显得抽搐。本修订把动效收口为分层时长 + 弹簧/平滑缓动（`--ease-spring` / `--ease-smooth`）；Tab 改为分段胶囊控制器；图表入场可到 600ms。灰阶 / 无渐变 / 无毛玻璃 / 无大阴影仍硬；分段选中块与总览 KPI hover 允许极弱高度。
 > **批 17 修订（2026-08-21）**：token 有了但业务仍复制 `duration-*` / `active:scale` 串，侧栏收起卸载文字、切页只有入场。本修订把动效收成可引用的 `motion-*` 类别；侧栏收起是宽度插值 + 文字淡出。灰阶 / 无渐变 / 无毛玻璃 / 无大阴影 / 无 bounce 仍硬。
 > **批 18 修订（2026-08-21）**：批 17 把 View Transition 和 `motion-enter` 叠在一起，切页双重卡顿并闪现。本修订**只保留** `key` + `motion-enter` 这一套缓动刷新；禁止再引入 View Transition / `withViewTransition`。侧栏导航必须是纵向 flex 栏（不能随拖宽变成横排）。
+> **v0.3 商务极简精雕修订（2026-11-20）**：针对 `/playbook` 与全仓原子组件补齐商务高级感——① 用温润黑曜石/雪花石膏中性灰阶（`bg-canvas #f6f6f7` 画布 + `#ffffff` 卡片 + `#111318` 墨色）拉开实体面层级；② 采用同心圆角几何（外卡/弹窗 `16px`、内层容器 `12px`、控件/按钮 `10px`、分段选中块 `7px`）与极克制微高度（`--shadow-card` / `--shadow-control` / `--shadow-button` / `--shadow-overlay`）；③ 新增自绘几何领域图标与 `IconBadge` 建筑感边框容器，通用 Lucide 图标统一 `strokeWidth={1.6}`；④ 补齐「晚加载（`DeferredReveal` / `LazyViewportSection` / `StaggerItem` / `motion-reveal` / `motion-stagger`）」与 `EmptyState` / `MetricCard` / `SearchInput` / `SettingRow` / `CopyButton` 等商务级通用原语。无渐变 / 无毛玻璃 / 无荧光色 / 无 bounce 仍硬。
 
 这是给自己人天天用的工具面板，不是宣传页。高端感来自克制与秩序：留白、层级清晰、字重与灰阶的节制使用、动效只用于表达状态变化。用户离开时应该能说：That was easy.
 
@@ -256,8 +257,9 @@
 
 ## 13. `/playbook` 活体组件实验室与目标页契约（v0.3 新增）
 
-- 路由 `/playbook` 是全仓统一的**原子组件 + 动效实验室 + v0.3 目标页面活体原型**（见 `apps/web/src/features/playbook/`），采用 `React.lazy()` 按需加载，不影响主路径 `/` 的包体与 `smoke-panel.mjs` 性能阈值。
-- **单一 UI 真源原则**：所有新增原子组件（`components/ui/{status-banner,path-field,step-list,drawer,diff-viewer}`、`Badge tone`、`SegmentedTabs badge`）与 v0.3 业务页面/弹窗组件（`features/shell/{DualPathOnboardingView,SettingsV3Panels}`、`features/reconcile/*`、`features/conflicts/*`、`features/git/*`）均先在 `/playbook` 中完成视觉、动效与交互状态对齐；正式业务页面只负责 `import` 这些组件并接入 `/api/*` 状态，**禁止在正式页面里另起一套重复 UI 样式或手写过渡动画**。
+- 路由 `/playbook` 是全仓统一的**商务极简设计系统 + 图标体系 + 完整原子控件库 + 动效与晚加载实验室 + v0.3 目标页面活体原型**（见 `apps/web/src/features/playbook/`），采用 `React.lazy()` 按需加载，不影响主路径 `/` 的包体与 `smoke-panel.mjs` 性能阈值。
+- **单一 UI 真源原则**：所有新增原子组件（`components/ui/{icon,deferred-reveal,empty-state,metric-card,search-input,setting-row,copy-button,status-banner,path-field,step-list,drawer,diff-viewer}`、`Badge tone+dot`、`SegmentedTabs badge`）与 v0.3 业务页面/弹窗组件（`features/shell/{DualPathOnboardingView,SettingsV3Panels}`、`features/reconcile/*`、`features/conflicts/*`、`features/git/*`）均先在 `/playbook` 中完成视觉、动效、晚加载与交互状态对齐；正式业务页面只负责 `import` 这些组件并接入 `/api/*` 状态，**禁止在正式页面里另起一套重复 UI 样式或手写过渡动画**。
+- **晚加载与交错动效口径**：异步加载模块优先使用 `<DeferredReveal>`（骨架→内容平滑解码，无生硬闪现）、列表/卡片组使用 `<StaggerItem index={i}>`（每项 `45ms` 上限 `360ms`）、折下区域按需使用 `<LazyViewportSection>`（`IntersectionObserver` 触发后立即解绑，零静置 CPU 消耗）。
 
 ## 14. 例外裁定
 

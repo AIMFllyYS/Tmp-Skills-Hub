@@ -7,6 +7,7 @@
 
 export type PlaybookSectionId =
   | "foundations"
+  | "icons"
   | "atoms"
   | "motion"
   | "shell-chrome"
@@ -28,36 +29,45 @@ export const PLAYBOOK_SECTIONS: readonly PlaybookSectionMeta[] = [
   {
     id: "foundations",
     group: "design-system",
-    label: "色彩 / 字号 / 间距",
-    subtitle: "ui-design-v1 克制灰阶体系、三档语义状态色、6 档字号与 4px 栅格节奏",
-    importHint: 'import "@/index.css"; // tokens: ink-strong / ink-mid / ink-faint / line / surface',
+    label: "色彩 · 圆角与排版",
+    subtitle: "温润黑曜石/雪花石膏中性灰阶、同心圆角几何、克制微高度 Token 与 6 档排版体系",
+    importHint: 'import "@/index.css"; // bg-canvas / bg-surface / ink-strong / --shadow-card / --shadow-lift',
+  },
+  {
+    id: "icons",
+    group: "design-system",
+    label: "图标与建筑感徽标",
+    subtitle: "11 枚自绘几何 SVG 领域图标、IconBadge 七态四尺寸矩阵与 strokeWidth=1.6 线宽规范",
+    importHint:
+      'import { HubBrandMark, IconBadge, ICON_STROKE, SingleSourceGlyph, SymlinkMeshGlyph } from "@/components/ui/icon";',
   },
   {
     id: "atoms",
     group: "design-system",
-    label: "原子控件总览",
-    subtitle: "全仓唯一组件出口：按钮、徽章、开关、分段 Tab、路径字段、状态条、步骤条、抽屉与 Diff",
+    label: "完整商务原子组件",
+    subtitle: "全仓统一出口：表单、SearchInput/Kbd、MetricCard、SettingRow、Table/Menu、Toast、EmptyState、Drawer 与 Diff",
     importHint:
-      'import { Button, Badge, Switch, SegmentedTabs, StatusBanner, PathField, StepList, Drawer, DiffViewer } from "@/components/ui/...";',
+      'import { Button, Badge, MetricCard, SearchInput, SettingGroup, SettingRow, EmptyState, CopyButton, Drawer, DiffViewer } from "@/components/ui/...";',
   },
   {
     id: "motion",
     group: "design-system",
-    label: "统一动效实验室",
-    subtitle: "motion-press / motion-fill / motion-enter / motion-row / motion-chevron / dialog-popup / drawer-popup",
-    importHint: 'className="motion-press" | "motion-fill" | "motion-enter" | "motion-row" | "motion-chevron"',
+    label: "动效与晚加载实验室",
+    subtitle: "DeferredReveal 异步骨架解码、StaggerItem 级联、LazyViewportSection 视口懒加载与 0.35× 慢放审校",
+    importHint:
+      'import { DeferredReveal, StaggerItem, LazyViewportSection } from "@/components/ui/deferred-reveal";',
   },
   {
     id: "shell-chrome",
     group: "design-system",
     label: "壳层与导航框架",
-    subtitle: "真实 Sidebar 展开/收起宽度插值 + 48px 图标列 + 四板块骨架 + 设置入口",
+    subtitle: "真实 Sidebar 展开/收起宽度插值 + 48px 图标列 + 顶栏晚加载骨架切换预览",
     importHint: 'import { Sidebar } from "@/features/shell/Sidebar";',
   },
   {
     id: "t1-settings",
     group: "v03-targets",
-    label: "双路径引导与设置自愈",
+    label: "双路径与设置自愈",
     subtitle: "固定 ~/.skills-hub/ 控制备份区 + 可迁移唯一真源 + 死链清理 / 漂移认领 / 桌面自启",
     issueTag: "T1.3 #241",
     importHint:
@@ -66,8 +76,8 @@ export const PLAYBOOK_SECTIONS: readonly PlaybookSectionMeta[] = [
   {
     id: "t2-reconcile",
     group: "v03-targets",
-    label: "启动巡检与一键接管",
-    subtitle: "非阻塞顶栏提醒横幅 + 手动重扫按钮 + 备份校验/冲突预警/外部软链预览弹窗",
+    label: "启动巡检与接管",
+    subtitle: "非阻塞顶栏提醒横幅 + 手动重扫按钮 + 含晚加载骨架态的备份校验/冲突预警预览弹窗",
     issueTag: "T2.4 #245",
     importHint:
       'import { ReconcileBanner, RescanTriggerButton } from "@/features/reconcile/ReconcileBanner";\nimport { ReconcileDialog } from "@/features/reconcile/ReconcileDialog";',
@@ -75,8 +85,8 @@ export const PLAYBOOK_SECTIONS: readonly PlaybookSectionMeta[] = [
   {
     id: "t3-conflicts",
     group: "v03-targets",
-    label: "同名多版本冲突中心",
-    subtitle: "Skills 管理第三 Tab：变体卡片、mtime 欺骗预警、逐文件 Unified Diff、保留/扶正/拆分/Agent 合并",
+    label: "同名冲突处理中心",
+    subtitle: "Skills 管理第三 Tab：变体交错卡片、mtime 欺骗预警、晚加载 Unified Diff 与 Agent 融合",
     issueTag: "T3.3 #248",
     importHint:
       'import { ConflictsView } from "@/features/conflicts/ConflictsView";\nimport { ConflictDiffViewer } from "@/features/conflicts/ConflictDiffViewer";',
@@ -84,8 +94,8 @@ export const PLAYBOOK_SECTIONS: readonly PlaybookSectionMeta[] = [
   {
     id: "t5-git",
     group: "v03-targets",
-    label: "Git 版本与 gh 云端备份",
-    subtitle: "Git/gh 检测开关、8 位设备码 Web 登录向导、私有/公开建仓与密钥预检、单 Skill 历史抽屉",
+    label: "Git 与云端备份",
+    subtitle: "Git/gh 检测开关、8 位设备码 Web 登录向导、私有/公开建仓密钥预检与单 Skill 历史抽屉",
     issueTag: "T5.3 #253",
     importHint:
       'import { GitSettingsSection } from "@/features/git/GitSettingsSection";\nimport { GhLoginDialog } from "@/features/git/GhLoginDialog";\nimport { CloudBackupDialog } from "@/features/git/CloudBackupDialog";\nimport { SkillHistoryDrawer } from "@/features/git/SkillHistoryDrawer";',
