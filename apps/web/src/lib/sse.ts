@@ -1,10 +1,18 @@
 /**
- * SSE 消费工具(翻译与 Agent 共用):POST + 手写 ReadableStream 解析,
- * 不引第三方库。帧格式:event: <name>\ndata: <JSON>\n\n(翻译专用 delta/done/error)。
+ * 翻译专用 SSE 消费工具:POST + 手写 ReadableStream 解析,
+ * 不引第三方库。帧格式:event: <name>\ndata: <JSON>\n\n(delta / done / error)。
  */
 
 export interface SseHandlers {
   [event: string]: (data: string) => void;
+}
+
+export function parseSseJson<T>(raw: string): T | null {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -18,17 +26,17 @@ export async function postSse(url: string, body: unknown, handlers: SseHandlers,
     body: JSON.stringify(body),
   };
   if (signal !== undefined) init.signal = signal;
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const fail = (await res.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(fail?.message ?? "HTTP " + String(res.status));
-  }
-  const streamBody = res.body;
-  if (streamBody === null) return;
-  const reader = streamBody.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
   try {
+    const res = await fetch(url, init);
+    if (!res.ok) {
+      const fail = (await res.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(fail?.message ?? "HTTP " + String(res.status));
+    }
+    const streamBody = res.body;
+    if (streamBody === null) return;
+    const reader = streamBody.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
     for (;;) {
       const chunk = await reader.read();
       if (chunk.done) break;

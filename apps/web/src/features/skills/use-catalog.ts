@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { isStoreUnconfiguredError } from "@/lib/api-client";
 import { getAction } from "../actions/registry.js";
 import { sortClientsForApps } from "../shell/apps-layout.js";
-import { fetchArchive, fetchCatalog, fetchClientSkillStates } from "./api.js";
+import {
+  fetchArchive,
+  fetchBackups,
+  fetchCatalog,
+  fetchClientSkillStates,
+  fetchDoctor,
+  fetchGroups,
+  fetchStats,
+  initStore,
+} from "./api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./async-resource.js";
 import {
   loadCatalogRefresh,
-  loadCatalogSnapshot,
+  loadPrimaryCatalog,
   patchClientStates,
   patchSkillVisibility,
   renameSkillHash,
   type CatalogLoadState,
-  type CatalogSnapshot,
+  type PrimaryCatalogResult,
 } from "./catalog.js";
 import type {
   ArchivedSkill,
@@ -31,7 +41,7 @@ export interface UseCatalogOptions {
   loadClientStates: boolean;
 }
 
-/** 远程目录状态与乐观写:页面只消费,不自己 setState。 */
+/** 远程目录状态与渐进水合:主壳只等 /api/skills + /api/clients,次级数据独立并行填充。 */
 export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   const [status, setStatus] = useState<CatalogLoadState>("loading");
   const [skills, setSkills] = useState<SkillRecord[]>([]);
@@ -44,44 +54,126 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   const [doctor, setDoctor] = useState<DoctorResponse | null>(null);
   const [latestSnapshotId, setLatestSnapshotId] = useState<string | null>(null);
   const [snapshotCount, setSnapshotCount] = useState(0);
+
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [doctorLoading, setDoctorLoading] = useState(false);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+
   const [focusedHash, setFocusedHash] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientStates, setClientStates] = useState<ClientSkillStatesResponse | null>(null);
   const [pendingHash, setPendingHash] = useState<string | null>(null);
 
-  const applySnapshot = useCallback((snap: CatalogSnapshot): void => {
-    const ordered = sortClientsForApps(snap.clients, snap.skills);
-    setStoreRoot(snap.storeRoot);
-    setSkills(snap.skills);
-    setClients(ordered);
-    setUsageByHash(new Map(Object.entries(snap.stats.stats.counters)));
-    setRanking(snap.stats.ranking);
-    setArchived(snap.archived);
-    setDoctor(snap.doctor);
-    setLatestSnapshotId(snap.backups?.latest ?? null);
-    setSnapshotCount(snap.backups?.snapshots.length ?? 0);
-    setGroups(snap.groups);
-    setSelectedClientId((prev) => prev ?? ordered[0]?.clientId ?? null);
-  }, []);
+  const mountedRef = useRef(true);
+  const loadGenRef = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    void loadCatalogSnapshot()
-      .then((snap) => {
-        if (cancelled) return;
-        applySnapshot(snap);
-        setStatus("ready");
+  const hydrateSecondary = useCallback((gen: number): void => {
+    const active = (): boolean => mountedRef.current && loadGenRef.current === gen;
+
+    setStatsLoading(true);
+    void fetchStats()
+      .then((res) => {
+        if (!active()) return;
+        setUsageByHash(new Map(Object.entries(res.stats.counters)));
+        setRanking(res.ranking);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active()) setStatsLoading(false);
+      });
+
+    setArchiveLoading(true);
+    void fetchArchive()
+      .then((list) => {
+        if (active()) setArchived(list);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active()) setArchiveLoading(false);
+      });
+
+    setDoctorLoading(true);
+    void fetchDoctor()
+      .then((doc) => {
+        if (active()) setDoctor(doc);
       })
       .catch(() => {
-        if (!cancelled) setStatus("offline");
+        if (active()) setDoctor(null);
+      })
+      .finally(() => {
+        if (active()) setDoctorLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [applySnapshot]);
+
+    setBackupsLoading(true);
+    void fetchBackups()
+      .then((bk) => {
+        if (!active()) return;
+        setLatestSnapshotId(bk.latest);
+        setSnapshotCount(bk.snapshots.length);
+      })
+      .catch(() => {
+        if (active()) return;
+        setLatestSnapshotId(null);
+        setSnapshotCount(0);
+      })
+      .finally(() => {
+        if (active()) setBackupsLoading(false);
+      });
+
+    setGroupsLoading(true);
+    void fetchGroups()
+      .then((list) => {
+        if (active()) setGroups(list);
+      })
+      .catch(() => {
+        if (active()) setGroups([]);
+      })
+      .finally(() => {
+        if (active()) setGroupsLoading(false);
+      });
+  }, []);
+
+  const applyPrimary = useCallback(
+    (primary: PrimaryCatalogResult, gen: number): void => {
+      if (!mountedRef.current || loadGenRef.current !== gen) return;
+      if (primary.kind === "unconfigured") {
+        setStoreRoot("");
+        setSkills([]);
+        setClients(sortClientsForApps(primary.clients, []));
+        setStatus("unconfigured");
+        return;
+      }
+      const ordered = sortClientsForApps(primary.clients, primary.skills);
+      setStoreRoot(primary.storeRoot);
+      setSkills(primary.skills);
+      setClients(ordered);
+      setSelectedClientId((prev) => prev ?? ordered[0]?.clientId ?? null);
+      setStatus("ready");
+      hydrateSecondary(gen);
+    },
+    [hydrateSecondary],
+  );
 
   useEffect(() => {
-    if (!loadClientStates || selectedClientId === null) return;
+    mountedRef.current = true;
+    const gen = ++loadGenRef.current;
+    void loadPrimaryCatalog()
+      .then((primary) => {
+        applyPrimary(primary, gen);
+      })
+      .catch(() => {
+        if (mountedRef.current && loadGenRef.current === gen) setStatus("offline");
+      });
+    return () => {
+      mountedRef.current = false;
+      loadGenRef.current += 1;
+    };
+  }, [applyPrimary]);
+
+  useEffect(() => {
+    if (!loadClientStates || selectedClientId === null || status !== "ready") return;
     let cancelled = false;
     void fetchClientSkillStates(selectedClientId)
       .then((s) => {
@@ -93,20 +185,48 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
     return () => {
       cancelled = true;
     };
-  }, [loadClientStates, selectedClientId]);
+  }, [loadClientStates, selectedClientId, status]);
 
   const refresh = useCallback((): void => {
-    void loadCatalogRefresh(selectedClientId).then((next) => {
-      setStoreRoot(next.storeRoot);
-      setSkills(next.skills);
-      setGroups(next.groups);
-      if (next.clientStates !== null) setClientStates(next.clientStates);
-    });
-  }, [selectedClientId]);
+    void loadCatalogRefresh(selectedClientId)
+      .then((next) => {
+        if (!mountedRef.current) return;
+        setStoreRoot(next.storeRoot);
+        setSkills(next.skills);
+        setGroups(next.groups);
+        if (next.clientStates !== null) setClientStates(next.clientStates);
+        if (status !== "ready") {
+          setStatus("ready");
+          hydrateSecondary(++loadGenRef.current);
+        }
+      })
+      .catch((e: unknown) => {
+        if (isStoreUnconfiguredError(e) && status === "unconfigured") return;
+        toast.error(e instanceof Error ? e.message : String(e));
+      });
+  }, [selectedClientId, status, hydrateSecondary]);
 
   const reload = useCallback((): void => {
-    void loadCatalogSnapshot().then(applySnapshot);
-  }, [applySnapshot]);
+    const gen = ++loadGenRef.current;
+    void loadPrimaryCatalog()
+      .then((primary) => {
+        applyPrimary(primary, gen);
+      })
+      .catch((e: unknown) => {
+        toast.error(e instanceof Error ? e.message : String(e));
+      });
+  }, [applyPrimary]);
+
+  const initializeStore = useCallback(
+    async (customStoreRoot?: string): Promise<void> => {
+      await initStore(customStoreRoot);
+      toast.success("库存已初始化");
+      const gen = ++loadGenRef.current;
+      const primary = await loadPrimaryCatalog();
+      applyPrimary(primary, gen);
+    },
+    [applyPrimary],
+  );
 
   const toggle = useCallback((skill: SkillRecord, clientId: string, enable: boolean): void => {
     void (async () => {
@@ -115,7 +235,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
         await getAction(enable ? "enable" : "disable").execute({ hash: skill.hash, clientId });
         setSkills((prev) => patchSkillVisibility(prev, skill.hash, clientId, enable));
         setClientStates((prev) => patchClientStates(prev, skill.hash, clientId, enable));
-      } catch (e) {
+      } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : String(e));
       } finally {
         setPendingHash(null);
@@ -137,7 +257,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
         setSkills((await fetchCatalog()).skills);
         setArchived(await fetchArchive());
         toast("已恢复 " + name);
-      } catch (e) {
+      } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : String(e));
       }
     })();
@@ -151,7 +271,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
         setArchived(await fetchArchive());
         setFocusedHash(null);
         toast("已归档");
-      } catch (e) {
+      } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : String(e));
       }
     })();
@@ -169,6 +289,11 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
     doctor,
     latestSnapshotId,
     snapshotCount,
+    statsLoading,
+    archiveLoading,
+    doctorLoading,
+    backupsLoading,
+    groupsLoading,
     focusedHash,
     setFocusedHash,
     selectedClientId,
@@ -179,6 +304,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
     markSaved,
     refresh,
     reload,
+    initializeStore,
     restore,
     archive,
   };

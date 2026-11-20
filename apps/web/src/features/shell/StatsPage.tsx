@@ -21,6 +21,7 @@ import {
   CHART_SERIES,
 } from "@/components/ui/chart";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableHead, TableRow, TableTd, TableTh } from "@/components/ui/table";
 import { SegmentedTabs, type SegmentedTabItem } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,7 @@ interface StatsPageProps {
   clients: ClientInfo[];
   ranking: UsageRankEntry[];
   counters: Map<string, UsageCounters>;
+  statsLoading?: boolean;
   onGo: (target: ShellNav) => void;
 }
 
@@ -250,7 +252,7 @@ function SourceChart({ rows }: { rows: { kind: string; count: number }[] }): Rea
 }
 
 /** 定量页:前 8 名粗柱 + 排行表。 */
-export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPageProps): React.JSX.Element {
+export function StatsPage({ skills, clients, ranking, counters, statsLoading = false, onGo }: StatsPageProps): React.JSX.Element {
   const [tab, setTab] = useState<StatsTab>("overview");
   const usage = useMemo(() => usageRows(skills, ranking, counters), [skills, ranking, counters]);
   const apps = useMemo(() => appDistribution(skills, clients), [skills, clients]);
@@ -294,9 +296,15 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
       <ScrollArea className="min-h-0 flex-1">
         <div key={tab} className="motion-enter space-y-6 p-6">
           {tab === "overview" && (
-            noData ? <Empty onGo={onGo} /> : (
+            noData && !statsLoading ? <Empty onGo={onGo} /> : (
               <div className="grid gap-4 lg:grid-cols-2">
-                {usageHead.length > 0 && (
+                {statsLoading ? (
+                  <Card>
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="mt-2 h-3 w-48" />
+                    <Skeleton className="mt-4 h-52 w-full" />
+                  </Card>
+                ) : usageHead.length > 0 && (
                   <Card>
                     <h2 className="text-base font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>
                     <p className="mt-1 text-xs text-ink-mid">蓝 = 查看，青 = 启用。点击进入该 skill。</p>
@@ -326,7 +334,15 @@ export function StatsPage({ skills, clients, ranking, counters, onGo }: StatsPag
             )
           )}
           {tab === "usage" && (
-            usage.length === 0 ? <Empty onGo={onGo} /> : (
+            statsLoading ? (
+              <div className="space-y-6">
+                <Card>
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="mt-4 h-56 w-full" />
+                </Card>
+                <Skeleton className="h-40 w-full" />
+              </div>
+            ) : usage.length === 0 ? <Empty onGo={onGo} /> : (
               <div className="space-y-6">
                 <Card>
                   <h2 className="text-base font-medium text-ink-strong">用量前 {String(usageHead.length)} 名</h2>

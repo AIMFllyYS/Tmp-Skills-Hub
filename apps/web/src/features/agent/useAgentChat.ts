@@ -3,13 +3,18 @@
  * UIMessage[] 存 localStorage(v2,不迁旧 Wire 会话)。
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
   type UIMessage,
 } from "ai";
+import {
+  collectCompletedWriteToolIds,
+  parseAgentErrorMessage,
+  sanitizePersistedMessages,
+} from "./agent-helpers.js";
 import type { WritePolicy } from "./types.js";
 
 const agentTransport = new DefaultChatTransport({ api: "/api/agent/chat" });
@@ -23,7 +28,7 @@ function loadMessages(): UIMessage[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === null) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as UIMessage[]) : [];
+    return sanitizePersistedMessages(parsed);
   } catch {
     return [];
   }
@@ -45,6 +50,11 @@ function loadWritePolicy(): WritePolicy {
   }
 }
 
+export interface UseAgentChatOptions {
+  /** 当助手写工具成功落盘(output-available)时触发目录刷新。 */
+  onMutated?: (() => void) | undefined;
+}
+
 export interface UseAgentChat {
   messages: UIMessage[];
   busy: boolean;
@@ -61,22 +71,53 @@ export interface UseAgentChat {
   deny: (approvalId: string) => void;
 }
 
-export function useAgentChat(): UseAgentChat {
+export function useAgentChat({ onMutated }: UseAgentChatOptions = {}): UseAgentChat {
+  const [initialMessages] = useState<UIMessage[]>(loadMessages);
   const [model, setModelState] = useState<string>(loadStoredModel);
   const [writePolicy, setWritePolicyState] = useState<WritePolicy>(loadWritePolicy);
-  const { messages, sendMessage, stop, status, error, setMessages, addToolApprovalResponse } = useChat({
+  const onMutatedRef = useRef(onMutated);
+  const [seenWriteCalls] = useState<Set<string>>(() => new Set(collectCompletedWriteToolIds(initialMessages)));
+
+  useEffect(() => {
+    onMutatedRef.current = onMutated;
+  }, [onMutated]);
+
+  const {
+    messages,
+    sendMessage,
+    stop,
+    status,
+    error,
+    clearError,
+    setMessages,
+    addToolApprovalResponse,
+  } = useChat({
     transport: agentTransport,
-    messages: loadMessages(),
+    messages: initialMessages,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
   useEffect(() => {
+    if (status !== "ready") return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      const cleaned = sanitizePersistedMessages(messages);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
     } catch {
       // 存储满等静默
     }
-  }, [messages]);
+  }, [messages, status]);
+
+  useEffect(() => {
+    const completed = collectCompletedWriteToolIds(messages);
+    let hasNewMutation = false;
+    for (const id of completed) {
+      if (!seenWriteCalls.has(id)) {
+        seenWriteCalls.add(id);
+        hasNewMutation = true;
+      }
+    }
+    if (hasNewMutation) onMutatedRef.current?.();
+  }, [messages, seenWriteCalls]);
 
   const setModel = useCallback((next: string) => {
     setModelState(next);
@@ -112,30 +153,35 @@ export function useAgentChat(): UseAgentChat {
     (text: string) => {
       const trimmed = text.trim();
       if (trimmed === "" || status === "streaming" || status === "submitted") return;
+      clearError();
       void sendMessage({ text: trimmed }, { body: { model, writePolicy } });
     },
-    [sendMessage, status, model, writePolicy],
+    [clearError, sendMessage, status, model, writePolicy],
   );
 
   const reset = useCallback(() => {
     void stop();
+    clearError();
+    seenWriteCalls.clear();
     setMessages([]);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
       // 静默
     }
-  }, [stop, setMessages]);
+  }, [stop, clearError, seenWriteCalls, setMessages]);
 
   const approve = useCallback(
     (approvalId: string) => {
+      clearError();
       void addToolApprovalResponse({ id: approvalId, approved: true, options: { body: { model, writePolicy } } });
     },
-    [addToolApprovalResponse, model, writePolicy],
+    [clearError, addToolApprovalResponse, model, writePolicy],
   );
 
   const deny = useCallback(
     (approvalId: string) => {
+      clearError();
       void addToolApprovalResponse({
         id: approvalId,
         approved: false,
@@ -143,13 +189,13 @@ export function useAgentChat(): UseAgentChat {
         options: { body: { model, writePolicy } },
       });
     },
-    [addToolApprovalResponse, model, writePolicy],
+    [clearError, addToolApprovalResponse, model, writePolicy],
   );
 
   return {
     messages,
     busy: status === "submitted" || status === "streaming",
-    errorText: error instanceof Error ? error.message : error !== undefined ? String(error) : null,
+    errorText: parseAgentErrorMessage(error),
     model,
     setModel,
     writePolicy,

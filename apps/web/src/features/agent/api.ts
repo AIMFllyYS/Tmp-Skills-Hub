@@ -1,14 +1,13 @@
+import { apiRequest } from "@/lib/api-client";
 import type { AgentModel } from "./types.js";
 
 export interface AgentModelsResponse {
-  ok: boolean;
+  ok: true;
   command: "agent-models";
   defaultModel: string;
   models: AgentModel[];
 }
 
 export async function fetchAgentModels(): Promise<AgentModelsResponse> {
-  const res = await fetch("/api/agent/models");
-  if (!res.ok) throw new Error("GET /api/agent/models → " + res.status);
-  return (await res.json()) as AgentModelsResponse;
+  return apiRequest<AgentModelsResponse>("/api/agent/models");
 }

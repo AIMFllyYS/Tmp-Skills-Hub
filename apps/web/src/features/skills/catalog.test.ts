@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiRequestError } from "@/lib/api-client";
+import { setSkillEnabled } from "./api.js";
 import {
   formatResetPreview,
   loadCatalogRefresh,
   loadCatalogSnapshot,
+  loadPrimaryCatalog,
   patchClientStates,
   patchSkillVisibility,
   renameSkillHash,
@@ -110,6 +113,76 @@ describe("formatResetPreview", () => {
     expect(text).toContain("40 文件");
     expect(text).toContain("8 链接");
     expect(text).not.toContain("/tmp/.pre-reinit");
+  });
+});
+
+describe("loadPrimaryCatalog", () => {
+  it("仅拉取 /api/skills 与 /api/clients 即可就绪", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url === "/api/skills") {
+        return jsonRes({ ok: true, command: "skills", storeRoot: "/s", total: 0, skills: [] });
+      }
+      if (url === "/api/clients") {
+        return jsonRes({ ok: true, command: "clients", clients: [{ clientId: "cursor", skillsDir: "/c" }] });
+      }
+      throw new Error("unexpected " + url);
+    });
+    const res = await loadPrimaryCatalog();
+    expect(res).toEqual({
+      kind: "ready",
+      storeRoot: "/s",
+      skills: [],
+      clients: [{ clientId: "cursor", skillsDir: "/c" }],
+    });
+    expect(urls.sort()).toEqual(["/api/clients", "/api/skills"]);
+  });
+
+  it("503 store-not-configured 返回 unconfigured 且保留已发现客户端", async () => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/skills") {
+        return jsonRes({ ok: false, command: "skills", code: "store-not-configured", message: "未配置" }, 503);
+      }
+      if (url === "/api/clients") {
+        return jsonRes({ ok: true, command: "clients", clients: [{ clientId: "claude", skillsDir: "/cl" }] });
+      }
+      throw new Error("unexpected " + url);
+    });
+    const res = await loadPrimaryCatalog();
+    expect(res).toEqual({
+      kind: "unconfigured",
+      clients: [{ clientId: "claude", skillsDir: "/cl" }],
+    });
+  });
+
+  it("真正离线时抛错以便切换 offline 状态", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+    await expect(loadPrimaryCatalog()).rejects.toThrow("fetch failed");
+  });
+});
+
+describe("apiRequest / setSkillEnabled", () => {
+  it("setSkillEnabled 对 hash 进行 encodeURIComponent 并保留服务端 code", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return jsonRes({ ok: false, command: "enable", code: "link-failed", message: "目录冲突" }, 409);
+    });
+    let caught: unknown;
+    try {
+      await setSkillEnabled("a/b?c", "cursor", true);
+    } catch (e) {
+      caught = e;
+    }
+    expect(calls[0]).toBe("/api/skills/a%2Fb%3Fc/enable");
+    expect(caught).toBeInstanceOf(ApiRequestError);
+    expect((caught as ApiRequestError).code).toBe("link-failed");
+    expect((caught as ApiRequestError).message).toBe("目录冲突");
   });
 });
 

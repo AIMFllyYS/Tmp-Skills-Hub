@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SegmentedTabs, type SegmentedTabItem } from "@/components/ui/tabs";
 import { TruncateTip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ interface SkillsPageProps {
   clients: ClientInfo[];
   groups: GroupDef[];
   archived: ArchivedSkill[];
+  archiveLoading?: boolean;
   focusedHash: string | null;
   onFocus: (hash: string) => void;
   pendingHash: string | null;
@@ -58,6 +60,7 @@ export function SkillsPage({
   clients,
   groups,
   archived,
+  archiveLoading = false,
   focusedHash,
   onFocus,
   pendingHash,
@@ -328,7 +331,13 @@ export function SkillsPage({
                 </span>
               </CollapsibleTrigger>
               <CollapsiblePanel className="mt-2">
-                <ArchivePanel archived={archived} onRestore={onRestore} />
+                {archiveLoading ? (
+                  <div className="space-y-2" aria-busy="true" aria-label="加载归档列表">
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : (
+                  <ArchivePanel archived={archived} onRestore={onRestore} />
+                )}
               </CollapsiblePanel>
             </Collapsible>
           </div>

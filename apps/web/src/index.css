@@ -112,6 +112,15 @@ html, body, #root {
   }
 }
 
+@utility motion-chevron {
+  transition-property: transform;
+  transition-duration: var(--duration-normal);
+  transition-timing-function: var(--ease-spring);
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
 /* 仅按钮收起/展开时插值；拖分隔条时由 .sidebar-dragging 关掉 */
 .sidebar-motion > [data-panel] {
   transition: flex-grow var(--duration-normal) var(--ease-smooth);

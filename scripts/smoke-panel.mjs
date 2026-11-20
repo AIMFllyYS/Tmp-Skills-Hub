@@ -33,13 +33,18 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(repo, "packages", "cli", "dist", "index.js");
 const webIndex = path.join(repo, "apps", "web", "dist", "index.html");
 
+const requireChrome = process.argv.includes("--require-chrome");
+
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`skills-hub 面板冒烟
 
 用法:  pnpm smoke
-       node scripts/smoke-panel.mjs
+       node scripts/smoke-panel.mjs [--require-chrome]
 
-需先 pnpm build。无 Chrome 时跳过并退出 0。
+选项:
+  --require-chrome  未找到 Chrome 时退出码 1(用于 CI 强门控)
+
+需先 pnpm build。默认无 Chrome 时跳过并退出 0。
 CHROME_PATH 可指定浏览器可执行文件。`);
   process.exit(0);
 }
@@ -250,6 +255,10 @@ async function metricsOf(send, sessionId) {
 async function main() {
   const chromePath = findChrome();
   if (chromePath === null) {
+    if (requireChrome) {
+      console.error("失败: 未找到 Chrome 且指定了 --require-chrome。请安装 Chrome 或设置 CHROME_PATH。");
+      return 1;
+    }
     console.log("跳过: 本机未找到 Chrome。安装 Chrome 或设置 CHROME_PATH 后再跑。");
     console.log("退出码 0(环境缺失,不视为失败)。");
     return 0;
@@ -371,7 +380,7 @@ async function main() {
     const navReady = await (async () => {
       for (let i = 0; i < 80; i++) {
         const found = await evalJs(`(() => {
-          const ids = ["nav-overview", "nav-stats", "nav-skills", "nav-settings"];
+          const ids = ["nav-overview", "nav-stats", "nav-skills", "nav-agent", "nav-settings"];
           return ids.every((id) => document.querySelector("[data-testid=" + id + "]"));
         })()`);
         if (found === true) return true;
@@ -380,7 +389,7 @@ async function main() {
       return false;
     })();
     if (navReady !== true) {
-      console.error("找不到左侧三板块 + 设置导航。");
+      console.error("找不到左侧板块(总览/统计/Skills/Agent)或设置导航。");
       return 1;
     }
     const tabErr = await openSkillsContentTab(evalJs);

@@ -4,9 +4,103 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>skill-hub — 统一查看</title>
+    <style>
+      .boot-shell {
+        display: flex;
+        height: 100dvh;
+        width: 100%;
+        overflow: hidden;
+        background: #ffffff;
+        color: #030712;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .boot-sidebar {
+        display: flex;
+        width: 224px;
+        flex-shrink: 0;
+        flex-direction: column;
+        border-right: 1px solid #e5e7eb;
+        background: #ffffff;
+      }
+      .boot-brand {
+        display: flex;
+        height: 48px;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .boot-nav {
+        flex: 1;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .boot-footer {
+        padding: 10px 12px;
+        border-top: 1px solid #e5e7eb;
+      }
+      .boot-main {
+        flex: 1;
+        min-width: 0;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .boot-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .boot-block {
+        border-radius: 8px;
+        background: rgba(229, 231, 235, 0.8);
+        animation: boot-pulse 1.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+      }
+      @keyframes boot-pulse {
+        50% { opacity: 0.55; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-block { animation: none; }
+      }
+      @media (max-width: 640px) {
+        .boot-sidebar { width: 48px; }
+        .boot-grid { grid-template-columns: 1fr; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-shell" aria-busy="true" aria-label="正在加载界面">
+        <aside class="boot-sidebar">
+          <div class="boot-brand">
+            <div class="boot-block" style="width: 20px; height: 20px; flex-shrink: 0"></div>
+            <div class="boot-block" style="width: 96px; height: 14px"></div>
+          </div>
+          <div class="boot-nav">
+            <div class="boot-block" style="height: 30px"></div>
+            <div class="boot-block" style="height: 30px"></div>
+            <div class="boot-block" style="height: 30px"></div>
+            <div class="boot-block" style="height: 30px"></div>
+          </div>
+          <div class="boot-footer">
+            <div class="boot-block" style="height: 30px"></div>
+          </div>
+        </aside>
+        <main class="boot-main">
+          <div class="boot-block" style="width: 140px; height: 28px"></div>
+          <div class="boot-block" style="width: 240px; height: 16px"></div>
+          <div class="boot-grid">
+            <div class="boot-block" style="height: 96px"></div>
+            <div class="boot-block" style="height: 96px"></div>
+            <div class="boot-block" style="height: 96px"></div>
+          </div>
+          <div class="boot-block" style="height: 160px"></div>
+        </main>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

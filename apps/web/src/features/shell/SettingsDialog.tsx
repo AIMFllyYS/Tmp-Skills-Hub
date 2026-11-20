@@ -7,6 +7,7 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TruncateTip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { getAction } from "../actions/registry.js";
@@ -23,6 +24,7 @@ interface SettingsDialogProps {
   storeRoot: string;
   clients: ClientInfo[];
   latestSnapshotId: string | null;
+  backupsLoading?: boolean;
   onResetDone: () => void;
 }
 
@@ -33,6 +35,7 @@ export function SettingsDialog({
   storeRoot,
   clients,
   latestSnapshotId,
+  backupsLoading = false,
   onResetDone,
 }: SettingsDialogProps): React.JSX.Element {
   const [ask, setAsk] = useState(false);
@@ -123,28 +126,34 @@ export function SettingsDialog({
               <p className="mt-1 text-sm text-ink-mid">
                 按备份快照回到初始化前,再自动收录。请再次确认后才会执行。
               </p>
-              <Button
-                type="button"
-                variant="destructive"
-                data-testid="reset-button"
-                className="mt-3"
-                disabled={busy || latestSnapshotId === null}
-                onClick={() => {
-                  if (latestSnapshotId === null) return;
-                  setBusy(true);
-                  void reset.preview({ snapshotId: latestSnapshotId })
-                    .then((p) => setPreviewBody(formatResetPreview(p)))
-                    .catch(() => setPreviewBody(RESET_FALLBACK_BODY))
-                    .finally(() => {
-                      setBusy(false);
-                      setAsk(true);
-                    });
-                }}
-              >
-                重置
-              </Button>
-              {latestSnapshotId === null && (
-                <p className="mt-2 text-sm text-ink-mid">尚无备份快照,无法重置。</p>
+              {backupsLoading ? (
+                <Skeleton className="mt-3 h-9 w-24" />
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    data-testid="reset-button"
+                    className="mt-3"
+                    disabled={busy || latestSnapshotId === null}
+                    onClick={() => {
+                      if (latestSnapshotId === null) return;
+                      setBusy(true);
+                      void reset.preview({ snapshotId: latestSnapshotId })
+                        .then((p) => setPreviewBody(formatResetPreview(p)))
+                        .catch(() => setPreviewBody(RESET_FALLBACK_BODY))
+                        .finally(() => {
+                          setBusy(false);
+                          setAsk(true);
+                        });
+                    }}
+                  >
+                    重置
+                  </Button>
+                  {latestSnapshotId === null && (
+                    <p className="mt-2 text-sm text-ink-mid">尚无备份快照,无法重置。</p>
+                  )}
+                </>
               )}
             </section>
           </ScrollArea>

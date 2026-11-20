@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { getAction } from "../actions/registry.js";
 import type { AnalyzeReportItem, AnalyzeResponse } from "./types.js";
 
@@ -56,21 +57,23 @@ export function AnalyzeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] overflow-y-auto">
+      <DialogContent className="flex max-h-[80vh] flex-col">
         <DialogTitle>{analyze.verb}</DialogTitle>
         <DialogDescription>报告仅为建议,未做任何写操作。</DialogDescription>
-        <Button type="button" className="mt-3" data-testid="analyze-run" disabled={busy} onClick={() => void run()}>
-          {busy ? "分析中…" : analyze.verb}
-        </Button>
-        {error !== null && (
-          <p data-testid="analyze-degraded" className="mt-3 text-sm text-ink-mid">{error.message}</p>
-        )}
-        {error === null && report !== null && (
-          <div data-testid="analyze-report">
-            <ItemList title="相近" items={report.similar} empty="未发现相近 skill" />
-            <ItemList title="可能冲突" items={report.conflict} empty="未发现冲突" />
-          </div>
-        )}
+        <ScrollArea className="mt-3 min-h-0 flex-1">
+          <Button type="button" data-testid="analyze-run" disabled={busy} onClick={() => void run()}>
+            {busy ? "分析中…" : analyze.verb}
+          </Button>
+          {error !== null && (
+            <p data-testid="analyze-degraded" className="mt-3 text-sm text-ink-mid">{error.message}</p>
+          )}
+          {error === null && report !== null && (
+            <div data-testid="analyze-report">
+              <ItemList title="相近" items={report.similar} empty="未发现相近 skill" />
+              <ItemList title="可能冲突" items={report.conflict} empty="未发现冲突" />
+            </div>
+          )}
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );

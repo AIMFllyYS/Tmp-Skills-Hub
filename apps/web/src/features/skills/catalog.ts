@@ -1,3 +1,4 @@
+import { isStoreUnconfiguredError } from "@/lib/api-client";
 import {
   fetchArchive,
   fetchBackups,
@@ -20,7 +21,11 @@ import type {
   StatsResponse,
 } from "./types.js";
 
-export type CatalogLoadState = "loading" | "ready" | "offline";
+export type CatalogLoadState = "loading" | "ready" | "unconfigured" | "offline";
+
+export type PrimaryCatalogResult =
+  | { kind: "ready"; storeRoot: string; skills: SkillRecord[]; clients: ClientInfo[] }
+  | { kind: "unconfigured"; clients: ClientInfo[] };
 
 export interface CatalogSnapshot {
   storeRoot: string;
@@ -33,7 +38,25 @@ export interface CatalogSnapshot {
   groups: GroupDef[];
 }
 
-/** 首屏 / 重置后的整包拉取。doctor、备份失败不拖垮目录。 */
+/** 首屏主门控:只等待核心技能列表与本机应用列表,区分未配置与离线。 */
+export async function loadPrimaryCatalog(): Promise<PrimaryCatalogResult> {
+  const [catalogResult, clientsResult] = await Promise.allSettled([fetchCatalog(), fetchClients()]);
+  const clients = clientsResult.status === "fulfilled" ? clientsResult.value : [];
+  if (catalogResult.status === "fulfilled") {
+    return {
+      kind: "ready",
+      storeRoot: catalogResult.value.storeRoot,
+      skills: catalogResult.value.skills,
+      clients,
+    };
+  }
+  if (isStoreUnconfiguredError(catalogResult.reason)) {
+    return { kind: "unconfigured", clients };
+  }
+  throw catalogResult.reason;
+}
+
+/** 整包拉取(保留用于向后兼容与单次快照场景)。doctor、备份失败不拖垮目录。 */
 export async function loadCatalogSnapshot(): Promise<CatalogSnapshot> {
   const [catalog, clients, stats, archived, doctor, backups, groups] = await Promise.all([
     fetchCatalog(),

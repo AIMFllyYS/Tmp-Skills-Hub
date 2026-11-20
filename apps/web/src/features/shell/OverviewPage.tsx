@@ -2,6 +2,7 @@ import { Blocks, Link2, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { ClientInfo, DoctorResponse, SkillRecord } from "../skills/types.js";
 import type { ShellNav } from "./page.js";
@@ -12,6 +13,8 @@ interface OverviewPageProps {
   clients: ClientInfo[];
   doctor: DoctorResponse | null;
   snapshotCount: number;
+  doctorLoading?: boolean;
+  backupsLoading?: boolean;
   onGo: (target: ShellNav) => void;
 }
 
@@ -55,7 +58,16 @@ function MetricButton({
 }
 
 /** 一眼健康,不是第二份统计。 */
-export function OverviewPage({ skills, clients, doctor, snapshotCount, onGo }: OverviewPageProps): React.JSX.Element {
+export function OverviewPage({
+  skills,
+  clients,
+  doctor,
+  snapshotCount,
+  doctorLoading = false,
+  backupsLoading = false,
+  onGo,
+}: OverviewPageProps): React.JSX.Element {
+  const healthLoading = doctorLoading || backupsLoading;
   const cover = coverageOf(skills);
   const dangling = doctor?.danglingLinks.length ?? 0;
   const unlinked = skills.filter((s) => s.visibleIn.length === 0).length;
@@ -128,7 +140,12 @@ export function OverviewPage({ skills, clients, doctor, snapshotCount, onGo }: O
         <div className="mt-8 grid gap-8 lg:grid-cols-2">
           <section>
             <h2 className="text-base font-medium text-ink-strong">需要处理</h2>
-            {issues.length === 0 ? (
+            {healthLoading ? (
+              <div className="mt-2 space-y-2" aria-busy="true" aria-label="加载健康检查">
+                <Skeleton className="h-11 w-full" />
+                <Skeleton className="h-11 w-full" />
+              </div>
+            ) : issues.length === 0 ? (
               <p className="mt-2 text-sm text-ink-mid">没有需要立刻处理的事。</p>
             ) : (
               <ul className="mt-2 space-y-2">

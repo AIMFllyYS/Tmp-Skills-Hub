@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 export function Skeleton({ className }: { className?: string }): React.JSX.Element {
   return (
     <div
-      className={cn("rounded-lg bg-surface motion-safe:animate-skeleton", className)}
+      className={cn("rounded-lg bg-gray-200/80 motion-safe:animate-skeleton motion-reduce:animate-none", className)}
       aria-hidden
     />
   );
