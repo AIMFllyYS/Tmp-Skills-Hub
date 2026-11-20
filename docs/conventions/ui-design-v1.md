@@ -261,6 +261,8 @@
 - **单一 UI 真源原则**：所有新增原子组件（`components/ui/{icon,deferred-reveal,empty-state,metric-card,search-input,setting-row,copy-button,status-banner,path-field,step-list,drawer,diff-viewer}`、`Badge tone+dot`、`SegmentedTabs badge`）与 v0.3 业务页面/弹窗组件（`features/shell/{DualPathOnboardingView,SettingsV3Panels}`、`features/reconcile/*`、`features/conflicts/*`、`features/git/*`）均先在 `/playbook` 中完成视觉、动效、晚加载与交互状态对齐；正式业务页面只负责 `import` 这些组件并接入 `/api/*` 状态，**禁止在正式页面里另起一套重复 UI 样式或手写过渡动画**。
 - **晚加载与交错动效口径**：异步加载模块优先使用 `<DeferredReveal>`（骨架→内容平滑解码，无生硬闪现）、列表/卡片组使用 `<StaggerItem index={i}>`（每项 `45ms` 上限 `360ms`）、折下区域按需使用 `<LazyViewportSection>`（`IntersectionObserver` 触发后立即解绑，零静置 CPU 消耗）。
 
+设置页通过 `/api/settings` 展示控制中心占用与唯一真源。迁移先校验目标和显示预演数量，再由用户确认实际执行。总览与设置共用自愈组件，仅在页面可见时请求健康信息，并在操作完成后刷新。悬空数量以台账清理预演为准，避免把未登记的外部断链算入可清理项。
+
 ## 14. 例外裁定
 
 与「克制 / 可预期」相冲突且本规范未覆盖的场景，默认按最保守方案。需要突破时先在 PR 里说明理由，由 review 裁定后回写本规范。

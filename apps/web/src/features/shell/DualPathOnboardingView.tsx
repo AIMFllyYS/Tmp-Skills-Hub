@@ -25,6 +25,7 @@ export interface DualPathOnboardingViewProps {
   defaultSkillsRoot?: string;
   gitDetected?: boolean;
   gitVersion?: string;
+  showGitOptions?: boolean;
   onInit: (opts: DualPathInitOptions) => Promise<void>;
   onOpenAgent: () => void;
   className?: string;
@@ -38,6 +39,7 @@ export function DualPathOnboardingView({
   defaultSkillsRoot = "~/.skills-hub/skills",
   gitDetected = true,
   gitVersion,
+  showGitOptions = true,
   onInit,
   onOpenAgent,
   className,
@@ -48,7 +50,7 @@ export function DualPathOnboardingView({
 
   const trimmedSkillsRoot = skillsRoot.trim();
   const isCustomSkillsRoot = trimmedSkillsRoot !== "" && trimmedSkillsRoot !== defaultSkillsRoot;
-  const effectiveGitEnabled = gitDetected && enableGit;
+  const effectiveGitEnabled = showGitOptions && gitDetected && enableGit;
 
   const handleInit = async (): Promise<void> => {
     setBusy(true);
@@ -139,55 +141,59 @@ export function DualPathOnboardingView({
             <p className="text-xs leading-relaxed text-ink-mid">
               所有活跃 Skill 的唯一实体目录，各应用内仅保留指向此处的纯软链接。默认位于{" "}
               <code className="rounded bg-surface px-1 py-0.5 font-mono text-ink-strong">{defaultSkillsRoot}</code>
-              ，也可指定到 D 盘独立目录或已有 Git 仓库路径。
+              ，也可指定到 D 盘等位置的独立目录。
             </p>
           </section>
 
-          <Separator />
+          {showGitOptions && (
+            <>
+              <Separator />
 
-          <section className="space-y-2.5" aria-label="Git 版本控制选项">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <IconBadge size="sm" tone={gitDetected ? "success" : "warning"} className="mt-0.5">
-                  <GitBranch className="size-4" strokeWidth={ICON_STROKE} />
-                </IconBadge>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Label htmlFor="dual-path-git-toggle">为唯一真源开启本地 Git 版本控制</Label>
-                    {gitDetected ? (
-                      <Badge tone="success" dot>
-                        {gitVersion !== undefined && gitVersion !== "" ? "Git " + gitVersion : "已检测到 Git"}
-                      </Badge>
-                    ) : (
-                      <Badge tone="warning" dot>
-                        未检测到 Git
-                      </Badge>
-                    )}
+              <section className="space-y-2.5" aria-label="Git 版本控制选项">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <IconBadge size="sm" tone={gitDetected ? "success" : "warning"} className="mt-0.5">
+                      <GitBranch className="size-4" strokeWidth={ICON_STROKE} />
+                    </IconBadge>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label htmlFor="dual-path-git-toggle">为唯一真源开启本地 Git 版本控制</Label>
+                        {gitDetected ? (
+                          <Badge tone="success" dot>
+                            {gitVersion !== undefined && gitVersion !== "" ? "Git " + gitVersion : "已检测到 Git"}
+                          </Badge>
+                        ) : (
+                          <Badge tone="warning" dot>
+                            未检测到 Git
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs leading-relaxed text-ink-mid">
+                        {gitDetected
+                          ? "开启后将自动初始化 .git 与 .gitignore，常规新建、编辑与冲突合并自动提交留痕。"
+                          : "未检测到本机 Git 可执行文件，已自动跳过，不会阻塞库存初始化。"}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs leading-relaxed text-ink-mid">
-                    {gitDetected
-                      ? "开启后将自动初始化 .git 与 .gitignore，常规新建、编辑与冲突合并自动提交留痕。"
-                      : "未检测到本机 Git 可执行文件，已自动跳过，不会阻塞库存初始化。"}
-                  </p>
+                  <Switch
+                    id="dual-path-git-toggle"
+                    checked={effectiveGitEnabled}
+                    disabled={busy || !gitDetected}
+                    onCheckedChange={setEnableGit}
+                    aria-label="为唯一真源开启本地 Git 版本控制"
+                  />
                 </div>
-              </div>
-              <Switch
-                id="dual-path-git-toggle"
-                checked={effectiveGitEnabled}
-                disabled={busy || !gitDetected}
-                onCheckedChange={setEnableGit}
-                aria-label="为唯一真源开启本地 Git 版本控制"
-              />
-            </div>
 
-            {!gitDetected && (
-              <div className="rounded-xl border border-line bg-canvas px-3.5 py-2.5 text-xs text-ink-mid">
-                如需版本回溯与 GitHub 云端备份，可稍后安装 Git（Windows 可运行{" "}
-                <code className="font-mono text-ink-strong">winget install Git.Git</code> 或访问{" "}
-                <code className="font-mono text-ink-strong">git-scm.com</code>），完成后在设置中随时开启。
-              </div>
-            )}
-          </section>
+                {!gitDetected && (
+                  <div className="rounded-xl border border-line bg-canvas px-3.5 py-2.5 text-xs text-ink-mid">
+                    如需版本回溯与 GitHub 云端备份，可稍后安装 Git（Windows 可运行{" "}
+                    <code className="font-mono text-ink-strong">winget install Git.Git</code> 或访问{" "}
+                    <code className="font-mono text-ink-strong">git-scm.com</code>），完成后在设置中随时开启。
+                  </div>
+                )}
+              </section>
+            </>
+          )}
 
           <div className="flex flex-wrap items-center gap-2.5 pt-1">
             <Button

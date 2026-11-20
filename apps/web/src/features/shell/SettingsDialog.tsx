@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Copy } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,12 +7,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TruncateTip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { getAction } from "../actions/registry.js";
 import { formatResetPreview } from "../skills/catalog.js";
 import type { ClientInfo } from "../skills/types.js";
 import { groupClientIds } from "./apps-layout.js";
+import { DesktopAutoLaunchSection, DualPathSettingsSection, MigrateStoreDialog, SelfHealSection } from "./SettingsV3Panels.js";
+import { fetchStoreSettings, migrateStore, patchStoreSettings, type StoreSettings } from "./store-operations-api.js";
+import type { StoreMaintenance } from "./use-store-maintenance.js";
 
 const RESET_FALLBACK_BODY =
   "将按最近一份备份还原各应用里的 skills,并旁路旧库存后再收录。此操作不能用撤销按钮收回。";
@@ -23,6 +24,7 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   storeRoot: string;
   clients: ClientInfo[];
+  maintenance: StoreMaintenance;
   latestSnapshotId: string | null;
   backupsLoading?: boolean;
   onResetDone: () => void;
@@ -34,29 +36,47 @@ export function SettingsDialog({
   onOpenChange,
   storeRoot,
   clients,
+  maintenance,
   latestSnapshotId,
   backupsLoading = false,
   onResetDone,
 }: SettingsDialogProps): React.JSX.Element {
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [migrateOpen, setMigrateOpen] = useState(false);
   const [previewBody, setPreviewBody] = useState(RESET_FALLBACK_BODY);
   const groups = groupClientIds(clients.map((c) => c.clientId));
-  const path = storeRoot === "" ? "未配置" : storeRoot;
   const reset = getAction("reset");
 
-  const copyPath = (): void => {
-    if (storeRoot === "") return;
-    void navigator.clipboard.writeText(storeRoot).then(
-      () => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1200);
+  useEffect(() => {
+    if (!open || storeRoot === "") return;
+    const request = new AbortController();
+    void fetchStoreSettings(request.signal).then(
+      (value) => {
+        if (request.signal.aborted) return;
+        setSettings(value);
+        setSettingsError(null);
       },
-      () => {
-        toast.error("无法复制路径");
+      (error: unknown) => {
+        if (request.signal.aborted) return;
+        setSettings(null);
+        setSettingsError(error instanceof Error ? error.message : String(error));
       },
     );
+    return () => request.abort();
+  }, [open, storeRoot]);
+
+  const currentSettings = settings?.stateRoot === storeRoot ? settings : null;
+  const migrate = async (target: string): Promise<void> => {
+    const result = await migrateStore(target);
+    setSettings((current) => current === null ? current : { ...current, ...result.paths });
+    toast.success("已迁移 " + String(result.skills) + " 个技能至 " + result.paths.skillsRoot, {
+      description: result.aside === null ? undefined : "原目录保留于 " + result.aside,
+    });
+    maintenance.reload();
+    void fetchStoreSettings().then(setSettings, () => undefined);
   };
 
   return (
@@ -64,34 +84,46 @@ export function SettingsDialog({
       <Dialog
         open={open}
         onOpenChange={(next) => {
-          if (busy) return;
+          if (busy || migrateOpen) return;
           if (!next) setAsk(false);
           onOpenChange(next);
         }}
-        disablePointerDismissal={ask}
+        disablePointerDismissal={ask || migrateOpen}
       >
         <DialogContent className="flex max-h-[min(36rem,90vh)] max-w-lg flex-col">
           <DialogTitle>设置</DialogTitle>
           <DialogDescription>不常改、但要找得到的东西。</DialogDescription>
           <ScrollArea className="mt-4 min-h-0 flex-1">
-            <section>
-              <Label>库存</Label>
-              <div className="mt-2 flex items-start gap-2">
-                <TruncateTip text={path} className="min-w-0 flex-1 break-all font-mono text-sm text-ink-mid" />
-                <Tooltip label={copied ? "已复制" : "复制路径"} side="top" disabled={storeRoot === ""}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    aria-label="复制库存路径"
-                    disabled={storeRoot === ""}
-                    onClick={copyPath}
-                  >
-                    <Copy className="size-4 text-ink-mid" aria-hidden />
-                  </Button>
-                </Tooltip>
-              </div>
-            </section>
+            {currentSettings !== null ? (
+              <>
+                <DualPathSettingsSection
+                  stateRoot={currentSettings.stateRoot}
+                  skillsRoot={currentSettings.skillsRoot}
+                  stateDiskBytes={currentSettings.stateDiskBytes}
+                  layoutMode={currentSettings.layoutMode}
+                  onOpenMigrate={() => setMigrateOpen(true)}
+                  migrateDisabled={busy}
+                />
+                <DesktopAutoLaunchSection
+                  className="mt-6"
+                  isDesktop={currentSettings.isDesktop}
+                  autoLaunch={currentSettings.autoLaunch}
+                  silentTray={currentSettings.silentTray}
+                  onAutoLaunchChange={async (autoLaunch) => setSettings(await patchStoreSettings({ autoLaunch }))}
+                  onSilentTrayChange={async (silentTray) => setSettings(await patchStoreSettings({ silentTray }))}
+                />
+              </>
+            ) : storeRoot === "" ? (
+              <p className="text-sm text-ink-mid">库存尚未初始化。</p>
+            ) : settingsError !== null ? (
+              <p role="alert" className="text-sm text-ink-mid">{settingsError}</p>
+            ) : <Skeleton className="h-28 w-full" />}
+            {maintenance.health !== null && storeRoot !== "" && (
+              <SelfHealSection className="mt-6" {...maintenance.health} onPruneDangling={maintenance.onPruneDangling} onAcceptDrifted={maintenance.onAcceptDrifted} />
+            )}
+            {maintenance.error !== null && storeRoot !== "" && (
+              <p role="alert" className="mt-4 text-sm text-ink-mid">健康检查失败。{maintenance.error}</p>
+            )}
 
             <section className="mt-6">
               <Label>已发现的应用</Label>
@@ -158,6 +190,15 @@ export function SettingsDialog({
             </section>
           </ScrollArea>
         </DialogContent>
+        {migrateOpen && currentSettings !== null && (
+          <MigrateStoreDialog
+            open
+            onOpenChange={setMigrateOpen}
+            currentSkillsRoot={currentSettings.skillsRoot}
+            onPreviewMigration={(target) => migrateStore(target, true)}
+            onMigrate={migrate}
+          />
+        )}
       </Dialog>
       {ask && (
         <ConfirmDialog
