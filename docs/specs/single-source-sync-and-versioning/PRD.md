@@ -110,6 +110,8 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
 - **兼容与适配函数**：
   - `normalizeHubPaths(input: string | HubPaths): HubPaths`：当传入旧 `string`（如旧测试传 `storeRoot`）时，返回 `{ stateRoot: input, skillsRoot: path.join(input, STORE_SKILLS_DIR), layoutMode: "legacy" }`；当传入 `HubPaths` 时原样透传；
   - `readHubConfig(configPath)` / `writeHubConfig(configPath, config)`：支持读取 v1 `{ storeRoot }` 自动映射为 `legacy` `HubPaths`，以及 v2 完整结构；
+  - **`resolveHubPaths({ cliHome, envHome, pointerFilePath })` 沙箱解析防踩坑口径（必守 `smoke-panel.mjs` 与 `json-contract.test.ts`）**：当传入 `cliHome` 时，**优先检查 `<cliHome>/.skills-hub/config.json` 是否存在**——若存在则按其声明的 `stateRoot`/`skillsRoot` 解析（确保 `init --home <X>` 后紧跟 `adopt --home <X>` 与 `ui --home <X>` 读到完全同一个目录！）；否则若 `<cliHome>/manifest.json` 存在则按旧单根 `legacy` 兼容；
+  - **静态护栏提醒**：`packages/cli/test/spec-conformance.test.ts` 会静态扫描 `packages/core/src/*.ts`，禁止任何同一行同时出现 `rm(`、`recursive`、`skills`（移除逻辑一律复用 `unlinkNoFollow` 或拆行工具函数，绝不递归硬删 `skills/`）；
   - 既有核心模块（`store.ts`、`create.ts`、`archive.ts`、`backup.ts`、`backup-restore.ts`、`links.ts`、`link-switch.ts`、`groups.ts`、`stats.ts`、`skill-files.ts`、`clients.ts`）统一通过 `normalizeHubPaths` 访问：
     - 索引/账本/备份/归档/冲突/暂存走 `paths.stateRoot`；
     - 活跃 skill 实体目录与软链接目标走 `paths.skillsRoot`；
@@ -125,10 +127,11 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
 
 #### T1.2 `[cli]` 初始化路径统一、真源目录迁移与自愈命令 (`doctor --prune` / `verify --accept`)
 
-- **目标**：消除 `bootstrap` 与 `performInit` 默认路径分裂，落地 `doctor --prune`、`verify --accept`、`migrate-store` 及 `/api/settings` 读写接口。
+- **目标**：消除 `bootstrap` 与 `performInit` 默认路径分裂，落地 `doctor --prune`、`verify --accept`、`migrate`（单命令名，兼容 `spec-conformance.test.ts` 的 `subCommands` 正则校验）及 `/api/settings` 读写接口。
 - **行为契约**：
-  1. **路径初始化统一**（`packages/cli/src/store-shared.ts` & `bootstrap.ts`）：
+  1. **路径初始化统一与 `UiRouteContext.paths` 穿透**（`packages/cli/src/store-shared.ts`、`bootstrap.ts`、`ui-http.ts`、`ui-server.ts` 及 `ui-{groups,drafts,content,links}.ts`）：
      - 新初始化默认 `stateRoot = path.join(home, ".skills-hub")`、`skillsRoot = path.join(home, ".skills-hub", "skills")`，写入 v2 `config.json`；
+     - `UiRouteContext` 增加 `paths: HubPaths | null`（与兼容字段 `storeRoot` 保持同步），`withStore` / `resolveUiHubPaths` 将 `HubPaths` 传入所有 `ui-*.ts` 路由，保证分离布局下所有既有端点读写同一真源目录；
      - 支持 `POST /api/store/init` 传入可选 `{ skillsRoot?: string }`（保持兼容旧 `{ storeRoot?: string }` 参数）；初始化提示明确告知控制中心与备份固定存于 `~/.skills-hub/`，前期不建议修改，唯一真源路径可自定义。
   2. **`skills-hub doctor --prune`** + **`POST /api/doctor/prune`**：
      - 读取 `links.json` 并复用 `findDanglingLinks`，剔除磁盘上已不存在目标路径的悬空记录（不触碰任何客户端磁盘目录），原子写回 `links.json`；
@@ -136,7 +139,7 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
   3. **`skills-hub verify --accept [<name...>]`** + **`POST /api/verify/accept`**：
      - 先运行只读 `performVerify`，对指定 `names`（缺省为全部 `drifted` 项）重算确定性哈希，原子同步更新 `index.json`、`groups.json`、`stats.json`、`links.json`（缺失项 `missing` 报错跳过，不静默删除）；
      - 支持 `--dry-run`、`--yes`、`--json`。
-  4. **`skills-hub migrate-store --to <absPath>`** + **`POST /api/store/migrate`**（新文件 `packages/cli/src/store-migrate.ts`）：
+  4. **`skills-hub migrate --to <absPath>`** + **`POST /api/store/migrate`**（新文件 `packages/cli/src/store-migrate.ts`）：
      - 校验目标路径为绝对路径、非已有非空目录且非客户端目录；
      - 步骤：校验目标可写 → 拷贝当前 `skillsRoot` 下所有活跃 skill 至新路径并逐个重算 SHA-256 校验一致 → 按客户端分批调用 `applyLinkSet`（journal 原子切换）将全部受管软链接重定向到新 `skillsRoot` → 原子更新 `config.json`（及运行中 `ui-server` 动态上下文）→ 将旧 `skillsRoot` 重命名为 `<old>.pre-migrate-<timestamp>` 旁路留底（零真删除）；
      - 任一步失败逆序回滚软链接并保持旧 `config.json` 不变。
@@ -147,6 +150,11 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
 #### T1.3 `[web]` 设置面板升级：目录分离展示、真源路径迁移、空间清理与自愈入口
 
 - **目标**：升级 `StoreOnboarding.tsx`、`SettingsDialog.tsx` 与 `OverviewPage.tsx`，让用户可视化感知目录分离、安全迁移真源路径并一键自愈死链接/漂移指纹。
+- **Playbook 组件直引契约（禁止重写重复 UI）**：
+  - 所有视觉与动效组件已在 `/playbook`（[registry.ts](../../../apps/web/src/features/playbook/registry.ts)）完整预制，本任务**直接 `import` 并接入真实 `/api/settings`、`/api/store/migrate`、`/api/doctor/prune`、`/api/verify/accept`**：
+    - `DualPathOnboardingView`（`apps/web/src/features/shell/DualPathOnboardingView.tsx`）
+    - `DualPathSettingsSection`、`MigrateStoreDialog`、`SelfHealSection`、`DesktopAutoLaunchSection`、`formatBytes`（`apps/web/src/features/shell/SettingsV3Panels.tsx`）
+  - **冒烟红线**：必须保留 `[data-testid="nav-settings"]`、`[data-testid="reset-button"]`、`[data-testid="store-init-path"]`、`[data-testid="store-init-button"]`。
 - **交互规格**（严格遵守 `ui-design-v1.md` 克制灰阶与统一控件规范）：
   1. **首次引导（`StoreOnboarding.tsx`）**：清晰分两行说明——「控制与备份中心（固定）：`~/.skills-hub/`」「唯一真源目录（默认 `~/.skills-hub/skills/`，可自定义）」，提供目录输入框/选择并支持一键以默认推荐配置初始化。
   2. **设置 Dialog（`SettingsDialog.tsx`）**：
@@ -253,6 +261,9 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
 #### T2.4 `[web]` 全局「重新扫描 / 发现野生与冲突 skills」提醒横幅与一键合并接管弹窗
 
 - **目标**：让用户一打开 WebUI 或桌面端就能第一时间感知客户端野生真目录与版本冲突，并一键触发安全备份与合并接管。
+- **Playbook 组件直引契约（禁止重写重复 UI）**：
+  - 直接复用 `/playbook` 已预制的 `ReconcileBanner`、`RescanTriggerButton`（`apps/web/src/features/reconcile/ReconcileBanner.tsx`）、`ReconcileDialog`（`apps/web/src/features/reconcile/ReconcileDialog.tsx`）与 `types.ts`；本任务仅补齐 `features/reconcile/api.ts` 并接入 `App.tsx` / `OverviewPage.tsx` / `Sidebar.tsx`。
+  - **冒烟性能红线**：仅在应用挂载就绪时异步触发 1 次 `GET /api/reconcile/scan` + 用户手动点击重扫，**严禁设置定时器轮询**（否则触发 `smoke-panel.mjs` 的 10s 静置 CPU / fetch 门禁失败）。
 - **交互规格**（新目录 `apps/web/src/features/reconcile/`）：
   1. **启动自动巡检 + 手动重扫按钮**：
      - `App.tsx` 在库存就绪后异步触发一次轻量 `GET /api/reconcile/scan`（不阻塞首屏渲染）；
@@ -318,6 +329,8 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
 #### T3.3 `[web]` WebUI & 桌面 GUI 共享「冲突处理」板块与一键 Agent 分析合并联动
 
 - **目标**：在 WebUI（桌面 Electron GUI 自动共享）落地完整的「冲突处理」工作区，并与内置 Agent 无缝打通。
+- **Playbook 组件直引契约（禁止重写重复 UI）**：
+  - 直接复用 `/playbook` 已预制的 `ConflictsView`（`apps/web/src/features/conflicts/ConflictsView.tsx`）、`ConflictDiffViewer`（`ConflictDiffViewer.tsx`）、`buildConflictAgentPrompt`（`types.ts`）与带徽章的 `SegmentedTabs`；本任务仅补齐 `features/conflicts/api.ts` 并接入 `SkillsPage.tsx`、`OverviewPage.tsx` 与 `AgentPage.tsx`。
 - **交互规格**（新目录 `apps/web/src/features/conflicts/`）：
   1. **入口与导航**（遵守 `app-shell-v2.md` 四板块骨架）：
      - 在 `SkillsPage.tsx` 扩展第三 Tab：**「应用」/「内容」/「冲突」**（`SkillsTab = "apps" | "content" | "conflicts"`），有未决冲突时 Tab 旁及左侧「Skills 管理」导航带克制计数徽章；
@@ -411,6 +424,9 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
 #### T5.3 `[web]` Git 版本控制设置、提交历史查看、`gh` 设备码登录向导与一键云端备份 UI
 
 - **目标**：在 WebUI & 桌面 GUI 中交付完整、零黑框门槛的 Git 版本控制与 GitHub 云端备份交互体验（新目录 `apps/web/src/features/git/`）。
+- **Playbook 组件直引契约（禁止重写重复 UI）**：
+  - 直接复用 `/playbook` 已预制的 `GitSettingsSection`、`GhLoginDialog`、`CloudBackupDialog`、`SkillHistoryDrawer`（均位于 `apps/web/src/features/git/`）；本任务仅补齐 `features/git/api.ts` 并接入 `SettingsDialog.tsx`、`StoreOnboarding.tsx` 与 `SkillViewer.tsx`。
+  - **冒烟性能红线（关键）**：`smoke-panel.mjs` 断言点开 skill 卡片后 4 秒内 `fetch <= 2`（`/tree` + `/file`），因此 `SkillHistoryDrawer` **必须在用户显式点击「历史记录」按钮打开抽屉时才懒请求 `GET /api/git/log`**，严禁在选中 skill 时预加载！
 - **交互规格**：
   1. **安装引导 & 设置页 Git 板块（`GitSettingsSection.tsx`）**：
      - 在 `StoreOnboarding.tsx`（可选步骤）和 `SettingsDialog.tsx` 实时显示本机 `Git` 与 `GitHub CLI (gh)` 检测状态；未安装时提供清晰安装链接与一键复制 `winget` 命令，且明确标注「可跳过，随时在设置开启」；

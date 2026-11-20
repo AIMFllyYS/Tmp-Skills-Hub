@@ -1,7 +1,8 @@
 # v0.3 单一真源接管、冲突中心、巡检与 Git 云端备份 — 任务总清单（`task.md`）
 
-> 对应 PRD：[PRD.md](./PRD.md)（共 442 行）
+> 对应 PRD：[PRD.md](./PRD.md)（共 459 行）
 > 决策背景：[single-source-sync-and-versioning.md](../../issues/single-source-sync-and-versioning/single-source-sync-and-versioning.md)
+> 前端活体组件真源：`/playbook` 路由（见 [registry.ts](../../../apps/web/src/features/playbook/registry.ts) — `T1.3` / `T2.4` / `T3.3` / `T5.3` 直接 `import` 预制组件并绑定 `/api/*`）
 > 目标仓库：`AIMFllyYS/Tmp-Skills-Hub`（所有 PR 打向 `dev`）
 > 本地进度监控（不进 Git）：`node docs/specs/single-source-sync-and-versioning/monitor/server.mjs` → `http://127.0.0.1:4399`
 > 总体规模：**5 个 Parent Epics（`#234`–`#238`） / 15 个原子 Sub-Issues（`#239`–`#253`）**
@@ -64,80 +65,80 @@
 
 ## 三、任务执行总表（按依赖拓扑分组，AI 完成后勾选 `[x]`）
 
-### E1: 状态与资产目录分离 + 运维自愈基座 | Epic #234 | Block A + B | PRD L83-L161
+### E1: 状态与资产目录分离 + 运维自愈基座 | Epic #234 | Block A + B | PRD L83-L170
 
-- [ ] **T1.1** `[core]` 状态目录 (`~/.skills-hub/`) 与唯一真源目录分离契约与兼容解析 — [#239](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/239) | [PRD.md#L85-L124](./PRD.md#L85-L124)
+- [ ] **T1.1** `[core]` 状态目录 (`~/.skills-hub/`) 与唯一真源目录分离契约与兼容解析 — [#239](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/239) | [PRD.md#L85-L127](./PRD.md#L85-L127)
   - **depends-on**: 无（全专项起点，可直接开工）
   - **负责模块**: `packages/core/src/store-location.ts`, `store-layout.ts`, `fs-atomic.ts`(新增), 现有 core 模块 `normalizeHubPaths` 兼容适配, `index.ts`
   - **复用资产**: `resolveStoreRoot`, `readPointerStoreRoot`, `initializeStoreLayout`, `uniqueTmpId`, `migrateVersionedData`, `unlinkNoFollow`
-- [ ] **T1.2** `[cli]` 初始化路径统一、真源目录迁移与自愈命令 (`doctor --prune` / `verify --accept`) — [#240](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/240) | [PRD.md#L126-L145](./PRD.md#L126-L145)
+- [ ] **T1.2** `[cli]` 初始化路径统一、真源目录迁移 (`migrate`) 与自愈命令 (`doctor --prune` / `verify --accept`) — [#240](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/240) | [PRD.md#L128-L149](./PRD.md#L128-L149)
   - **depends-on**: T1.1 (#239)
-  - **负责模块**: `packages/cli/src/store-shared.ts`, `bootstrap.ts`, `doctor.ts`, `store-query.ts`, `store-migrate.ts`(新增), `ui-server.ts`, `ui-http.ts`, `index.ts`
+  - **负责模块**: `packages/cli/src/store-shared.ts`, `bootstrap.ts`, `doctor.ts`, `store-query.ts`, `store-migrate.ts`(新增), `ui-server.ts`, `ui-http.ts`, `ui-{groups,drafts,content,links}.ts`, `index.ts`
   - **复用资产**: `performInit`, `writePointerFile`, `collectDoctorReport`, `performVerify`, `findDanglingLinks`, `applyLinkSet`, `hashSkillFolder`, `requireWriteAuth`
-- [ ] **T1.3** `[web]` 设置面板升级：目录分离展示、真源路径迁移、空间清理与自愈入口 — [#241](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/241) | [PRD.md#L147-L160](./PRD.md#L147-L160)
+- [ ] **T1.3** `[web]` 设置面板升级：目录分离展示、真源路径迁移、空间清理与自愈入口（直引 `/playbook` 组件） — [#241](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/241) | [PRD.md#L150-L170](./PRD.md#L150-L170)
   - **depends-on**: T1.2 (#240)
   - **负责模块**: `apps/web/src/features/shell/{StoreOnboarding.tsx,SettingsDialog.tsx,OverviewPage.tsx}`, `features/skills/{api.ts,types.ts}`
-  - **复用资产**: `Dialog`, `ConfirmDialog`, `Button`, `Badge`, `Collapsible`, `TruncateTip`, `useCatalog`
+  - **复用资产**: `/playbook` 预制 `DualPathOnboardingView`, `DualPathSettingsSection`, `MigrateStoreDialog`, `SelfHealSection`, `DesktopAutoLaunchSection`, `formatBytes`, `useCatalog`
 
-### E2: 客户端精准接管与纯软链接收敛引擎 | Epic #235 | Block A + B | PRD L164-L270
+### E2: 客户端精准接管与纯软链接收敛引擎 | Epic #235 | Block A + B | PRD L172-L283
 
-- [ ] **T2.1** `[core]` 两级极速扫描内核 (L1 浅扫 + L2 按需深扫) 与目录分类器 — [#242](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/242) | [PRD.md#L168-L190](./PRD.md#L168-L190)
+- [ ] **T2.1** `[core]` 两级极速扫描内核 (L1 浅扫 + L2 按需深扫) 与目录分类器 — [#242](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/242) | [PRD.md#L176-L199](./PRD.md#L176-L199)
   - **depends-on**: T1.1 (#239)
   - **负责模块**: `packages/core/src/reconcile-scan.ts`(新增), `packages/core/src/index.ts`
   - **复用资产**: `discoverClientRoots`, `readLinksLedger`, `readLinkTarget`, `readStoreIndex`, `readSkillMeta`, `hashSkillFolder`, `isIgnoredSkillEntry`
-- [ ] **T2.2** `[core]` 冲突池数据结构与 Reconcile 精准接管收敛内核 — [#243](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/243) | [PRD.md#L192-L233](./PRD.md#L192-L233)
+- [ ] **T2.2** `[core]` 冲突池数据结构与 Reconcile 精准接管收敛内核 — [#243](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/243) | [PRD.md#L200-L242](./PRD.md#L200-L242)
   - **depends-on**: T2.1 (#242)
   - **负责模块**: `packages/core/src/conflicts.ts`(新增), `packages/core/src/reconcile.ts`(新增), `packages/core/src/index.ts`
   - **复用资产**: `createBackupSnapshot`, `verifyBackupSnapshot`, `adoptSkillFolder`, `applyLinkSet`, `moveDirSafe`, `writeFileAtomicSafe`, `migrateVersionedData`, `reconcile-scan.ts`
-- [ ] **T2.3** `[cli]` `reconcile` 命令、`bootstrap` 接管闭环与 `/api/reconcile/*` HTTP 端点 — [#244](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/244) | [PRD.md#L235-L251](./PRD.md#L235-L251)
+- [ ] **T2.3** `[cli]` `reconcile` 命令、`bootstrap` 接管闭环与 `/api/reconcile/*` HTTP 端点 — [#244](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/244) | [PRD.md#L243-L260](./PRD.md#L243-L260)
   - **depends-on**: T2.2 (#243), T1.2 (#240)
   - **负责模块**: `packages/cli/src/reconcile-cmds.ts`(新增), `ui-reconcile.ts`(新增), `bootstrap.ts`, `ui-server.ts`, `index.ts`, `exports.ts`
   - **复用资产**: `planReconcile`, `executeReconcile`, `scanClientDriftL1`, `inspectDriftL2`, `requireWriteAuth`, `emitOk`, `emitError`
-- [ ] **T2.4** `[web]` 全局「重新扫描 / 发现野生与冲突 skills」提醒横幅与一键合并接管弹窗 — [#245](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/245) | [PRD.md#L253-L270](./PRD.md#L253-L270)
+- [ ] **T2.4** `[web]` 全局「重新扫描 / 发现野生与冲突 skills」提醒横幅与一键合并接管弹窗（直引 `/playbook` 组件） — [#245](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/245) | [PRD.md#L261-L283](./PRD.md#L261-L283)
   - **depends-on**: T2.3 (#244)
-  - **负责模块**: `apps/web/src/features/reconcile/{ReconcileBanner.tsx,ReconcileDialog.tsx,api.ts}`(新增), `App.tsx`, `OverviewPage.tsx`, `Sidebar.tsx`
-  - **复用资产**: `Dialog`, `Button`, `Badge`, `Checkbox`, `ScrollArea`, `toast`, `useCatalog`
+  - **负责模块**: `apps/web/src/features/reconcile/api.ts`(新增), `App.tsx`, `OverviewPage.tsx`, `Sidebar.tsx`
+  - **复用资产**: `/playbook` 预制 `ReconcileBanner`, `RescanTriggerButton`, `ReconcileDialog`, `reconcile/types.ts`, `useCatalog`
 
-### E3: 同名多版本冲突解决中心 + Agent 智能合并 | Epic #236 | Block A + B | PRD L274-L334
+### E3: 同名多版本冲突解决中心 + Agent 智能合并 | Epic #236 | Block A + B | PRD L285-L349
 
-- [ ] **T3.1** `[core]` 冲突变体逐文件 Diff 引擎与安全决议落盘内核 — [#246](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/246) | [PRD.md#L276-L292](./PRD.md#L276-L292)
+- [ ] **T3.1** `[core]` 冲突变体逐文件 Diff 引擎与安全决议落盘内核 — [#246](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/246) | [PRD.md#L287-L304](./PRD.md#L287-L304)
   - **depends-on**: T2.2 (#243)
   - **负责模块**: `packages/core/src/conflict-diff.ts`(新增), `packages/core/src/conflict-resolve.ts`(新增), `conflicts.ts`, `index.ts`
   - **复用资产**: `listSkillFiles`, `readSkillFile`, `saveSkillFile`, `hashSkillFolder`, `zipDirectory`, `readStoreIndex`, `writeStoreIndex`, `readGroups`, `writeGroups`, `readUsageStats`, `readLinksLedger`, `writeLinksLedger`
-- [ ] **T3.2** `[cli]` `conflicts` CLI 命令、`/api/conflicts/*` 端点与 4 个 Agent 一等合并工具 — [#247](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/247) | [PRD.md#L294-L316](./PRD.md#L294-L316)
+- [ ] **T3.2** `[cli]` `conflicts` CLI 命令、`/api/conflicts/*` 端点与 4 个 Agent 一等合并工具 — [#247](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/247) | [PRD.md#L305-L328](./PRD.md#L305-L328)
   - **depends-on**: T3.1 (#246)
   - **负责模块**: `packages/cli/src/conflict-cmds.ts`(新增), `ui-conflicts.ts`(新增), `agent/tools.ts`, `agent/prompt.ts`, `ui-server.ts`, `index.ts`
   - **复用资产**: `conflicts.ts`, `conflict-diff.ts`, `conflict-resolve.ts`, `safeToolExecute`, `dump`, `WRITE_TOOL_NAMES`, `requireWriteAuth`
-- [ ] **T3.3** `[web]` WebUI & 桌面 GUI 共享「冲突处理」板块与一键 Agent 分析合并联动 — [#248](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/248) | [PRD.md#L318-L334](./PRD.md#L318-L334)
+- [ ] **T3.3** `[web]` WebUI & 桌面 GUI 共享「冲突处理」板块与一键 Agent 分析合并联动（直引 `/playbook` 组件） — [#248](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/248) | [PRD.md#L329-L349](./PRD.md#L329-L349)
   - **depends-on**: T3.2 (#247), T2.4 (#245)
-  - **负责模块**: `apps/web/src/features/conflicts/{ConflictsView.tsx,ConflictDiffViewer.tsx,api.ts}`(新增), `features/shell/{page.ts,SkillsPage.tsx,Sidebar.tsx,OverviewPage.tsx}`, `features/agent/AgentPage.tsx`
-  - **复用资产**: `Tabs`, `Badge`, `Button`, `ScrollArea`, `ConfirmDialog`, `Dialog`, `useCatalog`, `ShellNav`, `useAgentChat`
+  - **负责模块**: `apps/web/src/features/conflicts/api.ts`(新增), `features/shell/{page.ts,SkillsPage.tsx,Sidebar.tsx,OverviewPage.tsx}`, `features/agent/AgentPage.tsx`
+  - **复用资产**: `/playbook` 预制 `ConflictsView`, `ConflictDiffViewer`, `buildConflictAgentPrompt`, `SegmentedTabs`(带徽章), `useCatalog`, `useAgentChat`
 
-### E4: 开机自启托盘静默巡检与强引导 self-skill v2 | Epic #237 | Block A + B | PRD L338-L367
+### E4: 开机自启托盘静默巡检与强引导 self-skill v2 | Epic #237 | Block A + B | PRD L351-L382
 
-- [ ] **T4.1** `[cli]` 升级 `self-skill/SKILL.md` 强触发指南与全客户端同步自检 — [#249](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/249) | [PRD.md#L340-L351](./PRD.md#L340-L351)
+- [ ] **T4.1** `[cli]` 升级 `self-skill/SKILL.md` 强触发指南与全客户端同步自检 — [#249](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/249) | [PRD.md#L353-L365](./PRD.md#L353-L365)
   - **depends-on**: T2.3 (#244)
   - **负责模块**: `packages/cli/self-skill/SKILL.md`, `packages/cli/src/bootstrap.ts`, `packages/cli/test/`
   - **复用资产**: `adoptAndEnableSelfSkill`, `parseSkillMeta`, `saveSkillFile`, `performLinkChange`, `discoverClientRoots`
-- [ ] **T4.2** `[desktop]` Electron 开机自启、系统托盘静默驻留与启动 L1 巡检通知 — [#250](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/250) | [PRD.md#L353-L367](./PRD.md#L353-L367)
+- [ ] **T4.2** `[desktop]` Electron 开机自启、系统托盘静默驻留与启动 L1 巡检通知 — [#250](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/250) | [PRD.md#L366-L382](./PRD.md#L366-L382)
   - **depends-on**: T2.3 (#244)
   - **负责模块**: `apps/desktop/src/tray.ts`(新增), `apps/desktop/src/main.ts`, `preload.ts`, `apps/desktop/test/`
   - **复用资产**: `createUiApp`, `performReconcileScanL1` (`packages/cli/src/exports.ts`), Electron `Tray`, `Notification`, `app.setLoginItemSettings`
 
-### E5: 可选 Git 版本控制与 GitHub CLI 云端备份 | Epic #238 | Block A + B + C | PRD L371-L427
+### E5: 可选 Git 版本控制与 GitHub CLI 云端备份 | Epic #238 | Block A + B + C | PRD L384-L445
 
-- [ ] **T5.1** `[cli]` Git 进程封装、环境检测、安全 `.gitignore` 与确定性自动 Commit 引擎 — [#251](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/251) | [PRD.md#L373-L387](./PRD.md#L373-L387)
+- [ ] **T5.1** `[cli]` Git 进程封装、环境检测、安全 `.gitignore` 与确定性自动 Commit 引擎 — [#251](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/251) | [PRD.md#L386-L401](./PRD.md#L386-L401)
   - **depends-on**: T1.2 (#240)
   - **负责模块**: `packages/cli/src/git/{git-runner.ts,git-repo.ts,secret-scan.ts,index.ts}`(新增), `packages/cli/test/git.test.ts`(新增)
   - **复用资产**: `scrub` (`llm/errors.ts`), `HubPaths`, `isIgnoredSkillEntry`
-- [ ] **T5.2** `[cli]` 挂载全链路自动 Commit、`gh` 设备码登录引导、一键建仓云端备份与 Agent Git 工具 — [#252](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/252) | [PRD.md#L389-L409](./PRD.md#L389-L409)
+- [ ] **T5.2** `[cli]` 挂载全链路自动 Commit、`gh` 设备码登录引导、一键建仓云端备份与 Agent Git 工具 — [#252](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/252) | [PRD.md#L402-L423](./PRD.md#L402-L423)
   - **depends-on**: T5.1 (#251), T2.3 (#244), T3.2 (#247)
   - **负责模块**: `packages/cli/src/git/gh-cloud.ts`(新增), `git-cmds.ts`(新增), `ui-git.ts`(新增), `ui-server.ts`, `agent/tools.ts`, `index.ts`
   - **复用资产**: `git-runner.ts`, `git-repo.ts`, `secret-scan.ts`, `safeToolExecute`, `WRITE_TOOL_NAMES`, `requireWriteAuth`
-- [ ] **T5.3** `[web]` Git 版本控制设置、提交历史查看、`gh` 设备码登录向导与一键云端备份 UI — [#253](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/253) | [PRD.md#L411-L427](./PRD.md#L411-L427)
+- [ ] **T5.3** `[web]` Git 版本控制设置、提交历史查看、`gh` 设备码登录向导与一键云端备份 UI（直引 `/playbook` 组件） — [#253](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/253) | [PRD.md#L424-L445](./PRD.md#L424-L445)
   - **depends-on**: T5.2 (#252), T1.3 (#241)
-  - **负责模块**: `apps/web/src/features/git/{GitSettingsSection.tsx,GhLoginDialog.tsx,CloudBackupDialog.tsx,SkillHistoryDrawer.tsx,api.ts}`(新增), `SettingsDialog.tsx`, `StoreOnboarding.tsx`, `SkillViewer.tsx`
-  - **复用资产**: `Dialog`, `Switch`, `Button`, `Badge`, `Input`, `ScrollArea`, `ConfirmDialog`, `toast`
+  - **负责模块**: `apps/web/src/features/git/api.ts`(新增), `SettingsDialog.tsx`, `StoreOnboarding.tsx`, `SkillViewer.tsx`
+  - **复用资产**: `/playbook` 预制 `GitSettingsSection`, `GhLoginDialog`, `CloudBackupDialog`, `SkillHistoryDrawer`, `git/types.ts`
 
 ---
 

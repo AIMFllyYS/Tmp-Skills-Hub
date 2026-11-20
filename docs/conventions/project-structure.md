@@ -52,7 +52,7 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 │   │       ├── App.tsx             # React.lazy 路由 + ErrorBoundary + 壳状态
 │   │       ├── lib/                # markdown.ts (DOMPurify) / sse.ts / utils.ts
 │   │       ├── components/ui/      # 跨页控件（button / dialog / chart / table / input（含 NativeSelect） / scroll-area / skeleton…）
-│   │       └── features/           # 按领域聚合（shell / skills / agent / actions；v0.3 新增 reconcile / conflicts / git）
+│   │       └── features/           # 按领域聚合（shell / skills / agent / actions；v0.3 新增 playbook / reconcile / conflicts / git）
 │   └── desktop/                    # Electron 桌面壳（进程内起 CLI 服务 + 内嵌 web/dist + self-skill/）
 │       ├── electron-builder.yml    # 打包配置（win nsis/portable · mac dmg · linux AppImage）
 │       ├── tsconfig.json
