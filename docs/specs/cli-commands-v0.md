@@ -105,6 +105,7 @@
 
 上面这套流程要成立，AI 必须先知道 CLI 怎么用。所以 skills-hub 自带一份 `SKILL.md`，内容就是「什么时机该调用我、怎么调用」。
 这份 skill 随 `bootstrap` 收录并默认启用到全部已发现客户端，其余全部按需 `enable`。用户可通过 `disable` 撤销。
+已配置的 `bootstrap` 或 `ui` 启动时自检随包指南。遇到较早的官方指南，会归档旧真源并更新 `SKILL.md` 及元数据。已有挂载随真源更新；新发现或已撤回的客户端由用户选择 `enable skills-hub --client <id>`。维护随包指南时，发布新版须递增文档的 `skills-hub-guide-version` 标记。
 
 ### 4.2 调用计数的落点
 

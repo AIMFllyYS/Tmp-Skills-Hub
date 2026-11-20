@@ -1,11 +1,8 @@
 import { createInterface } from "node:readline";
-import { statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { readdir } from "node:fs/promises";
 import { openBrowser } from "./open-console.js";
 import {
-  adoptSkillFolder,
   discoverClientRoots,
   ensureBuiltinGroups,
   initializeStoreLayout,
@@ -14,12 +11,14 @@ import {
   readSkillMeta,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
-import { performLinkChange } from "./link-actions.js";
+import { adoptAndEnableSelfSkill, checkBundledSelfSkill } from "./self-skill.js";
 import { planInitialPaths, resolveConfiguredHubPaths } from "./store-shared.js";
 import { validateSkillsRoot } from "./store-migrate.js";
 import { performReconcile, reconcilePreview } from "./reconcile-cmds.js";
 import { performAdopt, printAdoptSummary, writePointerFile } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
+
+export { adoptAndEnableSelfSkill } from "./self-skill.js";
 
 /**
  * bootstrap:预览并确认接管，备份校验后将客户端技能收敛为纯软链接，再启动面板。
@@ -99,6 +98,9 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
   if (!existing.ok && existing.reason === "invalid-pointer") throw new Error(existing.message);
   if (existing.ok) {
     console.log("库存已就绪:" + existing.paths.skillsRoot + " — 跳过初始化,直接启动面板。");
+    if (opts.ui === false || typeof opts.ui === "function") {
+      await checkBundledSelfSkill(base, existing.paths, opts.selfSkillDir);
+    }
     await launchUi(port, base, opts);
     return;
   }
@@ -157,66 +159,6 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
   await launchUi(port, base, opts);
 }
 
-/**
- * Adopt the skills-hub self-skill and enable it to all discovered clients.
- * Idempotent: skips if already in the store.
- */
-export async function adoptAndEnableSelfSkill(
-  home: string,
-  storeRoot: string | HubPaths,
-  selfSkillDirOverride?: string,
-): Promise<void> {
-  const selfSkillDir = findSelfSkillDir(selfSkillDirOverride);
-  if (selfSkillDir === null) return;
-  try {
-    const outcome = await adoptSkillFolder(storeRoot, selfSkillDir, { kind: "authored", reference: "bootstrap" });
-    if (outcome.kind !== "adopted" && outcome.kind !== "duplicate") return;
-    const record = outcome.record;
-    const roots = await discoverClientRoots(home, { storeRoot });
-    for (const root of roots) {
-      try {
-        await performLinkChange(
-          { storeRoot, clientId: root.clientId, scope: "global", skillsDir: root.skillsDir, dirNames: [record.dirName] },
-          "enable",
-        );
-      } catch {
-        // best-effort: skip clients where linking fails
-      }
-    }
-  } catch {
-    // self-skill adoption is best-effort
-  }
-}
-
-function findSelfSkillDir(overrideDir?: string): string | null {
-  const candidates: string[] = [];
-  if (overrideDir !== undefined && overrideDir !== "") {
-    candidates.push(path.join(overrideDir, "SKILL.md"));
-  }
-  const envDir = process.env.SKILLSHUB_SELF_SKILL_DIR;
-  if (envDir !== undefined && envDir !== "") {
-    candidates.push(path.join(envDir, "SKILL.md"));
-  }
-  try {
-    const thisFile = fileURLToPath(import.meta.url);
-    const cliSrc = path.dirname(thisFile);
-    candidates.push(
-      path.resolve(cliSrc, "..", "self-skill", "SKILL.md"),
-      path.resolve(cliSrc, "self-skill", "SKILL.md"),
-    );
-  } catch {
-    // fallback
-  }
-  for (const c of candidates) {
-    try {
-      if (statSync(c).isFile()) return path.dirname(c);
-    } catch {
-      // continue
-    }
-  }
-  return null;
-}
-
 /** 启动面板:home 永远是客户端发现基座。测试可注入函数替身。 */
 async function launchUi(port: number, home: string, opts: BootstrapOptions): Promise<void> {
   if (opts.ui === false) return;
@@ -224,6 +166,8 @@ async function launchUi(port: number, home: string, opts: BootstrapOptions): Pro
     await opts.ui({ port, home });
     return;
   }
-  const handle = await startUiServer({ port, home });
+  const handle = await startUiServer({
+    port, home, ...(opts.selfSkillDir === undefined ? {} : { selfSkillDir: opts.selfSkillDir }),
+  });
   openBrowser(handle.url);
 }

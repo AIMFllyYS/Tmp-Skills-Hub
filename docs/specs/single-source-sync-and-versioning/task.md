@@ -116,7 +116,7 @@
 
 ### E4: 开机自启托盘静默巡检与强引导 self-skill v2 | Epic #237 | Block A + B | PRD L351-L382
 
-- [ ] **T4.1** `[cli]` 升级 `self-skill/SKILL.md` 强触发指南与全客户端同步自检 — [#249](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/249) | [PRD.md#L353-L365](./PRD.md#L353-L365)
+- [x] **T4.1** `[cli]` 升级 `self-skill/SKILL.md` 强触发指南与全客户端同步自检 — [#249](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/249) | [PRD.md#L353-L365](./PRD.md#L353-L365)
   - **depends-on**: T2.3 (#244)
   - **负责模块**: `packages/cli/self-skill/SKILL.md`, `packages/cli/src/bootstrap.ts`, `packages/cli/test/`
   - **复用资产**: `adoptAndEnableSelfSkill`, `parseSkillMeta`, `saveSkillFile`, `performLinkChange`, `discoverClientRoots`

@@ -51,6 +51,7 @@ import { registerContentRoutes } from "./ui-content.js";
 import { registerLinkRoutes } from "./ui-links.js";
 import { registerReconcileRoutes } from "./ui-reconcile.js";
 import { registerConflictRoutes } from "./ui-conflicts.js";
+import { checkBundledSelfSkill } from "./self-skill.js";
 import { registerSettingsRoutes } from "./ui-settings.js";
 
 export const DEFAULT_UI_PORT = 4321;
@@ -642,6 +643,8 @@ export interface StartUiServerOptions {
   home?: string;
   /** web 静态产物根(Electron 等编程式嵌入可覆写) */
   webRoot?: string;
+  /** 随包指南目录，默认从 CLI 安装目录或桌面资源解析。 */
+  selfSkillDir?: string;
 }
 
 export interface UiServerHandle {
@@ -663,6 +666,7 @@ export async function startUiServer(opts: StartUiServerOptions = {}): Promise<Ui
   const port = opts.port ?? DEFAULT_UI_PORT;
   const h = opts.home ?? resolveHome();
   const paths = await resolveUiHubPaths(h);
+  if (paths !== null) await checkBundledSelfSkill(h, paths, opts.selfSkillDir);
   const appOpts: UiAppOptions = { paths, home: h, desktop: opts.desktop === true };
   if (opts.webRoot !== undefined) appOpts.webRoot = opts.webRoot;
   const app = createUiApp(appOpts);
