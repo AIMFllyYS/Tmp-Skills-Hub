@@ -94,7 +94,7 @@
   - **depends-on**: T2.2 (#243), T1.2 (#240)
   - **负责模块**: `packages/cli/src/reconcile-cmds.ts`(新增), `ui-reconcile.ts`(新增), `bootstrap.ts`, `ui-server.ts`, `index.ts`, `exports.ts`
   - **复用资产**: `planReconcile`, `executeReconcile`, `scanClientDriftL1`, `inspectDriftL2`, `requireWriteAuth`, `emitOk`, `emitError`
-- [ ] **T2.4** `[web]` 全局「重新扫描 / 发现野生与冲突 skills」提醒横幅与一键合并接管弹窗（直引 `/playbook` 组件） — [#245](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/245) | [PRD.md#L261-L283](./PRD.md#L261-L283)
+- [x] **T2.4** `[web]` 全局「重新扫描 / 发现野生与冲突 skills」提醒横幅与一键合并接管弹窗（直引 `/playbook` 组件） — [#245](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/245) | [PRD.md#L261-L283](./PRD.md#L261-L283)
   - **depends-on**: T2.3 (#244)
   - **负责模块**: `apps/web/src/features/reconcile/api.ts`(新增), `App.tsx`, `OverviewPage.tsx`, `Sidebar.tsx`
   - **复用资产**: `/playbook` 预制 `ReconcileBanner`, `RescanTriggerButton`, `ReconcileDialog`, `reconcile/types.ts`, `useCatalog`

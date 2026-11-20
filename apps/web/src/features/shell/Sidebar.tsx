@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { RescanTriggerButton, type RescanTriggerButtonProps } from "../reconcile/ReconcileBanner.js";
 import type { AppPage } from "./page.js";
 import { SIDEBAR_ICON_PX } from "./shell-prefs.js";
 
@@ -28,6 +29,7 @@ interface SidebarProps {
   onPage: (page: AppPage) => void;
   onSettings: () => void;
   onToggleCollapsed: () => void;
+  rescan?: RescanTriggerButtonProps | undefined;
 }
 
 function NavButton({
@@ -77,6 +79,7 @@ export function Sidebar({
   onPage,
   onSettings,
   onToggleCollapsed,
+  rescan,
 }: SidebarProps): React.JSX.Element {
   return (
     <aside
@@ -122,6 +125,11 @@ export function Sidebar({
       </ScrollArea>
       <Separator />
       <div className="shrink-0 py-1">
+        {rescan !== undefined && (
+          <div className="flex px-1.5 pb-1">
+            <RescanTriggerButton {...rescan} iconOnly={collapsed} className="h-9 w-full" />
+          </div>
+        )}
         <NavButton
           label="设置"
           testId="nav-settings"

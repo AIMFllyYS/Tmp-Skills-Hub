@@ -8,6 +8,8 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { ReconcileBanner } from "./features/reconcile/ReconcileBanner.js";
+import { useReconcile } from "./features/reconcile/use-reconcile.js";
 import { Sidebar } from "./features/shell/Sidebar.js";
 import { useStoreMaintenance } from "./features/shell/use-store-maintenance.js";
 import type { AppPage, ShellNav, SkillsTab } from "./features/shell/page.js";
@@ -32,6 +34,9 @@ const OverviewPage = lazy(() => import("./features/shell/OverviewPage.js").then(
 const StoreOnboarding = lazy(() => import("./features/shell/StoreOnboarding.js").then((m) => ({ default: m.StoreOnboarding })));
 const SkillsPage = lazy(() => import("./features/shell/SkillsPage.js").then((m) => ({ default: m.SkillsPage })));
 const StatsPage = lazy(() => import("./features/shell/StatsPage.js").then((m) => ({ default: m.StatsPage })));
+const ReconcileDialog = lazy(() =>
+  import("./features/reconcile/ReconcileDialog.js").then((m) => ({ default: m.ReconcileDialog })),
+);
 
 const PAGE_LABELS: Record<Exclude<AppPage, "agent">, string> = {
   overview: "总览",
@@ -76,6 +81,11 @@ function MainShellApp() {
   const sidebarMotionRef = useRef(false);
   const catalog = useCatalog({ loadClientStates: page === "skills" && skillsTab === "apps" });
   const maintenance = useStoreMaintenance(catalog.status === "ready" && (page === "overview" || settingsOpen), catalog.storeRoot, catalog.reload);
+  const reconcile = useReconcile(catalog.status === "ready" ? catalog.storeRoot : null, catalog.reload, () => {
+    setSkillsTab("conflicts");
+    setPage("skills");
+  });
+  const rescan = catalog.status === "ready" ? { scanning: reconcile.scanning, onRescan: reconcile.rescan } : undefined;
 
   useEffect(() => {
     writeShellPrefs({ collapsed, width: sidebarWidth });
@@ -181,6 +191,7 @@ function MainShellApp() {
               onPage={setPage}
               onSettings={() => setSettingsOpen(true)}
               onToggleCollapsed={toggleCollapsed}
+              rescan={rescan}
             />
           </ResizablePanel>
           <ResizableHandle
@@ -208,6 +219,15 @@ function MainShellApp() {
                 </div>
               )}
               {catalog.status === "loading" && <PageSkeleton />}
+              {catalog.status === "ready" && (
+                <ReconcileBanner
+                  summary={reconcile.summary}
+                  dismissed={reconcile.dismissed}
+                  onDismiss={reconcile.dismiss}
+                  onOpenDialog={reconcile.showPreview}
+                  className="shrink-0"
+                />
+              )}
               {catalog.status === "unconfigured" && (
                 <ErrorBoundary key={page}>
                   <Suspense fallback={<PageSkeleton />}>
@@ -240,6 +260,7 @@ function MainShellApp() {
                           doctorLoading={catalog.doctorLoading}
                           backupsLoading={catalog.backupsLoading}
                           onGo={go}
+                          rescan={rescan}
                         />
                       )}
                       {page === "stats" && (
@@ -283,6 +304,11 @@ function MainShellApp() {
             </main>
           </ResizablePanel>
         </ResizablePanelGroup>
+        {reconcile.dialog.open && (
+          <Suspense fallback={null}>
+            <ReconcileDialog {...reconcile.dialog} />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <SettingsDialog
             open={settingsOpen}

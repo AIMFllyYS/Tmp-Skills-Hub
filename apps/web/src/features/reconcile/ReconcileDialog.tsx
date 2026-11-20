@@ -25,6 +25,7 @@ import { formatBytes } from "../shell/SettingsV3Panels.js";
 import {
   countReconcilePreviewActions,
   formatReconcileMtime,
+  type ReconcileExternalLinkItem,
   type ReconcilePreviewData,
   type ReconcileUntouchedReason,
 } from "./types.js";
@@ -83,6 +84,7 @@ export interface ReconcileDialogProps {
   loading?: boolean;
   busy?: boolean;
   includeExternalLinks: boolean;
+  externalLinks?: readonly ReconcileExternalLinkItem[];
   onIncludeExternalLinksChange: (v: boolean) => void;
   onApply: () => Promise<void>;
 }
@@ -95,6 +97,7 @@ export function ReconcileDialog({
   loading = false,
   busy = false,
   includeExternalLinks,
+  externalLinks,
   onIncludeExternalLinksChange,
   onApply,
 }: ReconcileDialogProps): React.JSX.Element {
@@ -103,7 +106,8 @@ export function ReconcileDialog({
 
   const combinedNewAndRelink =
     preview === null ? [] : [...preview.toAdopt, ...preview.toRelinkIdentical];
-  const actionableCount = countReconcilePreviewActions(preview, includeExternalLinks);
+  const listedExternalLinks = externalLinks ?? preview?.skippedExternalLinks ?? [];
+  const actionableCount = countReconcilePreviewActions(preview, includeExternalLinks && externalLinks === undefined);
 
   const guaranteeSteps: StepItem[] =
     preview === null
@@ -207,7 +211,7 @@ export function ReconcileDialog({
                   <StepList items={guaranteeSteps} />
                 </div>
 
-                {actionableCount === 0 && preview.skippedExternalLinks.length === 0 && (
+                {actionableCount === 0 && listedExternalLinks.length === 0 && (
                   <StatusBanner
                     surface="card"
                     tone="success"
@@ -320,10 +324,10 @@ export function ReconcileDialog({
                   </PreviewSection>
                 )}
 
-                {preview.skippedExternalLinks.length > 0 && (
+                {listedExternalLinks.length > 0 && (
                   <PreviewSection
                     title="外部托管软链接（默认跳过不动）"
-                    count={preview.skippedExternalLinks.length}
+                    count={listedExternalLinks.length}
                     icon={<ExternalLink className="size-4 shrink-0 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />}
                     defaultOpen={true}
                     testId="reconcile-section-external"
@@ -331,7 +335,7 @@ export function ReconcileDialog({
                     <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-canvas px-3.5 py-3">
                       <Checkbox
                         checked={includeExternalLinks}
-                        disabled={isBusy}
+                        disabled={isBusy || loading}
                         onCheckedChange={(checked) => onIncludeExternalLinksChange(checked)}
                         className="mt-0.5"
                         data-testid="reconcile-include-external-checkbox"
@@ -344,7 +348,7 @@ export function ReconcileDialog({
                       </div>
                     </label>
                     <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
-                      {preview.skippedExternalLinks.map((item) => (
+                      {listedExternalLinks.map((item) => (
                         <li
                           key={item.clientId + ":" + item.skillName + ":" + item.linkPath}
                           className="space-y-1 px-4 py-2.5"
