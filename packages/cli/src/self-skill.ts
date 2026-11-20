@@ -18,6 +18,7 @@ import {
   type HubPaths,
 } from "@skills-hub/core";
 import { performLinkChange } from "./link-actions.js";
+import { autoVersionSkillAssets } from "./git-ops.js";
 import { scrub } from "./llm/errors.js";
 
 const NAME = "skills-hub";
@@ -51,6 +52,7 @@ export async function adoptAndEnableSelfSkill(home: string, storeRoot: string | 
       await checkBundledSelfSkill(home, paths, override);
       return;
     }
+    await autoVersionSkillAssets(home, paths, "docs(skills): install bundled Skills Hub guide");
     for (const root of await discoverClientRoots(home, { storeRoot: paths })) {
       try {
         const result = await performLinkChange({
@@ -123,7 +125,10 @@ export async function syncSelfSkill(home: string, paths: HubPaths, override?: st
 export async function checkBundledSelfSkill(home: string, paths: HubPaths, override?: string): Promise<void> {
   try {
     const result = await syncSelfSkill(home, paths, override);
-    if (result.status === "updated") console.log("已更新随包分发的 Skills Hub 指南，旧版已归档。");
+    if (result.status === "updated") {
+      console.log("已更新随包分发的 Skills Hub 指南，旧版已归档。");
+      await autoVersionSkillAssets(home, paths, "docs(skills): upgrade bundled Skills Hub guide");
+    }
     if (result.availableClients.length > 0) {
       console.log("自身指南可手动启用的客户端 · " + result.availableClients.join(", ") + " · skills-hub enable skills-hub --client <id>");
     }

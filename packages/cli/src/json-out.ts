@@ -26,11 +26,15 @@ export type JsonErrorCode =
   | "draft-exists"
   | "draft-not-found"
   | "draft-incomplete"
+  | "git-unavailable"
+  | "secret-detected"
+  | "remote-diverged"
+  | "gh-login-failed"
   | "io-error";
 
 /** 失败信封:--json 输出到 stdout,人类文本进 stderr,退出码 2。 */
-export function emitError(json: boolean, command: string, code: JsonErrorCode, message: string): void {
-  if (json) console.log(JSON.stringify({ ok: false, command, code, message }));
+export function emitError(json: boolean, command: string, code: JsonErrorCode, message: string, details: Record<string, unknown> = {}): void {
+  if (json) console.log(JSON.stringify({ ...details, ok: false, command, code, message }));
   console.error(message);
   process.exitCode = 2;
 }

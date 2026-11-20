@@ -52,6 +52,7 @@
 | `list_conflicts` | 列出冲突记录、变体来源与内容缩短告警 |
 | `diff_conflict_variants` | `{ skillName, variantA?, variantB }`，逐文件比对，左侧默认 `active` |
 | `read_conflict_file` | `{ skillName, variantId, path }`，读取变体内 UTF-8 文件，返回脱敏文本 |
+| `git_status` / `git_log` / `git_diff` | 查询真源 Git 状态、提交历史与脱敏差异。历史接受 `{ skill?, limit? }`，差异接受 `{ refA?, refB? }` |
 
 ### 4.2 写(`ask` 时审批)
 
@@ -65,13 +66,11 @@
 | `write_skill_file` | 写回已定稿 skill（同 `PUT /api/skills/:hash/file` 经 `saveSkillFile`）或未定稿草稿目录内的文本文件 |
 | `group_create` / `group_update` / `group_delete` / `group_members` | 现有分组 `perform*` |
 | `apply_conflict_resolution` | 必填 `skillName`、`mode` 与 `summary`。选版填 `winnerVariantId`，合并填 `mergedFiles` 与可选 `deletePaths`，拆分填 `variantId` 与 `newName`。执行时归档旧版并同步索引，`ask` 模式先等批准 |
+| `git_commit` | Git 开启后提交唯一真源的待提交改动，接收 `{ summary }`。`ask` 模式下先要求批准，云端推送从设置由用户发起 |
 
 不做:`run_cli` 逃生舱、`reset`、`backup restore`。
 
-### 4.3 v0.3 Git 版本历史预留工具（见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
-
-- **读** `git_status` / `git_log` / `git_diff` 查询唯一真源仓库的状态、历史与差异。未开启 Git 时返回降级提示。
-- **写** `git_commit` 为 Agent 的改动执行带语义摘要的提交。仅在 Git 开启时可用，并遵循 `writePolicy` 审批。
+启用 Git 后，编辑、收录、归档、恢复、草稿定稿、接管与冲突决议会尝试自动提交。Git 失败产生结构化警告，库存写入结果保留。Agent 在需要手动提交时先核对 Git 状态。
 
 ## 5. HTTP 流契约
 

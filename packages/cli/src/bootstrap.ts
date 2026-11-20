@@ -86,7 +86,7 @@ export async function migrateAllSkills(
   }
   const discovered = dirs.length;
   if (dirs.length === 0) return { discovered, adopted: 0, dryRun: false };
-  const report = await performAdopt(storeRoot, dirs, { dryRun: false });
+  const report = await performAdopt(storeRoot, dirs, { dryRun: false, home: baseHome });
   printAdoptSummary(report, false);
   return { discovered, adopted: report.adopted, dryRun: false };
 }

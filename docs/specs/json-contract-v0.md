@@ -222,7 +222,10 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 | verify-failed | backup verify 发现 blob 缺失或哈希不符 |
 | restore-failed | backup restore / reset 写回客户端 skills 失败 |
 | github-push-failed | share 推送被 GitHub 拒绝(无权限/限流/分支保护) |
-| remote-conflict | share 远端已有同名不同内容,不覆盖 |
+| remote-conflict | share 远端已有同名不同内容，或 Git 备份的 origin 设置冲突 |
+| git-unavailable | 当前未安装 Git |
+| secret-detected | 公开备份发现疑似密钥，需明确确认后重试 |
+| remote-diverged | 云端含本地尚未合入的提交，需人工解决分歧 |
 | draft-exists | new 占名时目标 dirName 已被 skills[] 或 drafts[] 占用 |
 | draft-not-found | new commit / new discard 目标不在 drafts[] 中 |
 | draft-incomplete | new commit 时 SKILL.md 缺 name 或 description |

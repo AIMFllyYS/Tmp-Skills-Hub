@@ -1,6 +1,10 @@
 export { runGit, runGh, detectGitEnvironment, parseGhUsername } from "./git-runner.js";
 export type { CommandResult, CommandRunner } from "./git-runner.js";
-export { initSkillsGitRepo, autoCommitSkillChange, getGitStatus, getGitLog, getGitDiff } from "./git-repo.js";
-export type { GitCommitEntry, GitStatus } from "./git-repo.js";
+export { initSkillsGitRepo, autoCommitSkillChange, getGitStatus, getGitLog, getGitDiff, getGitCommitPatch } from "./git-repo.js";
+export type { GitCommitEntry, GitCommitResult, GitStatus } from "./git-repo.js";
 export { scanSecretsInDir, redactGitSecrets } from "./secret-scan.js";
 export type { SecretFinding } from "./secret-scan.js";
+export { createGhDeviceLogin, GhLoginError } from "./gh-login.js";
+export type { GhDeviceLogin, GhLoginChallenge } from "./gh-login.js";
+export { githubRepoUrl, pushCloudBackup, setupCloudBackupRepo, isCloudRepoName } from "./gh-cloud.js";
+export type { CloudBackupOptions, GitCloudFailureCode, GitCloudRunners } from "./gh-cloud.js";

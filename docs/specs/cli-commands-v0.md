@@ -45,15 +45,9 @@
 | `bootstrap` | 选择真源、预览并确认接管，备份校验后入库和建软链接，再启用自身 skill 并启动面板；已初始化时直接启动 | 人 |
 | `reconcile` | `--dry-run` 预演，确认后备份、接管与建纯软链接；可用 `--include-external-links` 显式纳入外链 | 人 / AI |
 | `conflicts` | `list` 列出冲突，`diff <name> [--a active\|<id>] [--b <id>]` 查看逐文件差异，`resolve <name> --mode pick [--winner <id>]` 选版并默认保留真源，`resolve <name> --mode split --winner <id> --new-name <name>` 拆分。写操作在非交互环境下需要 `--yes`，文本合并走 HTTP 或 Agent | 人 / AI |
+| `git` | `status` 检测环境，`enable` / `disable` 开关版本控制，`log [name] [--limit N]` 查看历史，`commit -m <summary>` 提交当前真源改动，`cloud init --repo <name> [--private\|--public]` 建仓，`cloud push` 推送 | 人 / AI |
 
 新库存的 `--home <X>` 或 `SKILLS_HUB_HOME=<X>` 用于重定向客户端发现和控制中心，指针位于 `<X>/.skills-hub/config.json`。旧沙箱仍支持直接使用含 `manifest.json` 的单根布局。修订缘由是让 `init`、`bootstrap` 和运行时读取遵循同一双目录契约。
-
-### 1.1 v0.3 演进预留命令（见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
-
-> 以下为 v0.3 正式定案的预留命令名，各 Sub-Issue 实现并注册至 `packages/cli/src/index.ts` 后，同步移入 §1 命令表（§1 表格受 `spec-conformance.test.ts` 严格校验，确保表内命令均已落地）：
->
-> - `git status | enable | disable | log [name] | commit [-m msg]`（T5.2）：检测/开关唯一真源目录 Git 版本控制、查看历史、执行规范化提交（`status`/`log` 只读，其余需 `--yes` / TTY）
-> - `git cloud init [--private|--public] [--repo <name>]` / `git cloud push`（T5.2）：经 `gh` CLI 设备码登录、安全扫描、一键创建 GitHub 仓库并推送云端备份（写操作，需 `--yes` / TTY，绝不 `--force`）
 
 > **bootstrap 的流程与铁律**：先预览再显式确认。备份和校验是接管的前置条件，外链默认保持原状。非 TTY 环境需 `--yes`，采用默认真源并授权完整流程。启动面板时传入 home 基座，读取该 home 下的控制中心指针。库存已就绪时直接启动面板，不重新接管。
 
@@ -106,6 +100,10 @@
 上面这套流程要成立，AI 必须先知道 CLI 怎么用。所以 skills-hub 自带一份 `SKILL.md`，内容就是「什么时机该调用我、怎么调用」。
 这份 skill 随 `bootstrap` 收录并默认启用到全部已发现客户端，其余全部按需 `enable`。用户可通过 `disable` 撤销。
 已配置的 `bootstrap` 或 `ui` 启动时自检随包指南。遇到较早的官方指南，会归档旧真源并更新 `SKILL.md` 及元数据。已有挂载随真源更新；新发现或已撤回的客户端由用户选择 `enable skills-hub --client <id>`。维护随包指南时，发布新版须递增文档的 `skills-hub-guide-version` 标记。
+
+### 4.1.1 Git 备份
+
+写入类 Git 命令在非交互环境需 `--yes`。开关关闭时保留仓库与历史，暂停自动提交。只读历史按目录名筛选。安装后先在设置中完成 `gh` 设备授权。云端默认创建私有仓库，首次公开推送扫描工作树与可达历史中的已知凭据模式。命中后由用户核对脱敏位置，再决定是否提供 `--confirm-public-secrets`。已有 `origin` 保留，远端分叉需人工拉取合并。
 
 ### 4.2 调用计数的落点
 

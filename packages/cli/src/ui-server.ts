@@ -5,8 +5,6 @@ import { createAdaptorServer } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import {
-  archiveSkill,
-  restoreArchivedSkill,
   discoverClientRoots,
   listArchivedSkills,
   listBackupSnapshots,
@@ -53,6 +51,10 @@ import { registerReconcileRoutes } from "./ui-reconcile.js";
 import { registerConflictRoutes } from "./ui-conflicts.js";
 import { checkBundledSelfSkill } from "./self-skill.js";
 import { registerSettingsRoutes } from "./ui-settings.js";
+import { registerGitRoutes } from "./ui-git.js";
+import { archiveManagedSkill, restoreManagedSkill } from "./skill-write-ops.js";
+import { createGhDeviceLogin } from "./git/index.js";
+import type { GitRuntime } from "./git-ops.js";
 
 export const DEFAULT_UI_PORT = 4321;
 
@@ -133,6 +135,7 @@ export interface UiAppOptions {
   paths?: HubPaths | null;
   desktop?: boolean;
   onDesktopPreferences?: (preferences: DesktopPreferences) => void;
+  gitRuntime?: GitRuntime;
   /** home 解析基座(沙箱测试注入;缺省 resolveHome()) */
   home?: string;
   /** web 静态产物根(缺省 apps/web/dist;测试注入临时目录) */
@@ -300,7 +303,8 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   registerLinkRoutes(app, ctx);
   registerReconcileRoutes(app, ctx);
   registerConflictRoutes(app, ctx);
-  registerSettingsRoutes(app, ctx);
+  registerSettingsRoutes(app, ctx, opts.gitRuntime);
+  registerGitRoutes(app, ctx, opts.gitRuntime);
 
   app.get("/api/health", (c) => c.json({ ok: true }));
 
@@ -464,6 +468,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     };
     if (fetchImpl !== undefined) env.fetchImpl = fetchImpl;
     if (analyzeGenerate !== undefined) env.analyzeGenerate = analyzeGenerate;
+    if (opts.gitRuntime !== undefined) env.gitRuntime = opts.gitRuntime;
     const tools = createAgentTools(env);
     const validated = await safeValidateUIMessages({
       messages,
@@ -581,7 +586,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const raw = (await c.req.json().catch(() => null)) as { source?: unknown } | null;
       const source = typeof raw?.source === "string" ? raw.source.trim() : "";
       if (source === "") return err(c, "adopt", "bad-usage", "body 需要 { source: string }");
-      const report = await performAdopt(root, [source], fetchImpl !== undefined ? { fetchImpl } : {});
+      const report = await performAdopt(root, [source], { home: ctx.home, ...(fetchImpl === undefined ? {} : { fetchImpl }) });
       if (report.fetchFailed && report.outcomes.length === 0) {
         return err(c, "adopt", "github-fetch-failed", report.fetchMessage ?? "拉取失败");
       }
@@ -606,7 +611,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const hit = resolveSkill(needle, await readStoreIndex(root));
       if (!hit.ok) return skillLookupErr(c, "archive", hit);
       const dirName = hit.skill.dirName;
-      const res = await archiveSkill(root, dirName);
+      const res = await archiveManagedSkill(ctx.home, root, dirName);
       if (!res.ok) return err(c, "archive", res.code, res.message, 409);
       return c.json({ ok: true, command: "archive", dirName, archiveFile: res.archiveFile, sizeBytes: res.sizeBytes, removedLinks: res.removedLinks });
     }),
@@ -615,7 +620,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   app.post("/api/skills/:hash/restore", (c) =>
     withStore(ctx, c, "restore", async (root) => {
       const needle = c.req.param("hash") ?? "";
-      const res = await restoreArchivedSkill(root, needle);
+      const res = await restoreManagedSkill(ctx.home, root, needle);
       if (!res.ok) return err(c, "restore", res.code, res.message);
       return c.json({ ok: true, command: "restore", dirName: res.dirName, hash: res.hash, archiveFile: res.archiveFile });
     }),
@@ -643,6 +648,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 export interface StartUiServerOptions {
   desktop?: boolean;
   onDesktopPreferences?: (preferences: DesktopPreferences) => void;
+  gitRuntime?: GitRuntime;
   port?: number;
   /** 客户端发现的 home 基座,不是库存根 */
   home?: string;
@@ -672,7 +678,10 @@ export async function startUiServer(opts: StartUiServerOptions = {}): Promise<Ui
   const h = opts.home ?? resolveHome();
   const paths = await resolveUiHubPaths(h);
   if (paths !== null) await checkBundledSelfSkill(h, paths, opts.selfSkillDir);
-  const appOpts: UiAppOptions = { paths, home: h, desktop: opts.desktop === true };
+  const deviceLogin = opts.gitRuntime?.deviceLogin ?? createGhDeviceLogin(
+    opts.gitRuntime?.gh === undefined ? {} : { runner: opts.gitRuntime.gh },
+  );
+  const appOpts: UiAppOptions = { paths, home: h, desktop: opts.desktop === true, gitRuntime: { ...opts.gitRuntime, deviceLogin } };
   if (opts.onDesktopPreferences !== undefined) appOpts.onDesktopPreferences = opts.onDesktopPreferences;
   if (opts.webRoot !== undefined) appOpts.webRoot = opts.webRoot;
   const app = createUiApp(appOpts);
@@ -696,10 +705,12 @@ export async function startUiServer(opts: StartUiServerOptions = {}): Promise<Ui
       resolve({
         port: actualPort,
         url,
-        close: () =>
-          new Promise<void>((res, rej) => {
+        close: () => {
+          deviceLogin.dispose();
+          return new Promise<void>((res, rej) => {
             server.close((err) => (err ? rej(err) : res()));
-          }),
+          });
+        },
       });
     });
   });

@@ -7,6 +7,9 @@ import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
 import { executeReconcile, initializeStoreLayout, readConflicts, type HubPaths } from "@skills-hub/core";
 import { createSkillsHubAgent, parseWritePolicy } from "../src/agent/agent.js";
 import { buildAgentSystemPrompt } from "../src/agent/prompt.js";
+import { getGitLog, type CommandRunner } from "../src/git/index.js";
+import { performGitToggle } from "../src/git-ops.js";
+import { performInit } from "../src/store-shared.js";
 import {
   createAgentTools,
   dump,
@@ -180,6 +183,42 @@ describe("createAgentTools", () => {
 });
 
 describe("createSkillsHubAgent", () => {
+  it("reports local Git history and diff while gating manual commits behind approval", { timeout: 25_000 }, async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "skills-hub-agent-git-"));
+    tempDirs.push(home);
+    savedEnv.GIT_CONFIG_GLOBAL = process.env.GIT_CONFIG_GLOBAL;
+    savedEnv.GIT_CONFIG_NOSYSTEM = process.env.GIT_CONFIG_NOSYSTEM;
+    process.env.GIT_CONFIG_GLOBAL = path.join(home, "sandbox-config");
+    process.env.GIT_CONFIG_NOSYSTEM = "1";
+    const initialized = await performInit(home);
+    if (!initialized.ok) throw new Error(initialized.message);
+    const paths = initialized.paths;
+    const notes = path.join(paths.skillsRoot, "notes.md");
+    await writeFile(notes, "initial\n");
+    await performGitToggle(home, paths, true);
+    await writeFile(notes, "pending edit\n");
+    const gh: CommandRunner = async () => ({ ok: false, stdout: "", stderr: "", reason: "missing", message: "stub", exitCode: null });
+    const env: ToolEnv = { home, storeRoot: paths.stateRoot, paths, gitRuntime: { gh } };
+    const tools = createAgentTools(env);
+    expect(await runTool(tools.git_status, {})).toMatchObject({ ok: true, enabled: true, initialized: true, dirtyCount: 1 });
+    expect(await runTool(tools.git_log, {})).toMatchObject({ ok: true, commits: [{ message: "chore(skills): initialize single-source repository" }] });
+    expect(await runTool(tools.git_diff, {})).toMatchObject({ ok: true, diff: expect.stringContaining("+pending edit") });
+    expect(WRITE_TOOL_NAMES.has("git_commit")).toBe(true);
+    const input = { summary: "Record approved notes" };
+    const model = new MockLanguageModelV3({
+      doGenerate: {
+        content: [{ type: "tool-call", toolCallId: "git-approval", toolName: "git_commit", input: JSON.stringify(input) }],
+        finishReason: { unified: "tool-calls", raw: undefined },
+        usage, warnings: [],
+      },
+    });
+    const agent = createSkillsHubAgent({ model, env, clients: [], writePolicy: "ask" });
+    expect((await agent.generate({ prompt: "提交之前先让我审批" })).content.some((part) => part.type === "tool-approval-request")).toBe(true);
+    expect(await getGitLog(paths.skillsRoot)).toHaveLength(1);
+    expect(await runTool(tools.git_commit, input)).toMatchObject({ ok: true, skipped: false });
+    expect((await getGitLog(paths.skillsRoot))[0]?.message).toBe(input.summary);
+  });
+
   it("reads conflict evidence before requesting approval and leaves the active version intact", async () => {
     const home = await mkdtemp(path.join(os.tmpdir(), "skills-hub-agent-conflicts-"));
     tempDirs.push(home);

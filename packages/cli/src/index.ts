@@ -11,6 +11,7 @@ import { planInitialPaths, resolveConfiguredHubPaths, resolveStoreRootOrFail } f
 import { performMigrate } from "./store-migrate.js";
 import { runReconcile } from "./reconcile-cmds.js";
 import { conflicts } from "./conflict-cmds.js";
+import { git } from "./git-cmds.js";
 import { collectDoctorReport, performPrune } from "./doctor.js";
 import { runGroup } from "./group-cmds.js";
 import { performInit, POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
@@ -433,7 +434,7 @@ const main = defineCommand({
     name: "skills-hub",
     description: "社团内部的 Agent Skill 共享与统一管理中心",
   },
-  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, new: newCmd, ui, bootstrap, migrate, reconcile, conflicts },
+  subCommands: { scan, init, doctor, adopt, list, show, enable, disable, group, archive, analyze, verify, backup, share, reset, new: newCmd, ui, bootstrap, migrate, reconcile, conflicts, git },
 });
 
 // 启动时把 .env 载入进程环境(密钥等配置只从环境变量读取;缺失静默)。
