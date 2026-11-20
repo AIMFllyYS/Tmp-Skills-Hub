@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { discoverClientRoots } from "./clients.js";
 import { readLinkTarget } from "./link-probe.js";
 import { isIgnoredSkillEntry } from "./skill-ignore.js";
@@ -95,14 +96,17 @@ async function putBlob(blobsDir: string, tmpRoot: string, hash: string, buf: Uin
  * 不把链接当目录走进去;库存内目标只记引用,库存外目标复制内容一次。
  * blobs 是 backups/blobs 共享池,快照只有 manifest。
  */
-export async function createBackupSnapshot(storeRoot: string, home: string): Promise<BackupSnapshotResult> {
-  const backupsRoot = path.join(storeRoot, STORE_BACKUPS_DIR);
+export async function createBackupSnapshot(storeRoot: string | HubPaths, home: string): Promise<BackupSnapshotResult> {
+  const backupsRoot = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_BACKUPS_DIR);
   const blobsDir = path.join(backupsRoot, "blobs");
-  const tmpRoot = path.join(storeRoot, STORE_TMP_DIR);
+  const tmpRoot = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR);
   await mkdir(blobsDir, { recursive: true });
   const snapshotId = new Date().toISOString().replace(/[:]/g, "-");
   const snapshotDir = path.join(backupsRoot, snapshotId);
-  const realStore = await realpath(storeRoot).catch(() => path.resolve(storeRoot));
+  const { stateRoot, skillsRoot } = normalizeHubPaths(storeRoot);
+  const realStoreRoots = await Promise.all([stateRoot, skillsRoot].map(
+    (root) => realpath(root).catch(() => path.resolve(root)),
+  ));
   const roots = await discoverClientRoots(home, { storeRoot });
   const files: BackupFileEntry[] = [];
   const links: BackupLinkEntry[] = [];
@@ -123,7 +127,7 @@ export async function createBackupSnapshot(storeRoot: string, home: string): Pro
     const target = await readLinkTarget(abs);
     if (target !== null) {
       const realTarget = await realpath(target).catch(() => target);
-      const inStore = isInside(realTarget, realStore);
+      const inStore = realStoreRoots.some((root) => isInside(realTarget, root));
       const st = await lstat(abs);
       const kind: BackupLinkEntry["kind"] = process.platform === "win32" && st.isDirectory() && !st.isSymbolicLink() ? "junction" : "symlink";
       links.push({ clientId, rel, kind, target: realTarget, inStore });
@@ -175,9 +179,9 @@ export async function createBackupSnapshot(storeRoot: string, home: string): Pro
   return { snapshotId, snapshotDir, blobsDir, manifest };
 }
 
-export async function readLatestSnapshotId(storeRoot: string): Promise<string | null> {
+export async function readLatestSnapshotId(storeRoot: string | HubPaths): Promise<string | null> {
   try {
-    const raw = (await readFile(path.join(storeRoot, STORE_BACKUPS_DIR, "latest"), "utf8")).trim();
+    const raw = (await readFile(path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_BACKUPS_DIR, "latest"), "utf8")).trim();
     return raw === "" ? null : raw;
   } catch {
     return null;
@@ -194,8 +198,8 @@ export interface BackupSnapshotSummary {
 }
 
 /** 列 backups/ 下的快照(跳过 blobs/ 与 latest)。按 createdAt 新→旧。 */
-export async function listBackupSnapshots(storeRoot: string): Promise<BackupSnapshotSummary[]> {
-  const root = path.join(storeRoot, STORE_BACKUPS_DIR);
+export async function listBackupSnapshots(storeRoot: string | HubPaths): Promise<BackupSnapshotSummary[]> {
+  const root = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_BACKUPS_DIR);
   let names: string[];
   try {
     names = await readdir(root);
@@ -244,10 +248,10 @@ export async function readBackupManifest(snapshotDir: string): Promise<BackupMan
 }
 
 /** 按 manifest 重算 blob 哈希。不改源目录。 */
-export async function verifyBackupSnapshot(storeRoot: string, snapshotId?: string): Promise<BackupVerifyReport> {
+export async function verifyBackupSnapshot(storeRoot: string | HubPaths, snapshotId?: string): Promise<BackupVerifyReport> {
   const id = snapshotId ?? (await readLatestSnapshotId(storeRoot));
   if (id === null) return { ok: false, snapshotId: "", checked: 0, issues: [{ hash: "", rel: "latest", reason: "missing" }] };
-  const snapshotDir = path.join(storeRoot, STORE_BACKUPS_DIR, id);
+  const snapshotDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_BACKUPS_DIR, id);
   const raw = JSON.parse(await readFile(path.join(snapshotDir, "manifest.json"), "utf8")) as unknown;
   if (typeof raw !== "object" || raw === null || !Array.isArray((raw as BackupManifest).files)) {
     try {
@@ -259,7 +263,7 @@ export async function verifyBackupSnapshot(storeRoot: string, snapshotId?: strin
     return { ok: false, snapshotId: id, checked: 0, issues: [{ hash: "", rel: "roots", reason: "missing" }] };
   }
   const manifest = raw as BackupManifest;
-  const blobsDir = path.join(storeRoot, STORE_BACKUPS_DIR, "blobs");
+  const blobsDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_BACKUPS_DIR, "blobs");
   const issues: BackupVerifyIssue[] = [];
   for (const f of manifest.files) {
     const blob = path.join(blobsDir, f.hash);
@@ -283,8 +287,8 @@ export async function materializeBackupSnapshot(snapshotDir: string, destRoot: s
   }
 }
 
-export async function removeBackupTmp(storeRoot: string): Promise<void> {
-  const tmp = path.join(storeRoot, STORE_TMP_DIR);
+export async function removeBackupTmp(storeRoot: string | HubPaths): Promise<void> {
+  const tmp = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR);
   const names = await readdir(tmp).catch(() => []);
   for (const n of names) {
     if (n.startsWith("bak.")) await rm(path.join(tmp, n), { force: true });

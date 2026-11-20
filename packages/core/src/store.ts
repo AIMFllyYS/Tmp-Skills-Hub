@@ -1,9 +1,11 @@
 import { cp, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { moveDirSafe, unlinkNoFollow } from "./fs-atomic.js";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { hashSkillFolder } from "./hash.js";
 import { migrateVersionedData, type MigrationStep } from "./migrate.js";
 import { readSkillMeta } from "./skill-md.js";
-import { STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
+import { STORE_TMP_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 import type { SkillMeta, SkillRecord, SkillSource } from "./types.js";
 
@@ -61,13 +63,13 @@ export interface AdoptionReport {
 }
 
 /** 读取库存清单;文件缺失或为空占位({})视为空库,JSON 损坏抛错(不静默重置)。 */
-export async function readStoreIndex(storeRoot: string): Promise<SkillRecord[]> {
+export async function readStoreIndex(storeRoot: string | HubPaths): Promise<SkillRecord[]> {
   return (await readStoreIndexFile(storeRoot)).skills;
 }
 
 /** 读取完整 index 文件(含 drafts)。 */
-export async function readStoreIndexFile(storeRoot: string): Promise<StoreIndexFile> {
-  const indexPath = path.join(storeRoot, "index.json");
+export async function readStoreIndexFile(storeRoot: string | HubPaths): Promise<StoreIndexFile> {
+  const indexPath = path.join(normalizeHubPaths(storeRoot).stateRoot, "index.json");
   let raw: string;
   try {
     raw = await readFile(indexPath, "utf8");
@@ -101,11 +103,11 @@ export async function readStoreIndexFile(storeRoot: string): Promise<StoreIndexF
 
 /** 原子写库存清单:先写 tmp 再 rename。保留 drafts。 */
 export async function writeStoreIndex(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   skills: SkillRecord[],
   drafts?: DraftRecord[],
 ): Promise<void> {
-  const indexPath = path.join(storeRoot, "index.json");
+  const indexPath = path.join(normalizeHubPaths(storeRoot).stateRoot, "index.json");
   const existingDrafts = drafts ?? (await readStoreIndexFile(storeRoot)).drafts;
   const content = JSON.stringify(
     { version: STORE_INDEX_VERSION, skills, drafts: existingDrafts },
@@ -113,7 +115,7 @@ export async function writeStoreIndex(
     2,
   ) + "\n";
   const tmpPath = path.join(
-    storeRoot,
+    normalizeHubPaths(storeRoot).stateRoot,
     STORE_TMP_DIR,
     "index." + uniqueTmpId() + ".tmp",
   );
@@ -132,7 +134,7 @@ export interface AdoptOptions {
 }
 
 export async function adoptSkillFolder(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   folderPath: string,
   origin: SkillSource,
   options?: AdoptOptions,
@@ -166,7 +168,7 @@ export async function adoptSkillFolder(
   }
 
   // 目录已存在但清单无记录:疑似半成品/手动放置,绝不覆盖
-  const dest = path.join(storeRoot, STORE_SKILLS_DIR, meta.name);
+  const dest = path.join(normalizeHubPaths(storeRoot).skillsRoot, meta.name);
   if (await exists(dest)) {
     return { kind: "conflict", name: meta.name, existingHash: "?", incomingHash };
   }
@@ -182,10 +184,14 @@ export async function adoptSkillFolder(
 
   if (!dryRun) {
     // 原子入位:先复制到 tmp 再 rename 到 skills/<name>
-    await mkdir(path.join(storeRoot, STORE_TMP_DIR), { recursive: true });
-    const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "adopt." + uniqueTmpId());
-    await cp(folderPath, tmpDir, { recursive: true });
-    await rename(tmpDir, dest);
+    await mkdir(path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR), { recursive: true });
+    const tmpDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR, "adopt." + uniqueTmpId());
+    try {
+      await cp(folderPath, tmpDir, { recursive: true });
+      await moveDirSafe(tmpDir, dest);
+    } finally {
+      await unlinkNoFollow(tmpDir);
+    }
     skills.push(record);
     await writeStoreIndex(storeRoot, skills);
   }
@@ -194,7 +200,7 @@ export async function adoptSkillFolder(
 
 /** 批量收录并产出报告(缺 name/description 的目录进报告而不是被静默跳过)。 */
 export async function adoptMany(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   inputs: AdoptInput[],
   options?: AdoptOptions,
 ): Promise<AdoptionReport> {

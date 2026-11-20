@@ -1,5 +1,6 @@
 import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 
 /**
  * 客户端 skills 根目录发现:按目录形状扫描,不维护品牌名单。
@@ -69,7 +70,7 @@ export function isOwnClientId(id: string): boolean {
 
 export interface DiscoverRootsOptions {
   /** 库存根:其自身及子目录永不作为客户端 root */
-  storeRoot?: string;
+  storeRoot?: string | HubPaths;
 }
 
 function samePath(a: string, b: string): boolean {
@@ -78,7 +79,7 @@ function samePath(a: string, b: string): boolean {
 
 function isInside(inner: string, outer: string): boolean {
   const rel = path.relative(outer, inner);
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  return rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel);
 }
 
 /**
@@ -101,8 +102,14 @@ function isStoreOwnedSkillsDir(skillsDir: string, storeRoot: string): boolean {
  * (否则沙箱/临时 home 会被 "tmp/temp" 段误杀)。段名去前导点后比较,大小写不敏感。
  * storeRoot 是额外保护:库存根本身及其子目录永不作为客户端,即使名字不像 skills-hub。
  */
-export function isExcludedRoot(skillsDir: string, home: string, storeRoot?: string): boolean {
-  if (storeRoot !== undefined && storeRoot !== "" && isStoreOwnedSkillsDir(skillsDir, storeRoot)) return true;
+export function isExcludedRoot(skillsDir: string, home: string, storeRoot?: string | HubPaths): boolean {
+  if (storeRoot !== undefined && storeRoot !== "") {
+    const paths = normalizeHubPaths(storeRoot);
+    if (isInside(skillsDir, paths.skillsRoot)) return true;
+    if (paths.layoutMode === "split" ? isInside(skillsDir, paths.stateRoot) : isStoreOwnedSkillsDir(skillsDir, paths.stateRoot)) {
+      return true;
+    }
+  }
   const rel = path.relative(home, skillsDir);
   if (rel.startsWith("..") || path.isAbsolute(rel)) return false; // 不在 home 下,无从判定
   const segments = rel.split(/[\\/]/).map((s) => s.replace(/^\.+/, "").toLowerCase());
@@ -126,15 +133,19 @@ export async function discoverClientRoots(home: string, opts?: DiscoverRootsOpti
 export async function discoverClientRootsAt(base: string, opts?: DiscoverRootsOptions): Promise<ClientRoot[]> {
   const found = new Map<string, ClientRoot>();
   const declared = opts?.storeRoot;
-  const storeRoot = declared !== undefined && declared !== ""
-    ? await realpath(declared).catch(() => path.resolve(declared))
-    : undefined;
+  const paths = declared !== undefined && declared !== "" ? normalizeHubPaths(declared) : undefined;
+  const canonicalize = (root: string) => realpath(root).catch(() => path.resolve(root));
+  const canonical = paths && {
+    layoutMode: paths.layoutMode,
+    stateRoot: await canonicalize(paths.stateRoot),
+    skillsRoot: await canonicalize(paths.skillsRoot),
+  };
 
   // 同名真实路径只保留第一个(确定性顺序下先到者胜,clientId 取先到者)
   const addRoot = async (clientId: string, skillsDir: string): Promise<void> => {
-    if (isExcludedRoot(skillsDir, base, storeRoot)) return;
+    if (isExcludedRoot(skillsDir, base, paths)) return;
     const real = await realpath(skillsDir).catch(() => skillsDir);
-    if (storeRoot !== undefined && isStoreOwnedSkillsDir(real, storeRoot)) return;
+    if (canonical && isExcludedRoot(real, base, canonical)) return;
     if (!found.has(real)) {
       found.set(real, { clientId, skillsDir: real });
     }

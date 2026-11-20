@@ -1,11 +1,12 @@
-import { lstat, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir } from "node:fs/promises";
+import { writeFileAtomicSafe } from "./fs-atomic.js";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { readGroups, writeGroups } from "./groups.js";
 import { hashSkillFolder } from "./hash.js";
 import { readLinksLedger, writeLinksLedger } from "./links.js";
 import { migrateSkillStatsHash } from "./stats.js";
 import { readStoreIndex, writeStoreIndex } from "./store.js";
-import { uniqueTmpId } from "./tmp-id.js";
 
 /**
  * skill 内容读取(#36):文件树与文件内容,供面板查看器使用。
@@ -112,7 +113,7 @@ export type SkillSaveResult =
   | { ok: false; code: "outside" | "not-found" | "too-large" | "io-error"; message: string };
 
 export interface SaveSkillFileInput {
-  storeRoot: string;
+  storeRoot: string | HubPaths;
   skillDir: string;
   relPath: string;
   content: string;
@@ -134,17 +135,13 @@ export async function saveSkillFile({ storeRoot, skillDir, relPath, content }: S
     // 2. 版本追溯:旧内容副本进 archive/versions/
     if (oldBuf !== null) {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:]/g, "-");
-      const versionDir = path.join(storeRoot, "archive", "versions", name + "-" + stamp);
+      const versionDir = path.join(normalizeHubPaths(storeRoot).stateRoot, "archive", "versions", name + "-" + stamp);
       const versionFile = path.join(versionDir, relPath);
       await mkdir(path.dirname(versionFile), { recursive: true });
-      const tmpV = versionFile + ".tmp-" + uniqueTmpId();
-      await writeFile(tmpV, oldBuf);
-      await rename(tmpV, versionFile);
+      await writeFileAtomicSafe(versionFile, oldBuf);
     }
     // 3. 原子写回原件
-    const tmp = path.join(skillDir, "." + path.basename(safe) + ".tmp-" + uniqueTmpId());
-    await writeFile(tmp, content, "utf8");
-    await rename(tmp, safe);
+    await writeFileAtomicSafe(safe, content);
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     return { ok: false, code: "io-error", message: "写入失败(未产生半个文件): " + reason };

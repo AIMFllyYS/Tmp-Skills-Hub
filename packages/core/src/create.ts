@@ -1,5 +1,7 @@
-import { mkdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
+import { moveDirSafe, unlinkNoFollow } from "./fs-atomic.js";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { hashSkillFolder } from "./hash.js";
 import { readSkillMeta } from "./skill-md.js";
 import {
@@ -7,7 +9,7 @@ import {
   readStoreIndexFile,
   writeStoreIndex,
 } from "./store.js";
-import { STORE_ARCHIVE_DIR, STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
+import { STORE_ARCHIVE_DIR, STORE_TMP_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 import type { SkillRecord, SkillSource } from "./types.js";
 
@@ -39,7 +41,7 @@ const TEMPLATE_SKILL_MD = (name: string, description: string) =>
 
 /** Allocate a directory in the store for a new skill draft. */
 export async function allocateDraft(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   dirName: string,
   seed?: { description?: string; origin?: SkillSource },
 ): Promise<AllocateOutcome> {
@@ -52,7 +54,7 @@ export async function allocateDraft(
     return { kind: "conflict", dirName, reason: "drafts[] 中已有同名草稿" };
   }
 
-  const dest = path.join(storeRoot, STORE_SKILLS_DIR, dirName);
+  const dest = path.join(normalizeHubPaths(storeRoot).skillsRoot, dirName);
   if (await exists(dest)) {
     return { kind: "conflict", dirName, reason: "磁盘上已有同名目录" };
   }
@@ -66,15 +68,15 @@ export async function allocateDraft(
     createdAt: new Date().toISOString(),
   };
 
-  await mkdir(path.join(storeRoot, STORE_TMP_DIR), { recursive: true });
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "draft." + uniqueTmpId());
+  await mkdir(path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR), { recursive: true });
+  const tmpDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR, "draft." + uniqueTmpId());
   await mkdir(tmpDir, { recursive: true });
-  await writeFile(
-    path.join(tmpDir, "SKILL.md"),
-    TEMPLATE_SKILL_MD(dirName, description),
-    "utf8",
-  );
-  await rename(tmpDir, dest);
+  try {
+    await writeFile(path.join(tmpDir, "SKILL.md"), TEMPLATE_SKILL_MD(dirName, description), "utf8");
+    await moveDirSafe(tmpDir, dest);
+  } finally {
+    await unlinkNoFollow(tmpDir);
+  }
 
   indexFile.drafts.push(draft);
   await writeStoreIndex(storeRoot, indexFile.skills, indexFile.drafts);
@@ -83,14 +85,14 @@ export async function allocateDraft(
 }
 
 /** Commit a draft: validate SKILL.md, compute hash, move to skills[]. */
-export async function commitDraft(storeRoot: string, dirName: string): Promise<CommitOutcome> {
+export async function commitDraft(storeRoot: string | HubPaths, dirName: string): Promise<CommitOutcome> {
   const indexFile = await readStoreIndexFile(storeRoot);
   const draftIdx = indexFile.drafts.findIndex((d) => d.dirName === dirName);
   if (draftIdx === -1) {
     return { kind: "draft-not-found", dirName };
   }
 
-  const skillDir = path.join(storeRoot, STORE_SKILLS_DIR, dirName);
+  const skillDir = path.join(normalizeHubPaths(storeRoot).skillsRoot, dirName);
   const meta = await readSkillMeta(skillDir);
   if (meta === null) {
     return { kind: "incomplete", dirName, reason: "SKILL.md 缺少 name 或 description" };
@@ -130,22 +132,22 @@ export async function commitDraft(storeRoot: string, dirName: string): Promise<C
 }
 
 /** Discard a draft: move directory to archive/drafts/, remove from drafts[]. */
-export async function discardDraft(storeRoot: string, dirName: string): Promise<DiscardOutcome> {
+export async function discardDraft(storeRoot: string | HubPaths, dirName: string): Promise<DiscardOutcome> {
   const indexFile = await readStoreIndexFile(storeRoot);
   const draftIdx = indexFile.drafts.findIndex((d) => d.dirName === dirName);
   if (draftIdx === -1) {
     return { kind: "draft-not-found", dirName };
   }
 
-  const archiveDir = path.join(storeRoot, STORE_ARCHIVE_DIR, "drafts");
+  const archiveDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_ARCHIVE_DIR, "drafts");
   await mkdir(archiveDir, { recursive: true });
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const archivePath = path.join(archiveDir, `${dirName}-${timestamp}`);
 
-  const skillDir = path.join(storeRoot, STORE_SKILLS_DIR, dirName);
+  const skillDir = path.join(normalizeHubPaths(storeRoot).skillsRoot, dirName);
   if (await exists(skillDir)) {
-    await rename(skillDir, archivePath);
+    await moveDirSafe(skillDir, archivePath);
   }
 
   indexFile.drafts.splice(draftIdx, 1);
@@ -155,7 +157,7 @@ export async function discardDraft(storeRoot: string, dirName: string): Promise<
 }
 
 /** List current drafts. */
-export async function listDrafts(storeRoot: string): Promise<DraftRecord[]> {
+export async function listDrafts(storeRoot: string | HubPaths): Promise<DraftRecord[]> {
   return (await readStoreIndexFile(storeRoot)).drafts;
 }
 
@@ -164,7 +166,7 @@ export async function listDrafts(storeRoot: string): Promise<DraftRecord[]> {
  * Used by the human shell where name and description are already known.
  */
 export async function createAndCommit(
-  storeRoot: string,
+  storeRoot: string | HubPaths,
   dirName: string,
   description: string,
   origin?: SkillSource,

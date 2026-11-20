@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { uniqueTmpId } from "./tmp-id.js";
+import { writeFileAtomicSafe } from "./fs-atomic.js";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 
 /**
  * 库存目录布局初始化(spec §2)。
@@ -9,8 +10,7 @@ import { uniqueTmpId } from "./tmp-id.js";
 
 export const STORE_LAYOUT_VERSION = 1;
 
-/** 活跃 skill 真身目录(符号链接指向这里) */
-export const STORE_SKILLS_DIR = "skills";
+export { STORE_SKILLS_DIR } from "./store-location.js";
 /** 软删除归档目录(<name>-<ISO时间戳>.zip) */
 export const STORE_ARCHIVE_DIR = "archive";
 /** 原子操作暂存目录(操作结束即清空) */
@@ -37,14 +37,16 @@ export interface InitLayoutResult {
 }
 
 /** 建立 §2 目录布局。重复执行不破坏已有内容。 */
-export async function initializeStoreLayout(storeRoot: string): Promise<InitLayoutResult> {
+export async function initializeStoreLayout(input: string | HubPaths): Promise<InitLayoutResult> {
+  const { stateRoot: storeRoot, skillsRoot } = normalizeHubPaths(input);
   const manifestPath = path.join(storeRoot, "manifest.json");
   const existing = await readManifest(manifestPath);
   if (existing !== null) {
     return { created: false, storeRoot, manifest: existing };
   }
 
-  for (const dir of [STORE_SKILLS_DIR, STORE_ARCHIVE_DIR, STORE_TMP_DIR]) {
+  await mkdir(skillsRoot, { recursive: true });
+  for (const dir of [STORE_ARCHIVE_DIR, STORE_TMP_DIR]) {
     await mkdir(path.join(storeRoot, dir), { recursive: true });
   }
 
@@ -52,10 +54,12 @@ export async function initializeStoreLayout(storeRoot: string): Promise<InitLayo
     version: STORE_LAYOUT_VERSION,
     createdAt: new Date().toISOString(),
   };
-  await writeFileAtomic(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   for (const file of STORE_DATA_FILES) {
-    await writeFileAtomic(path.join(storeRoot, file), "{}\n");
+    await writeFile(path.join(storeRoot, file), "{}\n", { flag: "wx" }).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    });
   }
+  await writeFileAtomicSafe(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   return { created: true, storeRoot, manifest };
 }
 
@@ -64,8 +68,9 @@ async function readManifest(manifestPath: string): Promise<StoreManifest | null>
   let raw: string;
   try {
     raw = await readFile(manifestPath, "utf8");
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
   let data: unknown;
   try {
@@ -80,15 +85,4 @@ async function readManifest(manifestPath: string): Promise<StoreManifest | null>
   const manifest: StoreManifest = { version: v.version, createdAt: v.createdAt };
   if (typeof v.trustedRepo === "string") manifest.trustedRepo = v.trustedRepo;
   return manifest;
-}
-
-/** 原子写:先写 tmp 再 rename,避免读到半成品(spec §2 tmp 目录的用途)。 */
-async function writeFileAtomic(target: string, content: string): Promise<void> {
-  const tmpPath = path.join(
-    path.dirname(target),
-    STORE_TMP_DIR,
-    `${path.basename(target)}.init-${uniqueTmpId()}.tmp`,
-  );
-  await writeFile(tmpPath, content, "utf8");
-  await rename(tmpPath, target);
 }

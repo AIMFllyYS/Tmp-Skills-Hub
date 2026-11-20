@@ -67,7 +67,7 @@
 
 ### E1: 状态与资产目录分离 + 运维自愈基座 | Epic #234 | Block A + B | PRD L83-L170
 
-- [ ] **T1.1** `[core]` 状态目录 (`~/.skills-hub/`) 与唯一真源目录分离契约与兼容解析 — [#239](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/239) | [PRD.md#L85-L127](./PRD.md#L85-L127)
+- [x] **T1.1** `[core]` 状态目录 (`~/.skills-hub/`) 与唯一真源目录分离契约与兼容解析 — [#239](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/239) | [PRD.md#L85-L127](./PRD.md#L85-L127)
   - **depends-on**: 无（全专项起点，可直接开工）
   - **负责模块**: `packages/core/src/store-location.ts`, `store-layout.ts`, `fs-atomic.ts`(新增), 现有 core 模块 `normalizeHubPaths` 兼容适配, `index.ts`
   - **复用资产**: `resolveStoreRoot`, `readPointerStoreRoot`, `initializeStoreLayout`, `uniqueTmpId`, `migrateVersionedData`, `unlinkNoFollow`

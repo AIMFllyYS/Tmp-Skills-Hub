@@ -8,8 +8,9 @@ export type { GitHubFileEntry } from "./github-files.js";
 export { parseSkillMeta, readSkillMeta } from "./skill-md.js";
 export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot, isOwnClientId } from "./clients.js";
 export type { ClientRoot, DiscoverRootsOptions } from "./clients.js";
-export { resolveStoreRoot, readPointerStoreRoot } from "./store-location.js";
-export type { StoreRootOptions, StoreRootResolution, StoreRootSource } from "./store-location.js";
+export { resolveStoreRoot, readPointerStoreRoot, normalizeHubPaths, resolveHubPaths, readHubConfig, writeHubConfig } from "./store-location.js";
+export type { HubPaths, HubConfig, HubConfigV2, HubPathsResolution, StoreRootOptions, StoreRootResolution, StoreRootSource } from "./store-location.js";
+export { writeFileAtomicSafe, moveDirSafe, computeDirDiskUsage } from "./fs-atomic.js";
 export {
   initializeStoreLayout,
   STORE_ARCHIVE_DIR,

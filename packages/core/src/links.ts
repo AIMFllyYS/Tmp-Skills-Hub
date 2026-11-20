@@ -1,7 +1,7 @@
 import { readFile, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { inspectClientPath } from "./link-probe.js";
-import { STORE_SKILLS_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 import type { SkillRecord } from "./types.js";
 
@@ -42,8 +42,8 @@ export interface LinksLedgerFile {
 }
 
 /** 读台账:文件缺失或 init 占位 {} → 空台账;损坏/版本不符 → 抛错不重置。 */
-export async function readLinksLedger(storeRoot: string): Promise<LinkEntry[]> {
-  const file = path.join(storeRoot, "links.json");
+export async function readLinksLedger(storeRoot: string | HubPaths): Promise<LinkEntry[]> {
+  const file = path.join(normalizeHubPaths(storeRoot).stateRoot, "links.json");
   let raw: string;
   try {
     raw = await readFile(file, "utf8");
@@ -77,9 +77,9 @@ export async function readLinksLedger(storeRoot: string): Promise<LinkEntry[]> {
 }
 
 /** 原子写台账:先写 tmp 再 rename,中断不产生半个文件。 */
-export async function writeLinksLedger(storeRoot: string, entries: LinkEntry[]): Promise<void> {
-  const file = path.join(storeRoot, "links.json");
-  const tmp = path.join(storeRoot, "links." + uniqueTmpId() + ".tmp");
+export async function writeLinksLedger(storeRoot: string | HubPaths, entries: LinkEntry[]): Promise<void> {
+  const file = path.join(normalizeHubPaths(storeRoot).stateRoot, "links.json");
+  const tmp = path.join(normalizeHubPaths(storeRoot).stateRoot, "links." + uniqueTmpId() + ".tmp");
   await writeFile(tmp, JSON.stringify({ version: LINKS_LEDGER_VERSION, entries }, null, 2) + "\n", "utf8");
   await rename(tmp, file);
 }
@@ -98,7 +98,7 @@ export function attachVisibleIn(skills: readonly SkillRecord[], ledger: readonly
 }
 
 /** 追加/更新条目(按 id 去重),整份重写,原子。测试夹具用;生产写路径走 applyLinkSet。 */
-export async function upsertLinkEntries(storeRoot: string, entries: LinkEntry[]): Promise<LinkEntry[]> {
+export async function upsertLinkEntries(storeRoot: string | HubPaths, entries: LinkEntry[]): Promise<LinkEntry[]> {
   const current = await readLinksLedger(storeRoot);
   const byId = new Map(current.map((e) => [e.id, e]));
   for (const entry of entries) byId.set(entry.id, entry);
@@ -108,7 +108,7 @@ export async function upsertLinkEntries(storeRoot: string, entries: LinkEntry[])
 }
 
 /** 按 id 移除条目,整份重写,原子。测试夹具用;生产写路径走 applyLinkSet。 */
-export async function removeLinkEntries(storeRoot: string, ids: string[]): Promise<LinkEntry[]> {
+export async function removeLinkEntries(storeRoot: string | HubPaths, ids: string[]): Promise<LinkEntry[]> {
   const current = await readLinksLedger(storeRoot);
   const drop = new Set(ids);
   const next = current.filter((e) => !drop.has(e.id));
@@ -143,11 +143,11 @@ export interface LinkEntryCheck {
  * - target-invalid:死链或库存目标消失 → classify 为 dangling
  * 本函数保留更细的台账行状态,不另发明第四套枚举。只读,不修改任何东西。
  */
-export async function checkLinksLedger(storeRoot: string, entries: LinkEntry[]): Promise<LinkEntryCheck[]> {
+export async function checkLinksLedger(storeRoot: string | HubPaths, entries: LinkEntry[]): Promise<LinkEntryCheck[]> {
   const checks: LinkEntryCheck[] = [];
   for (const entry of entries) {
     const linkPath = path.join(entry.targetDir, entry.entryName);
-    const expectedDir = path.join(storeRoot, STORE_SKILLS_DIR, entry.entryName);
+    const expectedDir = path.join(normalizeHubPaths(storeRoot).skillsRoot, entry.entryName);
     const disk = await inspectClientPath(linkPath);
     const expectedTarget = await realpathIfExists(expectedDir);
     if (disk.kind === "missing") {
