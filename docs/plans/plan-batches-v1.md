@@ -1,6 +1,7 @@
 # 分批执行计划（v1）
 
 > Created: 2026-08-16
+> Updated: 2026-11-20
 > Status: accepted
 > Source: [第一次同步会](../updates/meeting-2026-08-15-first-sync.md) · [架构初始规范](../designs/architecture-initial-spec.md) · [库存与路径](../specs/store-and-paths-v0.md) · [CLI 命令面](../specs/cli-commands-v0.md)
 > 取代 [plan-first-shippable.md](./plan-first-shippable.md) 的里程碑划分（那份的 M0–M4 保留作为背景，执行以本文为准）。
@@ -30,10 +31,13 @@
 | 12 | 一键恢复到初始化前 | 备份被用过一轮后的 restore + 面板 reset | 10 |
 | 13 | 人用壳设计系统：克制灰阶 + 统一组件 | 天天用的壳要清晰、少、可预期 | 12 / #160 |
 | 14 | 人用壳交互：反馈、收纳、仪表盘 | 批 13 只换了皮，交互语法仍像静态灰字 | 13 |
+| 15 | 统计排行粗柱与内容层级树 | 看清 Top 用量与多文件 skill 结构 | 14 |
+| 16–18 | 动效收口、#189 收口与 AI 板块（七牛云 + Agent + 译文缓存 + AI SDK v7） | 统一动效、消除契约漂移、面板管家落地 | 15 |
+| 19 | 系统性治理与桌面端封装（Wave 1 修复 + Wave 2 Electron 壳 + 工程治理） | 全仓安全加固、#159/#205 收口、开箱桌面分发 | 16–18 |
 
-一批 = 一个父 issue + 一群 sub-issue = 一个分支族。按 [issue-to-pr](../../AGENTS.md) 规范，**每个 sub-issue 单独出一个 PR**，PR 打向 `dev`，正文末尾唯一一条 `Closes #N`。
+一批 = 一个父 issue + 一群 sub-issue = 一个分支族。按 [pr-and-git-workflow.md](../conventions/pr-and-git-workflow.md) 规范，**每个 sub-issue 单独出一个 PR**，PR 打向 `dev`，正文末尾唯一一条 `Closes #N`。
 
-> 批 0–6 已于 2026-08-16 完成（43 个 issue 全关）。批 7–15 已合入 `dev`（批 14 = #187，批 15 = #188）。当前执行是工程债收口 [\#189](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/189)（规范与代码对齐、去掉已废弃 IA、统一解析与编排）。设计依据：[panel-ia-v1.md](../designs/panel-ia-v1.md)、[app-shell-v2.md](../designs/app-shell-v2.md)、[ui-design-v1.md](../conventions/ui-design-v1.md)。
+> 批 0–15 与批 16–18（含 #187 / #188 / #189 / #204 / #207 / #208 / #216 / #218）均已合入 `dev`。当前推进**系统性治理与桌面壳工程（Wave 1 + Wave 2）**。设计依据：[panel-ia-v1.md](../designs/panel-ia-v1.md)、[app-shell-v2.md](../designs/app-shell-v2.md)、[desktop-shell-v0.md](../designs/desktop-shell-v0.md)、[ui-design-v1.md](../conventions/ui-design-v1.md)。
 
 ## 各批内容与验收
 
@@ -129,6 +133,23 @@ HTTP 补 adopt / links.apply / group / analyze / verify / restore；面板按钮
 
 验收：点任何导航/按钮有反馈；设置是弹窗；长应用名单默认折叠；侧栏可收可拖；统计是图不是细条；加载是骨架不是一句字；滚动条不可见；主路径仍无哈希/Ctrl+K。
 
+### 批 15 统计排行与内容层级树（#188）
+
+统计页只画前 8 名粗柱（区分查看与启用），全集下沉排行表；Skills 内容详情采用层级文件树 + 元信息网格，不再平铺长路径列表。
+
+### 批 16–18 动效收口、#189 对齐与 AI 能力升级
+
+- **#189 收口**：退役三栏选择/命令面板死代码，CLI/HTTP 统一 `resolveSkill` 匹配与 `perform*` 编排，ledger 实时推导 `visibleIn`。
+- **动效与启动体验（#204）**：抽离 `motion-press` / `motion-fill` / `motion-enter` / `motion-row`，去掉 View Transition 叠用，补齐一键启动脚本。
+- **AI 板块升级与 SDK 迁移（#207 / #208 / #216）**：推理后端迁至七牛云聚合服务并上线对话式 Agent 板块；翻译结果按内容哈希缓存进 `translations/`（绝不回写 `skills/`）；以 Vercel AI SDK v7（`ToolLoopAgent`、`streamText`、`generateText` + `Output.object`、`@ai-sdk/react` `useChat`）替换自制 SSE/工具循环运行时。
+- **宣传片与视觉底稿（#218）**：在独立目录 `promo/` 完成 57s 卡点宣传片及新前端浅色底稿。
+
+### 批 19 系统性治理与桌面壳（Wave 1 & Wave 2）
+
+- **Wave 1（内核 / CLI·AI·HTTP / Web）**：修复 #159 Windows 跨卷还原 `EPERM` 旁路、增加 Antigravity `.gemini/config/skills` 发现、编辑写回同步四份元数据哈希、`kind: "copy"` 受管切换、消除核心调试副作用；修齐 AI SDK v7 `fullStream` / `RetryError` / `Output.object` `"JSON"` 提示词 / 脱敏 / 工具安全包装；落地本机 HTTP 安全中间件（403/413/415/404 JSON/`POST /api/store/init`）、`packages/cli` 编程导出与 `--json` 契约修复；落地 Web `DOMPurify` XSS 净化、#205 首屏骨架 + 懒加载 + 渐进式水合、统一 `apiRequest` 与 `tsconfig.test.json`。
+- **Wave 2（Electron 桌面壳）**：新增 `apps/desktop`（[desktop-shell-v0.md](../designs/desktop-shell-v0.md)），进程内启动 `createUiApp()` / `startUiServer()` 并打包 `apps/web/dist` 与 `self-skill/`，提供社团内部分发包（默认无签名）。
+- **工程治理与 CI 加固**：建立 `.github/` PR/Issue 模板、CODEOWNERS、Dependabot、CI 权限/并发及 `--require-chrome` 强制冒烟门禁；清理冗余 `.gitkeep` 并消除全仓文档矛盾。
+
 ## 不做（本计划）
 
 账号与统一登录、公开技能市场、局域网分享、「有用」的自动判定、浏览器插件、千级换存储介质。
@@ -136,10 +157,10 @@ HTTP 补 adopt / links.apply / group / analyze / verify / restore；面板按钮
 
 ## 必须联网调研的知识点
 
-以下内容仓库里没有答案，实现时必须联网查证，不允许凭猜测写代码：
+以下内容在对应阶段实现时已/须联网查证，不允许凭猜测写代码：
 
 - macOS / Linux 上各客户端的 skills 目录约定
 - 除本机已实测的 26 个 root 外还有哪些主流客户端
 - skills.sh 的链接结构与拉取方式
 - symlink / junction / hardlink 在各系统的权限要求与非破坏性语义
-- DeepSeek API 的调用方式（密钥在 `.env`，已被 git 忽略）
+- 七牛云聚合推理与 Vercel AI SDK v7 接口约定（已迁移并定案，见 [ai-integration-v1.md](../specs/ai-integration-v1.md)）

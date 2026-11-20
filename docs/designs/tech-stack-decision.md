@@ -1,7 +1,7 @@
 # 技术选型决策记录
 
 > Created: 2026-08-16
-> Updated: 2026-08-16
+> Updated: 2026-11-20
 > Status: accepted
 > Source: [架构初始规范](./architecture-initial-spec.md) · [第一次同步会](../updates/meeting-2026-08-15-first-sync.md) · SPM 旧设计文档（spm-design / spm-draft / spm-agent-era-rethink，社团内部飞书）
 > 定位: 记录「为什么是 core + CLI + Vite 壳，而不是 Next.js」。推翻本文结论需按架构规范 §1 方法论重走一遍。
@@ -39,7 +39,7 @@ Go/Rust 的核心卖点是「用户零依赖的单文件分发」。但本项目
 
 1. **确定性内核尽量小**:只有「错了会破坏数据一致性」的逻辑写成代码;文本判断类功能写成 Skill 交给 Agent。
 2. **CLI + Skill 双重身份**:内核能力通过一份 SKILL.md 暴露给 Agent（描述「什么时机该调用我」）,「对 Agent 说帮我存」这条收录路径由此免费成立,不需要 MCP server。
-3. **不可变 store + content hash + lockfile**:与会议定的「内容哈希唯一标识」互相印证;lockfile 同时解决 C 分享层的对齐机制（共享仓库放清单,成员 sync 对齐）。
+3. **可写活跃副本 + 内容哈希快照 + 台账**：与会议定的「内容哈希唯一标识」互相印证；最初借自 SPM 时曾设想只读写入，现行已按 [core-patterns.md](../conventions/core-patterns.md) §1 修订为可写活跃副本 + `archive/versions/` 编辑快照 + `links.json` 台账，C 分享层仍按内容哈希比对对齐。
 
 ## 3. 明确不采用
 
@@ -50,7 +50,8 @@ Go/Rust 的核心卖点是「用户零依赖的单文件分发」。但本项目
 | 自建后端 / 数据库（第一版） | 分享层用 Git 当后端;存储介质接口已抽象,千级 skill 再评估 |
 | SPM 的 focus / supervision / evolve | 与会议「不重做各 Agent 的加载检索」结论冲突,登记进 backlog |
 
-## 4. 遗留验证项
+## 4. 已验证与定案事项
 
-- Windows junction 与各 Agent 的兼容性 spike（M1 前置,单独 issue）
-- 测试框架定案（倾向 vitest,首次引入时走 issue）
+- Windows junction 与各 Agent 的兼容性：已通过调研与单测验证（见 [core-patterns.md](../conventions/core-patterns.md) §4，部分需降级客户端走受管 `kind: "copy"`）
+- 测试框架：全仓已正式采用 **Vitest**（详见 [testing-and-security.md](../conventions/testing-and-security.md)）
+- 桌面端封装：已采用 **Electron** 包装进程内 CLI 服务（详见 [desktop-shell-v0.md](./desktop-shell-v0.md)）
