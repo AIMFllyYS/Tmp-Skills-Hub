@@ -86,7 +86,7 @@
   - **depends-on**: T1.1 (#239)
   - **负责模块**: `packages/core/src/reconcile-scan.ts`(新增), `packages/core/src/index.ts`
   - **复用资产**: `discoverClientRoots`, `readLinksLedger`, `readLinkTarget`, `readStoreIndex`, `readSkillMeta`, `hashSkillFolder`, `isIgnoredSkillEntry`
-- [ ] **T2.2** `[core]` 冲突池数据结构与 Reconcile 精准接管收敛内核 — [#243](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/243) | [PRD.md#L200-L242](./PRD.md#L200-L242)
+- [x] **T2.2** `[core]` 冲突池数据结构与 Reconcile 精准接管收敛内核 — [#243](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/243) | [PRD.md#L200-L242](./PRD.md#L200-L242)
   - **depends-on**: T2.1 (#242)
   - **负责模块**: `packages/core/src/conflicts.ts`(新增), `packages/core/src/reconcile.ts`(新增), `packages/core/src/index.ts`
   - **复用资产**: `createBackupSnapshot`, `verifyBackupSnapshot`, `adoptSkillFolder`, `applyLinkSet`, `moveDirSafe`, `writeFileAtomicSafe`, `migrateVersionedData`, `reconcile-scan.ts`

@@ -4,6 +4,7 @@ import type { Context, Hono } from "hono";
 import {
   classifyClientLink,
   discoverClientRoots,
+  linkSkillDirName,
   readLinksLedger,
   readStoreIndex,
   type ClientLinkState,
@@ -134,8 +135,8 @@ export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
       const roots = await discoverClientRoots(ctx.home, clientDiscoverOpts(ctx.paths));
       const links = [];
       for (const r of roots) {
-        const inLedger = ledger.some((e) => e.clientId === r.clientId && e.entryName === hit.skill.dirName);
-        const status = await classifyClientLink(path.join(r.skillsDir, hit.skill.dirName), inLedger);
+        const entry = ledger.find((e) => e.targetDir === r.skillsDir && linkSkillDirName(e) === hit.skill.dirName);
+        const status = await classifyClientLink(path.join(r.skillsDir, entry?.entryName ?? hit.skill.dirName), entry !== undefined);
         links.push({ clientId: r.clientId, state: status.state, detail: status.detail });
       }
       return c.json({ ok: true, command: "skill-links", hash: hit.skill.hash, links });
@@ -152,8 +153,8 @@ export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
       const ledger = await readLinksLedger(root);
       const rows: { hash: string; state: ClientLinkState; detail: string }[] = [];
       for (const s of skills) {
-        const inLedger = ledger.some((e) => e.clientId === clientId && e.entryName === s.dirName);
-        const status = await classifyClientLink(path.join(found.skillsDir, s.dirName), inLedger);
+        const entry = ledger.find((e) => e.targetDir === found.skillsDir && linkSkillDirName(e) === s.dirName);
+        const status = await classifyClientLink(path.join(found.skillsDir, entry?.entryName ?? s.dirName), entry !== undefined);
         rows.push({ hash: s.hash, state: status.state, detail: status.detail });
       }
       const enabled = rows.filter((r) => r.state === "managed").length;

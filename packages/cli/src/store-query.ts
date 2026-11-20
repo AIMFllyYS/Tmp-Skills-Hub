@@ -4,6 +4,7 @@ import { normalizeHubPaths, type HubPaths } from "@skills-hub/core";
 import {
   attachVisibleIn,
   hashSkillFolder,
+  linkSkillDirName,
   readGroups,
   readLinksLedger,
   readStoreIndex,
@@ -175,7 +176,7 @@ export async function performAcceptDrift(paths: HubPaths, names: string[], dryRu
     ["groups.json", () => writeGroups(paths, groups)],
     ["stats.json", () => writeUsageStats(paths, { ...stats, counters })],
     ["links.json", () => writeLinksLedger(paths, links.map((entry) => ({
-      ...entry, skillHash: updates.get(entry.entryName)?.actualHash ?? entry.skillHash,
+      ...entry, skillHash: updates.get(linkSkillDirName(entry))?.actualHash ?? entry.skillHash,
     })))],
     ["index.json", () => writeStoreIndex(paths, projected)],
   ] as const;

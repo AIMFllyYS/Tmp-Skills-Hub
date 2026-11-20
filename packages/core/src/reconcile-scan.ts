@@ -7,6 +7,7 @@ import { readLinkTarget } from "./link-probe.js";
 import { readLinksLedger, type LinkEntry } from "./links.js";
 import { isIgnoredSkillEntry } from "./skill-ignore.js";
 import { readSkillMeta } from "./skill-md.js";
+import { isPortableSkillName } from "./skill-name.js";
 import type { HubPaths } from "./store-location.js";
 import { readStoreIndex } from "./store.js";
 import type { SkillMeta, SkillRecord } from "./types.js";
@@ -69,13 +70,6 @@ function contains(root: string, file: string): boolean {
   return relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative);
 }
 
-function portableName(name: string): boolean {
-  return name.trim() === name && name !== "" && !/[. ]$/.test(name) &&
-    !/[<>:"/\\|?*]/.test(name) && !Array.from(name).some((char) => char.charCodeAt(0) < 32) &&
-    !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) &&
-    !isIgnoredSkillEntry(name) && name !== ".system" && name !== "builtin_skills";
-}
-
 async function classify(
   root: ClientRoot,
   item: Dirent,
@@ -112,7 +106,7 @@ export async function scanClientDriftL1(home: string, paths: HubPaths): Promise<
     readLinksLedger(paths),
     realpath(paths.skillsRoot).catch(() => path.resolve(paths.skillsRoot)),
   ]);
-  const registered = new Map(ledger.filter((e) => portableName(e.entryName)).map((entry) => [
+  const registered = new Map(ledger.filter((e) => isPortableSkillName(e.entryName)).map((entry) => [
     key(path.join(entry.targetDir, entry.entryName)), entry,
   ]));
   const resolvedTargets = new Map<string, Promise<string | null>>();
@@ -160,7 +154,7 @@ async function inspectCandidate(entry: DriftEntry): Promise<{ entry: DriftEntry;
   const manifest = await lstat(path.join(entry.entryPath, "SKILL.md")).catch(() => null);
   if (!manifest?.isFile()) return null;
   const meta = await readSkillMeta(entry.entryPath);
-  if (meta === null || !portableName(meta.name) || meta.description.trim() === "") return null;
+  if (meta === null || !isPortableSkillName(meta.name) || !isPortableSkillName(entry.entryName) || meta.description.trim() === "") return null;
   const fingerprint = await inspectSkillFingerprint(entry.entryPath).catch(() => null);
   return fingerprint === null ? null : { entry, meta, fingerprint };
 }
@@ -210,7 +204,7 @@ export async function inspectDriftL2(
     const storeSkill = index.find((skill) => skill.dirName.toLowerCase() === identity) ?? null;
     if (storeSkill !== null) {
       const sourcePath = path.join(paths.skillsRoot, storeSkill.dirName);
-      const existing = portableName(storeSkill.dirName)
+      const existing = isPortableSkillName(storeSkill.dirName)
         ? await inspectSkillFingerprint(sourcePath).catch(() => null)
         : null;
       if (existing === null) {
