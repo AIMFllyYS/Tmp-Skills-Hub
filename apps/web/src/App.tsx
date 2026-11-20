@@ -71,6 +71,10 @@ function MainShellApp() {
   const [page, setPage] = useState<AppPage>("overview");
   const [skillsTab, setSkillsTab] = useState<SkillsTab>("apps");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [desktopReconcileRequest, setDesktopReconcileRequest] = useState(
+    () => window.skillsHubDesktop?.isDesktop === true && window.location.hash === "#reconcile" ? 1 : 0,
+  );
+  const consumedReconcileRequest = useRef(0);
   const [collapsed, setCollapsed] = useState(prefs.collapsed);
   const [sidebarWidth, setSidebarWidth] = useState(prefs.width);
   const [sidebarMotion, setSidebarMotion] = useState(false);
@@ -86,6 +90,20 @@ function MainShellApp() {
     setPage("skills");
   });
   const rescan = catalog.status === "ready" ? { scanning: reconcile.scanning, onRescan: reconcile.rescan } : undefined;
+  const openReconcile = reconcile.showPreview;
+
+  useEffect(() => window.skillsHubDesktop?.onReconcileRequested?.(
+    () => setDesktopReconcileRequest((request) => request + 1),
+  ), []);
+
+  useEffect(() => {
+    if (desktopReconcileRequest === consumedReconcileRequest.current || catalog.status !== "ready") return;
+    consumedReconcileRequest.current = desktopReconcileRequest;
+    if (window.location.hash === "#reconcile") {
+      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    }
+    if (!reconcile.dialog.open) openReconcile();
+  }, [catalog.status, desktopReconcileRequest, openReconcile, reconcile.dialog.open]);
 
   useEffect(() => {
     writeShellPrefs({ collapsed, width: sidebarWidth });

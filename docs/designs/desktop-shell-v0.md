@@ -78,10 +78,10 @@ apps/desktop ──(import 编程接口)──→ packages/cli ──(import)─
   - 因此默认输出**无代码签名**产物；代价是 Windows SmartScreen 或 macOS Gatekeeper 首次运行会提示「未知发布者」，需在社团安装指引中说明首次放行步骤。
   - 若未来面向公开广泛分发，只需在 CI 发布工作流补充签名环境变量与证书密钥即可平滑接入，不牵动应用代码架构。
 
-## 七、开机自启、系统托盘与启动 L1 极速巡检（v0.3 规划）
+## 七、开机自启、系统托盘与启动 L1 极速巡检（v0.3）
 
 为承接 [single-source-sync-and-versioning/PRD.md](../specs/single-source-sync-and-versioning/PRD.md) 中的「开机巡检兜底」目标，桌面壳新增以下原生能力（仍严格遵守 `desktop → cli → core` 分层，不重写任何扫描业务）：
 
-1. **可选开机自启**：通过 Electron `app.setLoginItemSettings({ openAtLogin, args: ["--hidden"] })` 实现，状态持久化至 `~/.skills-hub/config.json`（`autoLaunch` 字段），由 WebUI 设置 Dialog 经 `PATCH /api/settings` 开关。
-2. **系统托盘（`apps/desktop/src/tray.ts`）**：支持静默启动到系统托盘，菜单含「打开主窗口」「立即重新扫描」「退出 Skills Hub」。
-3. **启动 L1 极速巡检与原生通知**：启动后经 `packages/cli` 编程导出调用 L1 浅扫（仅一层 `readdir` + `lstat`，耗时 < 20ms，零文件内容 I/O）；若无野生真目录或冲突且以 `--hidden` 启动，静默驻留不打扰；若检出新增本地真目录或版本冲突，发出 OS 原生 `Notification` 并更新托盘状态，点击通知直接唤醒窗口进入合并预览弹窗。
+1. **可选开机自启**。Windows 和 macOS 打包版使用 Electron 登录项。Windows 以 `--hidden` 启动，macOS 根据系统登录启动标记进入托盘。设置与托盘菜单共用 `PATCH /api/settings`，状态存放在固定控制根的 `config.json`。使用 `SKILLS_HUB_HOME` 的沙箱可以验证偏好，系统登录项保持不动。
+2. **系统托盘**。菜单提供「打开 Skills Hub」「立即重新扫描」「开机自启」「退出」。开启关闭到托盘偏好后，窗口关闭按钮隐藏窗口，退出操作释放本地服务和托盘。浏览器版设置区只展示桌面能力提示。
+3. **启动 L1 巡检与原生通知**。主进程通过 CLI 编程入口执行一次 L1 扫描，避免读取文件正文。在 `--hidden` 且无待接管项时静默驻留。发现未接管真目录或被覆写的链接时，托盘提示数量并发送原生通知。Windows 在原生通知不可用时使用托盘气泡。点击通知后窗口打开接管预览，内容差异仍由后续预览计算。

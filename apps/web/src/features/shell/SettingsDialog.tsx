@@ -44,11 +44,17 @@ export function SettingsDialog({
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
+  const [desktopRefresh, setDesktopRefresh] = useState(0);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [migrateOpen, setMigrateOpen] = useState(false);
   const [previewBody, setPreviewBody] = useState(RESET_FALLBACK_BODY);
   const groups = groupClientIds(clients.map((c) => c.clientId));
   const reset = getAction("reset");
+
+  useEffect(() => {
+    if (!open) return;
+    return window.skillsHubDesktop?.onPreferencesChanged?.(() => setDesktopRefresh((count) => count + 1));
+  }, [open]);
 
   useEffect(() => {
     if (!open || storeRoot === "") return;
@@ -66,7 +72,7 @@ export function SettingsDialog({
       },
     );
     return () => request.abort();
-  }, [open, storeRoot]);
+  }, [open, storeRoot, desktopRefresh]);
 
   const currentSettings = settings?.stateRoot === storeRoot ? settings : null;
   const migrate = async (target: string): Promise<void> => {

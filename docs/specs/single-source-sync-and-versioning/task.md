@@ -120,7 +120,7 @@
   - **depends-on**: T2.3 (#244)
   - **负责模块**: `packages/cli/self-skill/SKILL.md`, `packages/cli/src/bootstrap.ts`, `packages/cli/test/`
   - **复用资产**: `adoptAndEnableSelfSkill`, `parseSkillMeta`, `saveSkillFile`, `performLinkChange`, `discoverClientRoots`
-- [ ] **T4.2** `[desktop]` Electron 开机自启、系统托盘静默驻留与启动 L1 巡检通知 — [#250](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/250) | [PRD.md#L366-L382](./PRD.md#L366-L382)
+- [x] **T4.2** `[desktop]` Electron 开机自启、系统托盘静默驻留与启动 L1 巡检通知 — [#250](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/250) | [PRD.md#L366-L382](./PRD.md#L366-L382)
   - **depends-on**: T2.3 (#244)
   - **负责模块**: `apps/desktop/src/tray.ts`(新增), `apps/desktop/src/main.ts`, `preload.ts`, `apps/desktop/test/`
   - **复用资产**: `createUiApp`, `performReconcileScanL1` (`packages/cli/src/exports.ts`), Electron `Tray`, `Notification`, `app.setLoginItemSettings`

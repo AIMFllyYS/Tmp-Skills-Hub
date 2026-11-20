@@ -52,7 +52,7 @@ export function useReconcile(storeRoot: string | null, refresh: () => void, open
 
   useEffect(() => () => previewRequest.current?.abort(), []);
 
-  const loadPreview = async (include: boolean) => {
+  const loadPreview = useCallback(async (include: boolean, closeOnError = false) => {
     previewRequest.current?.abort();
     const request = new AbortController();
     previewRequest.current = request;
@@ -66,20 +66,20 @@ export function useReconcile(storeRoot: string | null, refresh: () => void, open
     } catch (error) {
       if (!request.signal.aborted) {
         toast.error(error instanceof Error ? error.message : String(error));
-        if (preview === null) setOpen(false);
+        if (closeOnError) setOpen(false);
       }
     } finally {
       if (previewRequest.current === request) setLoading(false);
     }
-  };
+  }, []);
 
-  const showPreview = () => {
+  const showPreview = useCallback(() => {
     setPreview(null);
     setIncludeExternalLinks(false);
     setExternalLinks([]);
     setOpen(true);
-    void loadPreview(false);
-  };
+    void loadPreview(false, true);
+  }, [loadPreview]);
 
   const rescan = async () => {
     const result = await scan();

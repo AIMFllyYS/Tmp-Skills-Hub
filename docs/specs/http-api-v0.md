@@ -67,7 +67,7 @@
 | --- | --- | --- | --- |
 | POST /api/store/init | `{ skillsRoot? }`（缺省 `<home>/.skills-hub/skills`；兼容旧 `{ storeRoot? }` 请求） | `{ ok, command: "store-init", stateRoot, skillsRoot, layoutMode, storeRoot, pointerFile, layoutCreated, builtinGroupsWrote }` | 400 bad-usage（非法路径或已初始化后更换真源）; 500 io-error |
 | GET /api/settings | — | `{ ok, command: "settings", stateRoot, skillsRoot, layoutMode, stateDiskBytes, git, autoLaunch, silentTray, isDesktop }` | 503 store-not-configured |
-| PATCH /api/settings | `{ gitEnabled?, autoLaunch?, silentTray? }`（仅布尔值） | 同 GET，配置原子写回 | 400 bad-usage; 503 store-not-configured |
+| PATCH /api/settings | `{ gitEnabled?, autoLaunch?, silentTray? }`（仅布尔值） | 同 GET，配置原子写回。桌面模式同步登录项与托盘，系统拒绝时保留旧配置 | 400 bad-usage; 500 io-error; 503 store-not-configured |
 | POST /api/store/migrate | `{ targetSkillsRoot, dryRun? }` | `{ ok, command: "store-migrate", paths, skills, movedLinks, aside, dryRun }` | 400 bad-usage; 409 conflict; 500 io-error; 503 store-not-configured |
 | POST /api/doctor/prune | `{ dryRun? }` | `{ ok, command: "doctor-prune", count, pruned, dryRun }`，只修改台账 | 400 bad-usage; 503 store-not-configured |
 | POST /api/verify/accept | `{ names?, dryRun? }` | `{ ok, command: "verify-accept", count, accepted, missing, dryRun }`，缺失项跳过 | 400 bad-usage; 404 not-found; 409 conflict; 503 store-not-configured |

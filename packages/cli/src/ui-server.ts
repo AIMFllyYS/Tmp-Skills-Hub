@@ -44,7 +44,7 @@ import { readTranslation, writeTranslation } from "./translations.js";
 import { createSkillsHubAgent, parseWritePolicy } from "./agent/agent.js";
 import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
 import { createAgentTools, type ToolEnv } from "./agent/tools.js";
-import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, setUiPaths, withStore, type UiRouteContext } from "./ui-http.js";
+import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, setUiPaths, withStore, type DesktopPreferences, type UiRouteContext } from "./ui-http.js";
 import { registerGroupRoutes } from "./ui-groups.js";
 import { registerDraftRoutes } from "./ui-drafts.js";
 import { registerContentRoutes } from "./ui-content.js";
@@ -132,6 +132,7 @@ export interface UiAppOptions {
   storeRoot?: string | null;
   paths?: HubPaths | null;
   desktop?: boolean;
+  onDesktopPreferences?: (preferences: DesktopPreferences) => void;
   /** home 解析基座(沙箱测试注入;缺省 resolveHome()) */
   home?: string;
   /** web 静态产物根(缺省 apps/web/dist;测试注入临时目录) */
@@ -240,7 +241,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const analyzeGenerate = opts.analyzeGenerate;
   const fetchImpl = opts.fetchImpl;
   const webRoot = opts.webRoot ?? defaultWebRoot();
-  const ctx: UiRouteContext = { storeRoot: null, paths: null, home, desktop: opts.desktop === true };
+  const ctx: UiRouteContext = {
+    storeRoot: null, paths: null, home, desktop: opts.desktop === true,
+    ...(opts.onDesktopPreferences === undefined ? {} : { onDesktopPreferences: opts.onDesktopPreferences }),
+  };
   setUiPaths(ctx, opts.paths === undefined && opts.storeRoot ? normalizeHubPaths(opts.storeRoot) : opts.paths ?? null);
 
   app.onError((e, c) => {
@@ -638,6 +642,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 /** 启动参数具名,避免把 storeRoot 按位置误传成 home(见 #95)。 */
 export interface StartUiServerOptions {
   desktop?: boolean;
+  onDesktopPreferences?: (preferences: DesktopPreferences) => void;
   port?: number;
   /** 客户端发现的 home 基座,不是库存根 */
   home?: string;
@@ -668,6 +673,7 @@ export async function startUiServer(opts: StartUiServerOptions = {}): Promise<Ui
   const paths = await resolveUiHubPaths(h);
   if (paths !== null) await checkBundledSelfSkill(h, paths, opts.selfSkillDir);
   const appOpts: UiAppOptions = { paths, home: h, desktop: opts.desktop === true };
+  if (opts.onDesktopPreferences !== undefined) appOpts.onDesktopPreferences = opts.onDesktopPreferences;
   if (opts.webRoot !== undefined) appOpts.webRoot = opts.webRoot;
   const app = createUiApp(appOpts);
   const server = createAdaptorServer({ fetch: app.fetch, hostname: "127.0.0.1" });
