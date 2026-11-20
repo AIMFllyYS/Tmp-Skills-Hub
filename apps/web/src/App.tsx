@@ -23,6 +23,9 @@ import {
 import { useCatalog } from "./features/skills/use-catalog.js";
 
 const AgentPage = lazy(() => import("./features/agent/AgentPage.js").then((m) => ({ default: m.AgentPage })));
+const PlaybookPage = lazy(() =>
+  import("./features/playbook/PlaybookPage.js").then((m) => ({ default: m.PlaybookPage })),
+);
 const SettingsDialog = lazy(() =>
   import("./features/shell/SettingsDialog.js").then((m) => ({ default: m.SettingsDialog })),
 );
@@ -35,7 +38,29 @@ const PAGE_LABELS: Record<Exclude<AppPage, "agent">, string> = {
   skills: "Skills 管理",
 };
 
+function isPlaybookRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  const p = window.location.pathname;
+  return p === "/playbook" || p.startsWith("/playbook/");
+}
+
 export default function App() {
+  if (isPlaybookRoute()) {
+    return (
+      <ErrorBoundary onRetry={() => window.location.reload()}>
+        <div className="h-dvh overflow-hidden bg-white">
+          <Toaster />
+          <Suspense fallback={<PageSkeleton />}>
+            <PlaybookPage />
+          </Suspense>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+  return <MainShellApp />;
+}
+
+function MainShellApp() {
   const [prefs] = useState<ShellPrefs>(readShellPrefs);
   const [page, setPage] = useState<AppPage>("overview");
   const [skillsTab, setSkillsTab] = useState<SkillsTab>("apps");

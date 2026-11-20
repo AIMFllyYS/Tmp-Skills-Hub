@@ -8,6 +8,7 @@ export interface SegmentedTabItem<T extends string> {
   id: T;
   label: string;
   testId?: string;
+  badge?: number;
 }
 
 /** 分段胶囊控制器：浅灰底槽 + 白底选中块，弹簧过渡。 */
@@ -70,7 +71,17 @@ export function SegmentedTabs<T extends string>({
                 : "text-ink-mid hover:text-ink-strong",
             )}
           >
-            {item.label}
+            <span>{item.label}</span>
+            {item.badge !== undefined && item.badge > 0 && (
+              <span
+                className={cn(
+                  "ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums",
+                  active ? "bg-surface text-ink-strong" : "bg-amber-50 text-amber-800",
+                )}
+              >
+                {String(item.badge)}
+              </span>
+            )}
           </button>
         );
       })}

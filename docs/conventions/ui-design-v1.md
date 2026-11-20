@@ -254,6 +254,11 @@
 
 滚动保留，滚动条**视觉隐藏**（`scrollbar-width: none`；`::-webkit-scrollbar { display: none }`）。可滚动区域走 `ScrollArea`（或等价封装），避免 Windows 上全局 `*` 选择器漏网。不要装饰性滚动条。页面根 `overflow: hidden`。不做移动端专门设计。虚拟列表仍自己管 `scrollTop`，不要外包一层会抢走滚动事件的容器。
 
-## 13. 例外裁定
+## 13. `/playbook` 活体组件实验室与目标页契约（v0.3 新增）
+
+- 路由 `/playbook` 是全仓统一的**原子组件 + 动效实验室 + v0.3 目标页面活体原型**（见 `apps/web/src/features/playbook/`），采用 `React.lazy()` 按需加载，不影响主路径 `/` 的包体与 `smoke-panel.mjs` 性能阈值。
+- **单一 UI 真源原则**：所有新增原子组件（`components/ui/{status-banner,path-field,step-list,drawer,diff-viewer}`、`Badge tone`、`SegmentedTabs badge`）与 v0.3 业务页面/弹窗组件（`features/shell/{DualPathOnboardingView,SettingsV3Panels}`、`features/reconcile/*`、`features/conflicts/*`、`features/git/*`）均先在 `/playbook` 中完成视觉、动效与交互状态对齐；正式业务页面只负责 `import` 这些组件并接入 `/api/*` 状态，**禁止在正式页面里另起一套重复 UI 样式或手写过渡动画**。
+
+## 14. 例外裁定
 
 与「克制 / 可预期」相冲突且本规范未覆盖的场景，默认按最保守方案。需要突破时先在 PR 里说明理由，由 review 裁定后回写本规范。

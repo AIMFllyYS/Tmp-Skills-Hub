@@ -51,7 +51,7 @@
 >
 > - `doctor --prune`（T1.2）：清理 `links.json` 中指向已不存在磁盘路径的死链接记录（写操作，需 `--yes` / TTY）
 > - `verify --accept [name...]`（T1.2）：确认外部修改合法，重算哈希并原子同步四份元数据（写操作，需 `--yes` / TTY）
-> - `migrate-store --to <absPath>`（T1.2）：将唯一真源目录迁至新路径，校验并按 journal 重指全机软链接，旧目录旁路留底（写操作，需 `--yes` / TTY）
+> - `migrate --to <absPath>`（T1.2）：将唯一真源目录迁至新路径，校验并按 journal 重指全机软链接，旧目录旁路留底（写操作，需 `--yes` / TTY）
 > - `reconcile [--include-external-links]`（T2.3）：L1/L2 扫描野生非软链接与冲突 skill → 备份校验 → 精准移出客户端真目录（冲突入 `conflicts/`）→ 原地挂回纯软链接（写操作，需 `--yes` / TTY）
 > - `conflicts list` / `conflicts diff <name>` / `conflicts resolve <name> --mode pick|merge|split`（T3.2）：列出、对比与无损解决同名多版本冲突（`list`/`diff` 只读，`resolve` 需 `--yes` / TTY）
 > - `git status | enable | disable | log [name] | commit [-m msg]`（T5.2）：检测/开关唯一真源目录 Git 版本控制、查看历史、执行规范化提交（`status`/`log` 只读，其余需 `--yes` / TTY）
