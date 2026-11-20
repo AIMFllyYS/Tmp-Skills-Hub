@@ -25,6 +25,7 @@ export { resolveHome } from "./home.js";
 export { performInit, POINTER_REL, writePointerFile } from "./store-cmds.js";
 export type { PerformInitFailure, PerformInitResult } from "./store-cmds.js";
 export { adoptAndEnableSelfSkill, migrateAllSkills, runBootstrap } from "./bootstrap.js";
+export { syncSelfSkill } from "./self-skill.js";
 export type { BootstrapArgs, BootstrapOptions } from "./bootstrap.js";
 export { performReset } from "./reset-cmds.js";
 export type { ResetFailure, ResetFailureCode, ResetSuccess } from "./reset-cmds.js";
