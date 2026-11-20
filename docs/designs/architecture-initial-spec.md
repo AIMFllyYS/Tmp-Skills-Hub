@@ -118,6 +118,12 @@
 | **范围** | 项目级/全局 = 链接挂在项目目录还是用户目录，复用各 Agent 已有隔离 | 只决定链接放哪一侧 | 不自建隔离机制 |
 
 > **§4 修订记录（2026-08-19，#169）**：补第六行「创建」。根因：决策甬道 §1.2 的起点是「我看到一个好 skill，想存下来」，全程从既有 skill 出发；「我要做一个新 skill」是另一条起点不同的甬道，此前未走过，导致创建在客户端 skills 目录里产生的真目录逃逸出链接语义。详见 [creation-path-analysis.md](../issues/skill-creation-path/creation-path-analysis.md)。
+>
+> **§4 修订记录（2026-11-20，v0.3 单一真源演进）**：在「存 / 用 / 改 / 删 / 范围 / 创建」之上明确**受授权收敛（Reconcile）与冲突治理闭环**：
+> 1. **状态与资产分离**：本机运行态与备份中心固定于 `~/.skills-hub/`（默认不建议改），唯独唯一真源 `skills` 目录默认位于 `~/.skills-hub/skills/` 且支持自定义迁移，保证真源目录可作为纯净 Git 仓库；
+> 2. **纯软链接投影**：在**明确预览清单 + 用户显式授权 + 完成且校验通过备份快照**的前提下，允许将客户端目录中的有效 skill 真文件夹安全迁入总馆并原地替换为受管软链接（严禁静默搬移，严禁触碰非 skill 杂项）；
+> 3. **冲突零丢失**：同名不同内容不再阻塞丢弃，所有变体留存于 `~/.skills-hub/conflicts/`，以 `maxMtime` 暂定活跃真源，交由人或「人 + Agent 合并工具（经确认门禁）」收敛；
+> 4. **可选 Git 与云端备份**：版本控制与 GitHub CLI（`gh`）个人云端备份作为 A/C 块的可选增强能力，默认可开关降级，子进程封装隔离于 `packages/cli`，不污染 `packages/core`。详见 [single-source-sync-and-versioning/PRD.md](../specs/single-source-sync-and-versioning/PRD.md)。
 
 ---
 

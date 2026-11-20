@@ -13,22 +13,58 @@
 
 这就是统一库存要解决的问题，不需要再论证。
 
-## 1. 库存位置：不放用户目录
+## 1. 库存位置：状态与资产分离（v0.3 演进口径，向后兼容 v0）
 
-库存本体放在**用户指定的位置**（如 `D:\SkillsHub`），不塞进 `~`。但 CLI 必须能找到自己的库，所以用户目录里只留一个指针文件。
+为兼顾「前期开发可预测性、C 盘客户端同盘原子接管、以及唯一真源作为纯净 Git 仓库」三大目标，v0.3 将目录职责拆分为**固定控制备份中心 (`stateRoot`)** 与 **可自定义唯一真源目录 (`skillsRoot`)**（详细演进见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）：
 
-解析顺序（先命中者胜；适用于 `list` / `adopt` 等把 `--home` 当库存根的命令）：
+- **本机控制与备份中心（`stateRoot`）**：固定位于 `<home>/.skills-hub/`（初始化时明确告知用户，默认不建议修改）。存放 `config.json`、`backups/`、`archive/`、`conflicts/`、`links.json`、`stats.json`、`translations/`、`tmp/`。
+- **唯一真源目录（`skillsRoot`）**：默认位于 `<home>/.skills-hub/skills/`（消除了旧版 `bootstrap` 用 `~/.skills-hub` 与 `performInit` 用 `~/.skills-hub/store` 的分裂），**唯一允许用户在设置中自定义或迁移至其他路径**（如 `D:\My-Skills`）。当开启 Git 版本控制时，Git 仓库仅初始化于 `skillsRoot` 内。
+- **`config.json` 演进与向后兼容**：
+  - **v1（旧版单根，保持只读兼容）**：`{ "storeRoot": "D:\\...\\Hubs" }`——当未显式区分 `stateRoot`/`skillsRoot` 时，内核按旧单根布局解析（`stateRoot = storeRoot`, `skillsRoot = <storeRoot>/skills`），绝不破坏存量用户库存；
+  - **v2（新版分离布局）**：`{ "version": 2, "stateRoot": "<home>/.skills-hub", "skillsRoot": "<home>/.skills-hub/skills", "git": { "enabled": false }, "autoLaunch": false }`（保留 `storeRoot` 兼容派生字段或由 `normalizeHubPaths()` 统一转换）。
+- **跨盘写入铁律（`EXDEV` 防护）**：当 `skillsRoot` 与 `stateRoot` 位于不同磁盘分区（如 `D:` vs `C:`）时，对 `skillsRoot` 内部的原子写不得先落盘至 `stateRoot/tmp` 再跨盘 `rename`，必须就近使用目标目录同分区的隐藏临时文件再 `rename`（失败则安全降级为拷贝校验后清理）。
 
-1. 命令行参数 `--home <path>`
+解析顺序（先命中者胜；适用于 CLI 命令）：
+
+1. 命令行参数 `--home <path>`（始终作为沙箱 `home` 基座，或按 v0 单根测试口径兼容）
 2. 环境变量 `SKILLS_HUB_HOME`
-3. 指针文件 `~/.skills-hub/config.json` 里的 `storeRoot` 字段
+3. 指针配置文件 `<home>/.skills-hub/config.json`
 4. 都没有 → 报错，提示先跑 `skills-hub init`
 
-指针文件只存一个绝对路径，不存任何业务数据。这样「库在哪」可迁移，「库里有什么」全部跟着库走。
-
-**`ui` / `bootstrap` 拉起面板时不要走第 1 条。** 这时传入的 `home` 只是客户端发现基座和指针文件所在处，不是库存根。面板按指针（其次 `SKILLS_HUB_HOME`）解析 `storeRoot`，不得把 `home` 当作 `cliHome` 直通——库存与 home 分离是本节的默认形态，直通会把用户主目录当成空库存。
+**`ui` / `bootstrap` 拉起面板时不要走第 1 条。** 这时传入的 `home` 只是客户端发现基座和 `.skills-hub/config.json` 所在处，不是库存根。面板按配置文件（其次 `SKILLS_HUB_HOME`）解析路径。
 
 ## 2. 目录布局
+
+### 2.0 v0.3 分离式目标布局（默认新初始化形态）
+
+```text
+<home>/.skills-hub/              # 固定本机控制与备份中心（stateRoot，不进 Git）
+├── config.json                  # v2 配置文件（skillsRoot、git.enabled、autoLaunch 等）
+├── manifest.json                # 控制中心元信息（版本号、创建时间、可选 trustedRepo）
+├── index.json                   # 哈希 ↔ skill 对照表（库存清单 + drafts[]）
+├── links.json                   # 本机受管链接台账（含绝对路径，仅属当前机器）
+├── groups.json                  # 分组定义（内置 + 用户自定义；开启 Git 时可镜像到 skillsRoot）
+├── stats.json                   # 本机调用计数
+├── backups/                     # 客户端 skills 备份基线
+│   ├── blobs/                   # 共享内容寻址池（<sha256>）
+│   ├── <snapshotId>/            # 快照目录（manifest.json）
+│   └── latest                   # 当前最新快照 ID 指针
+├── archive/                     # 软删除归档，<name>-<ISO时间戳>.zip
+│   ├── versions/                # 编辑写回/冲突扶正前的旧内容快照
+│   ├── conflicts/               # 已解决冲突中被替换的落选变体归档（zip）
+│   └── drafts/                  # 被 discard 的草稿
+├── conflicts/                   # 同名多版本待决冲突池（v0.3 新增）
+│   ├── conflicts.json           # 冲突索引清单（版本化迁移）
+│   └── <skillName>/<variantId>/ # 冲突变体完整内容副本（零丢失）
+├── translations/                # 译文缓存：<skillHash>/<relPath>
+├── tmp/                         # 本机原子操作暂存（journal / restore-aside-<runId>）
+└── skills/                      # 【默认】唯一真源目录（skillsRoot，可自定义迁至 D:\My-Skills）
+    ├── .git/                    # 可选（开启 Git 版本控制时）
+    ├── .gitignore               # 严格忽略 .env* / node_modules / .venv / __pycache__ 等
+    └── <name>/                  # 活跃 skill 真身，客户端 Junction/symlink 指向这里
+```
+
+### 2.0b v0 存量单根布局（继续向后兼容）
 
 ```
 <storeRoot>/

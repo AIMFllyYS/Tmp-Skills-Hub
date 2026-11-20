@@ -88,6 +88,31 @@
 | POST /api/backups/preview | `{ snapshotId? }` | `{ ok, command: "backups-preview", snapshotId, dryRun: true, clients, skills, files, links, wouldRestore, skippedOwnDirs, asideStore, asidePointer }`(不写盘) | 400; 404 not-found; 409 verify-failed; 503 |
 | POST /api/reset | `{ snapshotId?, confirm: "reset" }` | `{ ok, command: "reset", storeRoot, snapshotId, asideStore, asidePointer, adopted }`(本请求内跑完还原,与 CLI `reset --json` 同形) | 400 bad-usage(缺确认短语); 404; 409 verify-failed\|restore-failed; 500 io-error; 503 |
 
+### 3.1 v0.3 演进预留端点（见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
+
+> 以下端点为 v0.3 正式契约，按 sub-issue 逐批落地，落地后移入 §2 / §3 主表。
+
+| 端点 | 方法 / 参数 | 响应与用途 | 关键失败码 |
+| --- | --- | --- | --- |
+| `/api/settings` | `GET` / `PATCH { gitEnabled?, autoLaunch? }` | 读取与更新 `~/.skills-hub/config.json`（含 `stateRoot`、`skillsRoot`、磁盘占用、Git/自启开关） | 400 bad-usage; 503 |
+| `/api/store/migrate` | `POST { targetSkillsRoot }` | 迁移唯一真源目录并按 journal 重指全机软链接 | 400; 409; 500 |
+| `/api/doctor/prune` | `POST` | 清理 `links.json` 死链接记录 | 503 |
+| `/api/verify/accept` | `POST { names?: string[] }` | 认领外部编辑漂移并刷新四份元数据哈希 | 404; 503 |
+| `/api/reconcile/scan` | `GET` | L1 浅扫 + L2 按需深扫，返回野生真目录、被覆盖链接、外部链接与冲突摘要 | 503 |
+| `/api/reconcile/preview` | `POST { includeExternalLinks? }` | 返回接管计划预览（只读） | 503 |
+| `/api/reconcile/apply` | `POST { includeExternalLinks? }` | 执行备份校验 → 精准移出/入冲突池 → 原地挂回纯软链接 | 409 link-failed; 500; 503 |
+| `/api/conflicts` | `GET` | 列出所有待解决冲突及变体元数据（含 `maxMtime` 与 `shorterContentWarning`） | 503 |
+| `/api/conflicts/:name/diff` | `GET ?a=&b=` | 返回两个变体间逐文件差异 | 404; 503 |
+| `/api/conflicts/:name/file` | `GET ?variant=&path=` | 读取指定冲突变体内的文本文件 | 400 outside; 404; 422; 503 |
+| `/api/conflicts/:name/resolve` | `POST { mode: "pick"\|"merge"\|"split", ... }` | 落盘冲突决议并归档旧版/落选变体 | 400; 404; 409; 503 |
+| `/api/git/status` | `GET` | 检测 `git`、`gh` 安装与登录态、真源仓状态、未推送提交数与远端地址 | — |
+| `/api/git/toggle` | `POST { enabled: boolean }` | 开启（初始化真源 `.git` + `.gitignore`）或关闭 Git 版本控制 | 409 git-unavailable; 503 |
+| `/api/git/log` | `GET ?skill=&limit=` | 查询真源仓或单 skill 提交历史 | 409 git-unavailable; 503 |
+| `/api/git/gh/login/start` | `POST` | 启动 `gh auth login --web` 设备码流，返回 `{ sessionId, userCode, verificationUri }` | 503 git-unavailable |
+| `/api/git/gh/login/status` | `GET ?sessionId=` | 轮询 `gh` 认证状态，返回 `{ status, authenticated, username }` | — |
+| `/api/git/cloud/setup` | `POST { repoName, visibility: "private"\|"public", confirmPublicSecrets? }` | 敏感信息预检 + `gh repo create` + 绑定 `origin` + 首次推送 | 409 secret-detected\|remote-conflict; 502; 503 auth-required |
+| `/api/git/cloud/push` | `POST` | 安全推送至云端备份仓（绝不 `push -f`） | 409 remote-diverged; 502; 503 |
+
 - `:hash` 与 CLI 共用 `resolveSkill`:dirName 精确,否则唯一哈希前缀;0 命中 404 not-found;前缀不唯一 400 bad-usage
 - `SkillFileEntry`:`{ path, kind: "file"|"dir", sizeBytes }`
 - `scope`:global(默认,home 下)/ project(cwd 下),与 cli-commands-v0.md §2 一致
@@ -124,7 +149,10 @@
 | github-push-failed | 502 | share 推送被 GitHub 拒绝或失败 |
 | store-not-configured | 503 | 库存未配置（`withStore` 守卫） |
 | not-configured | 503 | 缺少 `QINIU_API_KEY` |
-| auth-required | 503 | `POST /api/share` 缺少 `GITHUB_TOKEN` |
+| auth-required | 503 | `POST /api/share` 缺 `GITHUB_TOKEN` 或 `gh` 未登录 |
+| git-unavailable | 409 / 503 | 本机未安装 `git` / `gh` 或未开启 Git 版本控制（v0.3 预留） |
+| secret-detected | 409 | 公开云端仓库推送前敏感密钥预检命中风险（v0.3 预留） |
+| remote-diverged | 409 | 远端备份仓库存在本地未拉取提交，拒绝强推（v0.3 预留） |
 
 > 注:`auth-required` 在 HTTP 侧专用于 `POST /api/share` 缺 `GITHUB_TOKEN`（503）,在 CLI 侧还用于非交互写操作缺 `--yes`（exit 2）;`group-empty` / `invalid-skill` 仅在 CLI 命令层出现。
 

@@ -41,9 +41,10 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 │           ├── github-source.ts / skills-sh-source.ts / share.ts / analyze.ts / doctor.ts
 │           ├── llm/                # 七牛云 AI SDK v7 provider 与错误映射/脱敏
 │           ├── agent/              # ToolLoopAgent、一等工具、模型白名单
+│           ├── git/                # [v0.3] git / gh 子进程封装、自动 commit 与密钥预检（严禁进 core）
 │           └── ui-server.ts        # Hono 本地服务（安全中间件 + ui-http.ts + ui-*.ts）
 ├── apps/
-│   ├── web/                        # 人用 Web 壳（Vite + React SPA: 总览/统计/Skills/Agent + 设置 Dialog）
+│   ├── web/                        # 人用 Web 壳（Vite + React SPA: 总览/统计/Skills 管理/Agent + 设置 Dialog）
 │   │   ├── tsconfig.json
 │   │   ├── tsconfig.test.json
 │   │   └── src/
@@ -51,7 +52,7 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 │   │       ├── App.tsx             # React.lazy 路由 + ErrorBoundary + 壳状态
 │   │       ├── lib/                # markdown.ts (DOMPurify) / sse.ts / utils.ts
 │   │       ├── components/ui/      # 跨页控件（button / dialog / chart / table / input（含 NativeSelect） / scroll-area / skeleton…）
-│   │       └── features/           # 按领域聚合（shell / skills / agent / actions；见第三节）
+│   │       └── features/           # 按领域聚合（shell / skills / agent / actions；v0.3 新增 reconcile / conflicts / git）
 │   └── desktop/                    # Electron 桌面壳（进程内起 CLI 服务 + 内嵌 web/dist + self-skill/）
 │       ├── electron-builder.yml    # 打包配置（win nsis/portable · mac dmg · linux AppImage）
 │       ├── tsconfig.json
@@ -61,7 +62,8 @@ skill-hub 是 pnpm monorepo。确定性本体是「核心库 + CLI」；**Web �
 │       └── src/
 │           ├── main.ts             # 单实例锁、BrowserWindow、IPC 与退出回收
 │           ├── preload.ts          # contextBridge 薄封装
-│           └── protocol.ts         # app://skills-hub 桥接 Hono 与安全校验
+│           ├── protocol.ts         # app://skills-hub 桥接 Hono 与安全校验
+│           └── tray.ts             # [v0.3] 系统托盘、开机自启与启动 L1 巡检通知
 ├── promo/                          # 57s 宣传片与视觉底稿（独立目录，不属于 pnpm workspace）
 ├── docs/                           # designs / specs / conventions / plans / updates / issues / audits / ops
 ├── scripts/                        # setup / build / dev / smoke-panel.mjs

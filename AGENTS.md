@@ -76,16 +76,17 @@ scripts/          辅助脚本（setup/build/dev/smoke-panel.mjs）
 
 > 以下是硬性规则，违反会导致构建失败或架构腐化。详细解释见对应规范文档。
 
-- **依赖方向单向**: `apps/desktop → packages/cli → packages/core`；`apps/web → (HTTP /api) → packages/cli → packages/core`。`core` 不依赖任何包、不 import 框架/网络/子进程、禁用 `console.*`；`web` 不直接 import `core` / `cli` / Electron。
+- **依赖方向单向**: `apps/desktop → packages/cli → packages/core`；`apps/web → (HTTP /api) → packages/cli → packages/core`。`core` 不依赖任何包、不 import 框架/网络/子进程、禁用 `console.*`（`git`/`gh` 子进程封装一律放 `packages/cli/src/git/`）；`web` 不直接 import `core` / `cli` / Electron。
 - **确定性内核铁律**（详见 [core-patterns.md](docs/conventions/core-patterns.md)）:
-  - 库存 `skills/<name>/` 是可写活跃副本——编辑写回前先落版本快照到 `archive/versions/`，写回后重算哈希并同步更新 `index.json` / `groups.json` / `stats.json` / `links.json`
-  - symlink 集合变更必须使用 `tmp/` journal 先行 + 逐条原子切换 + 失败逆序回滚；严禁整目录重命名或删除未在 `links.json` 登记的用户真实目录（受管 `kind: "copy"` 条目除外）
+  - 状态与资产分离（v0.3）：本机控制与备份中心固定于 `~/.skills-hub/`，唯一真源 `skillsRoot` 默认 `~/.skills-hub/skills/` 且支持自定义迁移（跨盘写入必须防 `EXDEV`）；向后兼容旧单根 `config.json`
+  - 库存活跃副本编辑/冲突扶正前先落版本快照到 `archive/versions/`，写回后重算哈希并同步更新 `index.json` / `groups.json` / `stats.json` / `links.json`
+  - symlink 集合变更必须使用 `tmp/` journal 先行 + 逐条原子切换 + 失败逆序回滚；严禁整目录重命名或删除未在 `links.json` 登记的用户真实目录（授权 Reconcile 流程须先完成备份校验并按目录精准移出）
   - 哈希必须确定——排序后的 POSIX 相对路径 + 原始字节，换行统一由 `.gitattributes` 保证
   - Windows 目录链接优先用 junction，避免要求用户提权
 - **HTTP 安全与凭据红线**（详见 [http-and-routing.md](docs/conventions/http-and-routing.md) 和 [testing-and-security.md](docs/conventions/testing-and-security.md)）:
   - 本地服务只绑 `127.0.0.1`，强校验 `Host`（含 `skills-hub`）、写请求 `Origin`、写请求 `Content-Type: application/json` 与请求体大小上限（`413`）；Markdown 经 `DOMPurify.sanitize()` 净化后才渲染
-  - `QINIU_API_KEY` / `GITHUB_TOKEN` 只从环境变量或 `.env` 读取，异常经 `scrub()` 脱敏，绝不进源码、日志或前端响应
-  - 零静默写入、零真删除（所有移除走 `archive` / `archive/drafts/` / `.pre-reinit` 旁路）
+  - `QINIU_API_KEY` / `GITHUB_TOKEN` 只从环境变量或 `.env` 读取，`gh` 云端备份认证完全委托 `gh` CLI（Skills Hub 绝不保存明文 GitHub Token）；异常经 `scrub()` 脱敏，绝不进源码、日志或前端响应
+  - 零静默写入、零真删除（所有移除走 `archive` / `archive/conflicts/` / `archive/drafts/` / `.pre-reinit` 旁路）
 - **TypeScript strict，禁止 `any`** — 用 `unknown` + 类型收窄（ESLint 已设为 error；测试文件经 `tsconfig.test.json` 强制检查）
 - **收录前必须明确告知并获得授权**——绝不静默搬走用户已有技能（产品红线，架构规范 §4）
 - **智能层写成 Skill 不写成代码**——文本判断类功能（审查/分类建议等）交给 Agent，core/cli 只做确定性操作
@@ -99,13 +100,14 @@ scripts/          辅助脚本（setup/build/dev/smoke-panel.mjs）
 - Commit: Conventional Commits，scope 允许 `core`、`cli`、`web`、`desktop`、`docs`、`ops`、`promo`（详见 [pr-and-git-workflow.md](docs/conventions/pr-and-git-workflow.md)）
 - Squash merge PRs，PR 需通过 CI 和至少一次审查
 
-### Issue 与 PR 协作（强制 skill）
+### Issue 与 PR 协作（含 Sub-Issue 自治执行流）
 
-> 创建 issue、处理 issue 驱动开发、创建 PR 时，**必须先调用对应 skill**，不要自行发挥流程。
-
-- **创建 issue / 拆 issue / 创建子 issue** → 调用 `/agents:issue-to-pr` 或 `/claude:issue-creator` skill
-- **根据 issue 做 PR / issue 驱动开发** → 调用 `/agents:issue-to-pr` skill
 - 每个 issue 必须写清：属于哪个块（A/B/C/D）、`depends-on`、`blocked-by`（架构规范 §7）
+- **v0.3 单一真源 / 冲突 / Git 专项 Sub-Issue 自治 SOP**（完整流程见 [pr-and-git-workflow.md](docs/conventions/pr-and-git-workflow.md) §四.1 与 [task.md](docs/specs/single-source-sync-and-versioning/task.md)）：
+  1. 以 `AGENTS.md` 为首上下文 → 读 `task.md` 与对应 `PRD.md` 指定行号 → `gh issue view <subIssue> --comments` 读清任务及用户反馈 → 读相关板块规范与源码；
+  2. 从最新 `dev` 切出独立分支实施改动 → 编写并跑通深度单测/集成测试与沙箱端测 → 四检 + `pnpm smoke` 全绿；
+  3. 同步更新 `task.md` 复选框及受影响的规范文档 → 原子化 commit → 向 `dev` 提 PR（**必须用 `Refs #N`，严禁写 `Closes #N` / `Fixes #N`**）→ CI 绿后 squash merge 并同步本地 `dev`；
+  4. 通过 `gh issue comment` 在对应 Sub-Issue 追加完整执行报告（含 PR/Commit、测试与端测结果、**开发者深度手动端测步骤**、规范文档 diff 链接）；**默认绝不关闭 Sub-Issue**，由用户手动端测确认后自行关闭或追加反馈。
 
 ## Boundaries
 
@@ -160,6 +162,8 @@ scripts/          辅助脚本（setup/build/dev/smoke-panel.mjs）
 - [json-contract-v0.md](docs/specs/json-contract-v0.md) — **JSON 输出契约**：CLI `--json` 信封、字段约定、错误枚举与退出码 `0|1|2`
 - [ai-integration-v1.md](docs/specs/ai-integration-v1.md) — **七牛云 AI 推理服务集成口径**：Vercel AI SDK v7 + `createOpenAICompatible`、密钥铁律、`enable_thinking: false`、错误映射
 - [agent-v0.md](docs/specs/agent-v0.md) — **Agent 模块唯一口径**（v1）：一等工具、`writePolicy`、AI SDK UI message stream、模型白名单、输出契约
+- [single-source-sync-and-versioning/PRD.md](docs/specs/single-source-sync-and-versioning/PRD.md) — **v0.3 单一真源、纯软链收敛、冲突解决、托盘巡检与 Git 云端备份详细 PRD**
+- [single-source-sync-and-versioning/task.md](docs/specs/single-source-sync-and-versioning/task.md) — **v0.3 专项任务总清单（Epic / Sub-Issue / PRD 行号映射 / Agent 打勾进度与执行 SOP）**
 
 ### docs/plans/ — 计划
 
@@ -174,6 +178,7 @@ scripts/          辅助脚本（setup/build/dev/smoke-panel.mjs）
 
 - [backlog-from-first-sync.md](docs/issues/backlog-from-first-sync.md) — 会上明确后置、但第一天就要躺在列表里的项
 - [skill-creation-path/](docs/issues/skill-creation-path/) — **「创建」操作未定义**：用户在客户端里新建 skill 的路径分析（#169 的决策依据；#162 与 #168 的上游根因）
+- [single-source-sync-and-versioning/](docs/issues/single-source-sync-and-versioning/single-source-sync-and-versioning.md) — **v0.3 架构讨论背景与决策定案记录**（D1–D6 已定案并展开为 `docs/specs/single-source-sync-and-versioning/`）
 
 ### docs/conventions/ — 项目规范
 
