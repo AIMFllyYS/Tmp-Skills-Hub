@@ -131,7 +131,7 @@
   - **depends-on**: T1.2 (#240)
   - **负责模块**: `packages/cli/src/git/{git-runner.ts,git-repo.ts,secret-scan.ts,index.ts}`(新增), `packages/cli/test/git.test.ts`(新增)
   - **复用资产**: `scrub` (`llm/errors.ts`), `HubPaths`, `isIgnoredSkillEntry`
-- [ ] **T5.2** `[cli]` 挂载全链路自动 Commit、`gh` 设备码登录引导、一键建仓云端备份与 Agent Git 工具 — [#252](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/252) | [PRD.md#L402-L423](./PRD.md#L402-L423)
+- [x] **T5.2** `[cli]` 挂载全链路自动 Commit、`gh` 设备码登录引导、一键建仓云端备份与 Agent Git 工具 — [#252](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/252) | [PRD.md#L402-L423](./PRD.md#L402-L423)
   - **depends-on**: T5.1 (#251), T2.3 (#244), T3.2 (#247)
   - **负责模块**: `packages/cli/src/git/gh-cloud.ts`(新增), `git-cmds.ts`(新增), `ui-git.ts`(新增), `ui-server.ts`, `agent/tools.ts`, `index.ts`
   - **复用资产**: `git-runner.ts`, `git-repo.ts`, `secret-scan.ts`, `safeToolExecute`, `WRITE_TOOL_NAMES`, `requireWriteAuth`

@@ -8,6 +8,8 @@ import {
   type AdoptInput,
 } from "@skills-hub/core";
 import { GitHubSourceProvider } from "./github-source.js";
+import { autoVersionSkillAssets } from "./git-ops.js";
+import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { isSkillsShUrl, SkillsShSourceProvider } from "./skills-sh-source.js";
 import { requireWriteAuth, resolveStoreRootOrFail } from "./store-shared.js";
@@ -61,7 +63,7 @@ async function cleanupGithubTmp(storeRoot: string | HubPaths): Promise<void> {
 export async function performAdopt(
   storeRoot: string | HubPaths,
   sources: string[],
-  opts: { dryRun?: boolean; fetchImpl?: typeof fetch } = {},
+  opts: { dryRun?: boolean; fetchImpl?: typeof fetch; home?: string } = {},
 ): Promise<AdoptPerformResult> {
   const dryRun = opts.dryRun === true;
   const inputs: AdoptInput[] = [];
@@ -101,6 +103,9 @@ export async function performAdopt(
 
   const report = await adoptMany(storeRoot, inputs, { dryRun });
   await cleanupGithubTmp(storeRoot);
+  if (!dryRun && report.adopted > 0) {
+    await autoVersionSkillAssets(opts.home, storeRoot, "feat(skills): adopt " + String(report.adopted) + " skill(s)");
+  }
 
   return {
     dryRun,
@@ -145,7 +150,7 @@ export async function runAdopt(args: AdoptArgs): Promise<void> {
   const storeRoot = await resolveStoreRootOrFail(args, "adopt");
   if (storeRoot === null) return;
 
-  const report = await performAdopt(storeRoot, paths, { dryRun });
+  const report = await performAdopt(storeRoot, paths, { dryRun, home: resolveHome(args.home) });
 
   if (args.json) {
     if (report.fetchFailed && report.fetchMessage !== undefined && report.outcomes.length === 0) {

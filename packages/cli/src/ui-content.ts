@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Hono } from "hono";
-import { listSkillFiles, readSkillFile, readStoreIndex, saveSkillFile, type HubPaths } from "@skills-hub/core";
+import { listSkillFiles, readSkillFile, readStoreIndex, type HubPaths } from "@skills-hub/core";
+import { saveManagedSkillFile } from "./skill-write-ops.js";
 import { resolveSkill, type ResolveSkillFailure } from "./resolve-skill.js";
 import { err, skillLookupErr, withStore, type UiRouteContext } from "./ui-http.js";
 
@@ -46,7 +47,7 @@ export function registerContentRoutes(app: Hono, ctx: UiRouteContext): void {
       if (body === null || typeof body?.content !== "string") {
         return err(c, "skill-file-save", "bad-usage", "body 需要 { content: string }");
       }
-      const res = await saveSkillFile({ storeRoot: root, skillDir: found.skillDir, relPath: rel, content: body.content });
+      const res = await saveManagedSkillFile(ctx.home, { storeRoot: root, skillDir: found.skillDir, relPath: rel, content: body.content });
       if (!res.ok) return err(c, "skill-file-save", res.code, res.message);
       return c.json({ ok: true, command: "skill-file-save", dirName: path.basename(found.skillDir), path: rel, hash: res.newHash });
     }),

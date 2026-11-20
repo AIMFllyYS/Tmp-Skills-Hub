@@ -22,6 +22,10 @@ const RULES = [
 
 const ignoredDirectories = new Set([".venv", "__pycache__"]);
 
+function matches(file: string, line: number, text: string): SecretFinding[] {
+  return RULES.filter((rule) => rule.pattern.test(text)).map(({ rule, preview }) => ({ file, line, preview, rule }));
+}
+
 /** Redact subprocess output as well as displayed file names and Git diff text. */
 export function redactGitSecrets(text: string): string {
   let result = text
@@ -29,6 +33,32 @@ export function redactGitSecrets(text: string): string {
     .replace(/(https?:\/\/)[^/@\s]+:[^/@\s]+@/gi, "$1[redacted]@");
   for (const rule of RULES) result = result.replace(new RegExp(rule.pattern.source, rule.pattern.flags + "g"), "[redacted]");
   return scrub(result);
+}
+
+export function scanGitPatchSecrets(patch: string): SecretFinding[] {
+  const findings: SecretFinding[] = [];
+  let file = "";
+  let line = 0;
+  let inHunk = false;
+  for (const text of patch.split("\n")) {
+    if (text.startsWith("diff --git ")) {
+      inHunk = false;
+      file = "";
+    } else if (!inHunk && (text.startsWith("+++ b/") || text.startsWith('+++ "b/'))) {
+      file = redactGitSecrets(text.replace(/^\+\+\+ "?b\//, "").replace(/"$/, ""));
+    } else if (text.startsWith("@@ ")) {
+      const begin = / \+(\d+)(?:,\d+)? @@/.exec(text)?.[1];
+      inHunk = begin !== undefined;
+      line = Number(begin);
+    } else if (inHunk && file !== "") {
+      if (text.startsWith("+")) {
+        findings.push(...matches(file, line, text.slice(1)));
+        if (findings.length >= 100) return findings.slice(0, 100);
+      }
+      if (text.startsWith("+") || text.startsWith(" ")) line++;
+    }
+  }
+  return findings;
 }
 
 export async function scanSecretsInDir(skillsRoot: string): Promise<SecretFinding[]> {
@@ -52,9 +82,7 @@ export async function scanSecretsInDir(skillsRoot: string): Promise<SecretFindin
         let line = 0;
         for await (const value of lines) {
           line++;
-          for (const { rule, pattern, preview } of RULES) {
-            if (pattern.test(value)) result.push({ file: relative, line, preview, rule });
-          }
+          result.push(...matches(relative, line, value));
         }
       } finally {
         await handle.close();

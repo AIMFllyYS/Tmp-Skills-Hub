@@ -10,6 +10,8 @@ import {
   type SkillSource,
 } from "@skills-hub/core";
 import path from "node:path";
+import { autoVersionSkillAssets } from "./git-ops.js";
+import { resolveHome } from "./home.js";
 import { resolveStoreRootOrFail } from "./store-cmds.js";
 import { emitError, emitOk } from "./json-out.js";
 
@@ -71,11 +73,12 @@ export async function performAllocate(
   return { ok: true, verb: "allocate", dirName: result.draft.dirName, storeDir: result.storeDir };
 }
 
-export async function performCommit(storeRoot: string | HubPaths, dirName: string): Promise<DraftCommitOk | DraftFail> {
+export async function performCommit(storeRoot: string | HubPaths, dirName: string, home?: string): Promise<DraftCommitOk | DraftFail> {
   const name = dirName.trim();
   if (name === "") return { ok: false, code: "bad-usage", message: "需要 dirName" };
   const result = await commitDraft(storeRoot, name);
   if (result.kind !== "committed") return failFromCommit(result, name);
+  await autoVersionSkillAssets(home, storeRoot, "feat(skills): publish " + name);
   return { ok: true, verb: "commit", dirName: name, hash: result.record.hash };
 }
 
@@ -85,6 +88,7 @@ export async function performCreate(
   dirName: string,
   description: string,
   origin?: SkillSource,
+  home?: string,
 ): Promise<DraftCreateOk | DraftFail> {
   const name = dirName.trim();
   if (name === "") return { ok: false, code: "bad-usage", message: "需要 dirName" };
@@ -94,6 +98,7 @@ export async function performCreate(
   if (result.kind === "conflict") return failFromAllocate(result);
   if (result.kind === "allocated") return { ok: false, code: "io-error", message: "未知结果" };
   if (result.kind !== "committed") return failFromCommit(result, name);
+  await autoVersionSkillAssets(home, storeRoot, "feat(skills): create " + name);
   return { ok: true, verb: "create", dirName: name, hash: result.record.hash, storeDir: path.join(normalizeHubPaths(storeRoot).skillsRoot, name) };
 }
 
@@ -152,7 +157,7 @@ async function runCommit(args: CreateArgs, positionals: string[]): Promise<void>
   const storeRoot = await resolveStoreRootOrFail(args, "new");
   if (storeRoot === null) return;
 
-  const result = await performCommit(storeRoot, dirName);
+  const result = await performCommit(storeRoot, dirName, resolveHome(args.home));
   if (!result.ok) {
     emitError(args.json === true, "new", result.code, result.message);
     return;

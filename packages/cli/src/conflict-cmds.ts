@@ -5,6 +5,8 @@ import {
 import { defineCommand } from "citty";
 import { z } from "zod";
 import { redactGitSecrets } from "./git/index.js";
+import { autoVersionSkillAssets } from "./git-ops.js";
+import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { scrub } from "./llm/errors.js";
 import { requireWriteAuth, resolveStoreRootOrFail } from "./store-shared.js";
@@ -44,7 +46,7 @@ export function conflictError(error: unknown) {
   };
 }
 
-export async function performConflictResolution(paths: HubPaths, skillName: string, value: unknown) {
+export async function performConflictResolution(paths: HubPaths, skillName: string, value: unknown, home?: string) {
   const parsed = decisionSchema.safeParse(value);
   const invalid = { ok: false as const, code: "bad-usage" as const, message: "冲突决议参数无效，请检查模式、变体和文件清单" };
   if (!parsed.success) return invalid;
@@ -68,6 +70,9 @@ export async function performConflictResolution(paths: HubPaths, skillName: stri
     }
   }
   const result = await resolveConflict(paths, skillName, decision);
+  if (result.ok) {
+    await autoVersionSkillAssets(home, paths, data.summary ?? "chore(skills): " + decision.mode + " conflict " + skillName);
+  }
   return result.ok ? result : { ...result, message: scrub(result.message) };
 }
 
@@ -176,7 +181,7 @@ export const conflicts = defineCommand({
         if (paths === null) return;
         const result = await performConflictResolution(paths, args.name, args.mode === "pick"
           ? { mode: "pick", winnerVariantId: args.winner ?? "active" }
-          : { mode: "split", winnerVariantId: args.winner, newName: args["new-name"] });
+          : { mode: "split", winnerVariantId: args.winner, newName: args["new-name"] }, resolveHome(args.home));
         if (!result.ok) emitError(args.json === true, command, result.code === "outside" ? "bad-usage" : result.code, result.message);
         else if (args.json) emitOk(command, result);
         else console.log("已完成 " + result.skillName + " 冲突决议，未决变体 " + String(result.remainingVariants));

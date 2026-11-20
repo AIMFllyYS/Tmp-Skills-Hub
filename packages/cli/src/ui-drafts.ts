@@ -19,7 +19,7 @@ export function registerDraftRoutes(app: Hono, ctx: UiRouteContext): void {
       const origin = { kind: "authored" as const, reference: "web" };
       const result =
         description !== ""
-          ? await performCreate(root, dirName, description, origin)
+          ? await performCreate(root, dirName, description, origin, ctx.home)
           : await performAllocate(root, dirName, { origin });
       if (!result.ok) return err(c, "new", result.code, result.message);
       if (result.verb === "create") {
@@ -38,7 +38,7 @@ export function registerDraftRoutes(app: Hono, ctx: UiRouteContext): void {
 
   app.post("/api/drafts/:dirName/commit", (c) =>
     withStore(ctx, c, "new", async (root) => {
-      const result = await performCommit(root, c.req.param("dirName"));
+      const result = await performCommit(root, c.req.param("dirName"), ctx.home);
       if (!result.ok) return err(c, "new", result.code, result.message);
       return c.json({ ok: true, command: "new", verb: "commit", dirName: result.dirName, hash: result.hash });
     }),

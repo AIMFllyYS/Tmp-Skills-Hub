@@ -67,7 +67,7 @@
 | --- | --- | --- | --- |
 | POST /api/store/init | `{ skillsRoot? }`（缺省 `<home>/.skills-hub/skills`；兼容旧 `{ storeRoot? }` 请求） | `{ ok, command: "store-init", stateRoot, skillsRoot, layoutMode, storeRoot, pointerFile, layoutCreated, builtinGroupsWrote }` | 400 bad-usage（非法路径或已初始化后更换真源）; 500 io-error |
 | GET /api/settings | — | `{ ok, command: "settings", stateRoot, skillsRoot, layoutMode, stateDiskBytes, git, autoLaunch, silentTray, isDesktop }` | 503 store-not-configured |
-| PATCH /api/settings | `{ gitEnabled?, autoLaunch?, silentTray? }`（仅布尔值） | 同 GET，配置原子写回。桌面模式同步登录项与托盘，系统拒绝时保留旧配置 | 400 bad-usage; 500 io-error; 503 store-not-configured |
+| PATCH /api/settings | `{ gitEnabled?, autoLaunch?, silentTray? }`（仅布尔值） | 同 GET，配置原子写回。Git 启用行为同 `/api/git/toggle`。桌面模式同步登录项与托盘，系统拒绝时保留旧配置 | 400 bad-usage; 409 git-unavailable; 500 io-error; 503 store-not-configured |
 | POST /api/store/migrate | `{ targetSkillsRoot, dryRun? }` | `{ ok, command: "store-migrate", paths, skills, movedLinks, aside, dryRun }` | 400 bad-usage; 409 conflict; 500 io-error; 503 store-not-configured |
 | POST /api/doctor/prune | `{ dryRun? }` | `{ ok, command: "doctor-prune", count, pruned, dryRun }`，只修改台账 | 400 bad-usage; 503 store-not-configured |
 | POST /api/verify/accept | `{ names?, dryRun? }` | `{ ok, command: "verify-accept", count, accepted, missing, dryRun }`，缺失项跳过 | 400 bad-usage; 404 not-found; 409 conflict; 503 store-not-configured |
@@ -99,20 +99,14 @@
 | POST /api/share | `{ target, repo? }`(hash 前缀或 dirName;repo 覆盖 manifest.trustedRepo) | `{ ok, command: "share", dirName, url, idempotent, dryRun }` | 400 bad-usage; 404 not-found; 409 remote-conflict; 503 auth-required(无 GITHUB_TOKEN); 502 github-push-failed |
 | POST /api/backups/preview | `{ snapshotId? }` | `{ ok, command: "backups-preview", snapshotId, dryRun: true, clients, skills, files, links, wouldRestore, skippedOwnDirs, asideStore, asidePointer }`(不写盘) | 400; 404 not-found; 409 verify-failed; 503 |
 | POST /api/reset | `{ snapshotId?, confirm: "reset" }` | `{ ok, command: "reset", storeRoot, snapshotId, asideStore, asidePointer, adopted }`(本请求内跑完还原,与 CLI `reset --json` 同形) | 400 bad-usage(缺确认短语); 404; 409 verify-failed\|restore-failed; 500 io-error; 503 |
-
-### 3.1 v0.3 演进预留端点（见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
-
-> 以下端点为 v0.3 正式契约，按 sub-issue 逐批落地，落地后移入 §2 / §3 主表。
-
-| 端点 | 方法 / 参数 | 响应与用途 | 关键失败码 |
-| --- | --- | --- | --- |
-| `/api/git/status` | `GET` | 检测 `git`、`gh` 安装与登录态、真源仓状态、未推送提交数与远端地址 | — |
-| `/api/git/toggle` | `POST { enabled: boolean }` | 开启（初始化真源 `.git` + `.gitignore`）或关闭 Git 版本控制 | 409 git-unavailable; 503 |
-| `/api/git/log` | `GET ?skill=&limit=` | 查询真源仓或单 skill 提交历史 | 409 git-unavailable; 503 |
-| `/api/git/gh/login/start` | `POST` | 启动 `gh auth login --web` 设备码流，返回 `{ sessionId, userCode, verificationUri }` | 503 git-unavailable |
-| `/api/git/gh/login/status` | `GET ?sessionId=` | 轮询 `gh` 认证状态，返回 `{ status, authenticated, username }` | — |
-| `/api/git/cloud/setup` | `POST { repoName, visibility: "private"\|"public", confirmPublicSecrets? }` | 敏感信息预检 + `gh repo create` + 绑定 `origin` + 首次推送 | 409 secret-detected\|remote-conflict; 502; 503 auth-required |
-| `/api/git/cloud/push` | `POST` | 安全推送至云端备份仓（绝不 `push -f`） | 409 remote-diverged; 502; 503 |
+| GET /api/git/status | — | `{ ok, command: "git-status", enabled, gitInstalled, gitVersion, ghInstalled, ghVersion, ghAuthenticated, ghUsername, initialized?, branch?, aheadCount?, dirtyCount?, remoteDiverged?, remoteUrl }` 及安装提示。库存未配置时仍可检测依赖 | 500 |
+| POST /api/git/toggle | `{ enabled: boolean }` | `{ ok, command: "git-toggle", enabled }`。开启时初始化真源，关闭后保留版本仓 | 400; 409 git-unavailable; 503 |
+| GET /api/git/log | `?skill=&limit=`（默认 30，最多 100） | `{ ok, command: "git-log", commits }`，每项含哈希、时间、作者和摘要 | 400; 409 git-unavailable; 503 |
+| GET /api/git/diff | `?commit=<hash>&skill=` | `{ ok, command: "git-diff", commit, patch }`。按提交读取可选单技能的脱敏差异 | 400; 409 git-unavailable; 503 |
+| POST /api/git/gh/login/start | `{}` | `{ ok, command: "gh-login-start", sessionId, userCode, verificationUri, status: "pending", expiresAt }` | 502 gh-login-failed; 503 git-unavailable |
+| GET /api/git/gh/login/status | `?sessionId=` | `{ ok, command: "gh-login-status", sessionId, status, authenticated, username, error, expiresAt }`。内存会话状态为 pending、authenticated、expired 或 error | 404 not-found |
+| POST /api/git/cloud/setup | `{ repoName, visibility: "private"\|"public", confirmPublicSecrets? }` | `{ ok, command: "git-cloud-init", remoteUrl }`。公开预检当前文件和历史补丁，疑似密钥命中会在 409 中返回脱敏 `findings` | 409 secret-detected\|remote-conflict; 502; 503 auth-required |
+| POST /api/git/cloud/push | `{}` | `{ ok, command: "git-cloud-push", remoteUrl }`。校验 origin，使用非强制推送 | 409 remote-diverged\|remote-conflict; 502; 503 |
 
 - `:hash` 与 CLI 共用 `resolveSkill`:dirName 精确,否则唯一哈希前缀;0 命中 404 not-found;前缀不唯一 400 bad-usage
 - `SkillFileEntry`:`{ path, kind: "file"|"dir", sizeBytes }`
@@ -151,7 +145,8 @@
 | store-not-configured | 503 | 库存未配置（`withStore` 守卫） |
 | not-configured | 503 | 缺少 `QINIU_API_KEY` |
 | auth-required | 503 | `POST /api/share` 缺 `GITHUB_TOKEN` 或 `gh` 未登录 |
-| git-unavailable | 409 / 503 | 本机未安装 `git` / `gh` 或未开启 Git 版本控制（v0.3 预留） |
+| git-unavailable | 409 / 503 | 本机未安装 Git 或 GitHub CLI |
+| gh-login-failed | 502 | GitHub CLI 设备登录启动失败 |
 | secret-detected | 409 | 公开云端仓库推送前敏感密钥预检命中风险（v0.3 预留） |
 | remote-diverged | 409 | 远端备份仓库存在本地未拉取提交，拒绝强推（v0.3 预留） |
 

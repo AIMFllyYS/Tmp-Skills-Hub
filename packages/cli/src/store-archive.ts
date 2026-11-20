@@ -1,14 +1,14 @@
 import path from "node:path";
 import { normalizeHubPaths } from "@skills-hub/core";
 import {
-  archiveSkill,
   listArchivedSkills,
   readStoreIndex,
-  restoreArchivedSkill,
   STORE_ARCHIVE_DIR,
 } from "@skills-hub/core";
+import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { resolveNames } from "./resolve-skill.js";
+import { archiveManagedSkill, restoreManagedSkill } from "./skill-write-ops.js";
 import { requireWriteAuth, resolveStoreRootOrFail } from "./store-shared.js";
 
 export interface ArchiveArgs {
@@ -23,6 +23,7 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
   const names = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "");
   const storeRoot = await resolveStoreRootOrFail(args, "archive");
   if (storeRoot === null) return;
+  const home = resolveHome(args.home);
 
   if (names[0] === "restore") {
     const targets = names.slice(1);
@@ -43,7 +44,7 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
     let failed = 0;
     const results: unknown[] = [];
     for (const n of targets) {
-      const res = await restoreArchivedSkill(storeRoot, n);
+      const res = await restoreManagedSkill(home, storeRoot, n);
       if (res.ok) {
         results.push({ name: n, ok: true, hash: res.hash, archiveFile: res.archiveFile });
         if (!args.json) console.log("✓ 已恢复: " + res.dirName + " (" + res.hash.slice(0, 12) + ")");
@@ -101,7 +102,7 @@ export async function runArchive(args: ArchiveArgs): Promise<void> {
   const results: unknown[] = [];
   let failed = 0;
   for (const dirName of dirNames) {
-    const res = await archiveSkill(storeRoot, dirName);
+    const res = await archiveManagedSkill(home, storeRoot, dirName);
     if (res.ok) {
       results.push({ dirName, ok: true, archiveFile: res.archiveFile, sizeBytes: res.sizeBytes, removedLinks: res.removedLinks });
       if (!args.json) console.log("✓ 已归档: " + dirName + " → " + res.archiveFile + " (" + res.removedLinks + " 个链接已摘)");

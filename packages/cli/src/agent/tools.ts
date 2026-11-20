@@ -7,7 +7,6 @@ import path from "node:path";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import {
-  archiveSkill,
   attachVisibleIn,
   listArchivedSkills,
   listBackupSnapshots,
@@ -18,8 +17,6 @@ import {
   readSkillFile,
   readStoreIndex,
   readStoreIndexFile,
-  restoreArchivedSkill,
-  saveSkillFile,
   normalizeHubPaths,
   type HubPaths,
 } from "@skills-hub/core";
@@ -27,6 +24,7 @@ import type { AnalyzeGenerate } from "../analyze.js";
 import { performAnalyze } from "../analyze.js";
 import { performAllocate, performCommit, performDiscard } from "../create-cmds.js";
 import { conflictAgentDecision, getSharedConflictDiff, performConflictResolution, readConflictText } from "../conflict-cmds.js";
+import { performGitCommit, performGitDiff, performGitLog, performGitStatus, type GitRuntime } from "../git-ops.js";
 import { collectDoctorReport } from "../doctor.js";
 import {
   performCreateGroup,
@@ -38,6 +36,7 @@ import { performLinkChange } from "../link-actions.js";
 import { scrub } from "../llm/errors.js";
 import { resolveSkill } from "../resolve-skill.js";
 import { scanKnownClients } from "../scan.js";
+import { archiveManagedSkill, restoreManagedSkill, saveManagedSkillFile } from "../skill-write-ops.js";
 import { performShare } from "../share.js";
 import { performAdopt, performVerify } from "../store-cmds.js";
 import { resolveClientSkillsDirAt } from "../ui-http.js";
@@ -60,6 +59,7 @@ export const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "group_delete",
   "group_members",
   "apply_conflict_resolution",
+  "git_commit",
 ]);
 
 export interface ToolEnv {
@@ -68,6 +68,7 @@ export interface ToolEnv {
   paths?: HubPaths | null;
   fetchImpl?: typeof fetch;
   analyzeGenerate?: AnalyzeGenerate;
+  gitRuntime?: GitRuntime;
 }
 
 function clip(text: string): string {
@@ -153,6 +154,41 @@ async function linkChange(
 
 export function createAgentTools(env: ToolEnv): ToolSet {
   return {
+    git_status: tool({
+      description: "读取唯一真源的 Git 开关、工作树与提交状态。",
+      inputSchema: z.object({}),
+      execute: safeToolExecute(async () => {
+        const root = needStore(env);
+        return dump({ ok: true, ...await performGitStatus(env.home, "ok" in root ? null : root, env.gitRuntime) });
+      }),
+    }),
+    git_log: tool({
+      description: "查看整个真源仓库或某个 Skill 目录下的 Git 提交历史。",
+      inputSchema: z.object({ skill: z.string().optional(), limit: z.number().int().min(1).max(100).optional() }),
+      execute: safeToolExecute(async ({ skill, limit }) => {
+        const root = needStore(env);
+        if ("ok" in root) return root;
+        return dump({ ok: true, commits: await performGitLog(env.home, root, skill, limit ?? 30, env.gitRuntime) });
+      }),
+    }),
+    git_diff: tool({
+      description: "比较两个 Git 版本，或查看从 HEAD 到工作树的差异。只读，输出脱敏。",
+      inputSchema: z.object({ refA: z.string().optional(), refB: z.string().optional() }),
+      execute: safeToolExecute(async (refs) => {
+        const root = needStore(env);
+        if ("ok" in root) return root;
+        return { ok: true, diff: clip(await performGitDiff(env.home, root, refs, env.gitRuntime)) };
+      }),
+    }),
+    git_commit: tool({
+      description: "提交唯一真源中的既有改动。说明原因，ask 模式下由用户批准。不会推送。",
+      inputSchema: z.object({ summary: z.string().min(1).max(500) }),
+      execute: safeToolExecute(async ({ summary }) => {
+        const root = needStore(env);
+        if ("ok" in root) return root;
+        return { ok: true, ...await performGitCommit(env.home, root, summary, env.gitRuntime) };
+      }),
+    }),
     list_conflicts: tool({
       description: "列出所有同名技能冲突和各版本的来源、时间与大小。",
       inputSchema: z.object({}),
@@ -187,7 +223,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       execute: safeToolExecute(async ({ skillName, ...decision }) => {
         const root = needStore(env);
         if ("ok" in root) return root;
-        return dump(await performConflictResolution(root, skillName, decision));
+        return dump(await performConflictResolution(root, skillName, decision, env.home));
       }),
     }),
     list_skills: tool({
@@ -335,7 +371,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
         const root = needStore(env);
         if ("ok" in root) return root;
         const adoptOpts = env.fetchImpl !== undefined ? { fetchImpl: env.fetchImpl } : {};
-        const res = await performAdopt(root, [source], adoptOpts);
+        const res = await performAdopt(root, [source], { ...adoptOpts, home: env.home });
         if (res.fetchFailed) return fail(res.fetchMessage ?? "拉取失败");
         return dump({
           ok: true,
@@ -355,7 +391,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
         if ("ok" in root) return root;
         const dirName = await resolveDirName(root, target);
         if (typeof dirName !== "string") return dirName;
-        return dump(await archiveSkill(root, dirName));
+        return dump(await archiveManagedSkill(env.home, root, dirName));
       }),
     }),
     restore_archived: tool({
@@ -364,7 +400,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       execute: safeToolExecute(async ({ name }) => {
         const root = needStore(env);
         if ("ok" in root) return root;
-        return dump(await restoreArchivedSkill(root, name));
+        return dump(await restoreManagedSkill(env.home, root, name));
       }),
     }),
     share_skill: tool({
@@ -395,7 +431,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       execute: safeToolExecute(async ({ dirName }) => {
         const root = needStore(env);
         if ("ok" in root) return root;
-        return dump(await performCommit(root, dirName));
+        return dump(await performCommit(root, dirName, env.home));
       }),
     }),
     discard_draft: tool({
@@ -415,7 +451,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
         if ("ok" in root) return root;
         const dirName = await resolveSkillOrDraftDirName(root, target);
         if (typeof dirName !== "string") return dirName;
-        const res = await saveSkillFile({
+        const res = await saveManagedSkillFile(env.home, {
           storeRoot: root,
           skillDir: path.join(root.skillsRoot, dirName),
           relPath: rel,

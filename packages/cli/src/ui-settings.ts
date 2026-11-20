@@ -1,13 +1,12 @@
-import { mkdir } from "node:fs/promises";
-import path from "node:path";
 import type { Context, Hono } from "hono";
-import { computeDirDiskUsage, readHubConfig, writeHubConfig, writeFileAtomicSafe, type HubConfig } from "@skills-hub/core";
+import { computeDirDiskUsage } from "@skills-hub/core";
 import { performPrune } from "./doctor.js";
+import { gitFailure } from "./git-cmds.js";
+import { ensureGitRepository, type GitRuntime } from "./git-ops.js";
 import { performMigrate } from "./store-migrate.js";
+import { readStorePreferences, serializePreferenceWrite, writeStorePreferences } from "./store-preferences.js";
 import { performAcceptDrift } from "./store-query.js";
-import { POINTER_REL } from "./store-shared.js";
 import { err, setUiPaths, withStore, type DesktopPreferences, type UiRouteContext } from "./ui-http.js";
-import { scrub } from "./llm/errors.js";
 
 async function jsonObject(c: Context): Promise<Record<string, unknown> | null> {
   const text = await c.req.text();
@@ -20,43 +19,25 @@ async function jsonObject(c: Context): Promise<Record<string, unknown> | null> {
   }
 }
 
-function preferences(config: HubConfig | null) {
-  return {
-    git: config?.git ?? { enabled: false },
-    autoLaunch: config?.autoLaunch ?? false,
-    silentTray: config?.silentTray ?? false,
-  };
-}
-
 export async function readDesktopPreferences(home: string): Promise<DesktopPreferences> {
-  const { autoLaunch, silentTray } = preferences(await readHubConfig(path.join(home, POINTER_REL)));
+  const { autoLaunch, silentTray } = await readStorePreferences(home);
   return { autoLaunch, silentTray };
 }
 
-export function registerSettingsRoutes(app: Hono, ctx: UiRouteContext): void {
-  const configFile = path.join(ctx.home, POINTER_REL);
-  let preferenceWrites = Promise.resolve();
-
-  function enqueuePreferenceWrite(action: () => Promise<Response>): Promise<Response> {
-    const result = preferenceWrites.then(action);
-    preferenceWrites = result.then(() => undefined, () => undefined);
-    return result;
-  }
-
+export function registerSettingsRoutes(app: Hono, ctx: UiRouteContext, runtime: GitRuntime = {}): void {
   app.get("/api/settings", (c) => withStore(ctx, c, "settings", async (paths) => {
-    const config = await readHubConfig(configFile);
+    const current = await readStorePreferences(ctx.home);
     const { bytes } = await computeDirDiskUsage(paths.stateRoot);
-    return c.json({ ok: true, command: "settings", ...paths, stateDiskBytes: bytes, ...preferences(config), isDesktop: ctx.desktop });
+    return c.json({ ok: true, command: "settings", ...paths, stateDiskBytes: bytes, ...current, isDesktop: ctx.desktop });
   }));
 
-  app.patch("/api/settings", (c) => enqueuePreferenceWrite(() => withStore(ctx, c, "settings", async (paths) => {
+  app.patch("/api/settings", (c) => serializePreferenceWrite(ctx.home, () => withStore(ctx, c, "settings", async (paths) => {
     const fields = ["gitEnabled", "autoLaunch", "silentTray"];
     const body = await jsonObject(c);
     if (body === null || Object.entries(body).some(([key, value]) => !fields.includes(key) || typeof value !== "boolean")) {
       return err(c, "settings", "bad-usage", "只接受布尔值 gitEnabled / autoLaunch / silentTray");
     }
-    const config = await readHubConfig(configFile);
-    const current = preferences(config);
+    const current = await readStorePreferences(ctx.home);
     const next = {
       git: { ...current.git, enabled: typeof body.gitEnabled === "boolean" ? body.gitEnabled : current.git.enabled },
       autoLaunch: typeof body.autoLaunch === "boolean" ? body.autoLaunch : current.autoLaunch,
@@ -65,19 +46,14 @@ export function registerSettingsRoutes(app: Hono, ctx: UiRouteContext): void {
     const notify = ctx.desktop && (next.autoLaunch !== current.autoLaunch || next.silentTray !== current.silentTray)
       ? ctx.onDesktopPreferences : undefined;
     try {
+      if (body.gitEnabled === true) await ensureGitRepository(paths, runtime);
       notify?.({ autoLaunch: next.autoLaunch, silentTray: next.silentTray });
     } catch (error) {
-      return err(c, "settings", "io-error", scrub(error instanceof Error ? error.message : String(error)));
+      const failure = gitFailure(error);
+      return err(c, "settings", failure.code, failure.message);
     }
     try {
-      if (Object.keys(body).length > 0) {
-        if (paths.layoutMode === "split") {
-          await writeHubConfig(configFile, { version: 2, stateRoot: paths.stateRoot, skillsRoot: paths.skillsRoot, storeRoot: paths.stateRoot, ...next });
-        } else {
-          await mkdir(path.dirname(configFile), { recursive: true });
-          await writeFileAtomicSafe(configFile, JSON.stringify({ storeRoot: paths.stateRoot, ...next }, null, 2) + "\n");
-        }
-      }
+      if (Object.keys(body).length > 0) await writeStorePreferences(ctx.home, paths, next);
     } catch (error) {
       notify?.({ autoLaunch: current.autoLaunch, silentTray: current.silentTray });
       throw error;

@@ -103,7 +103,7 @@ async function disabledFilterArgs(root: string, runner: CommandRunner): Promise<
   return args;
 }
 
-interface GitCommitResult { skipped: boolean; commitHash?: string }
+export interface GitCommitResult { skipped: boolean; commitHash?: string }
 
 async function stageAndCommit(root: string, gitDir: string, summary: string, runner: CommandRunner): Promise<GitCommitResult> {
   if (summary.trim() === "" || summary.includes("\0")) throw new Error("提交说明为空或无效。");
@@ -116,11 +116,12 @@ async function stageAndCommit(root: string, gitDir: string, summary: string, run
     const tempIndex = path.join(work, "index");
     if (original !== null) await writeFileAtomicSafe(tempIndex, original);
     const options = { indexFile: tempIndex };
-    const candidates = stdout(await runner(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], options));
+    const pathsOnly = { ...options, machinePaths: true };
+    const candidates = stdout(await runner(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], pathsOnly));
     await checkedPaths(root, [...new Set(zeroSeparated(candidates))]);
     const filters = await disabledFilterArgs(root, runner);
     stdout(await runner(root, [...filters, "add", "-A", "--", "."], options));
-    const staged = stdout(await runner(root, ["ls-files", "-z", "--cached"], options));
+    const staged = stdout(await runner(root, ["ls-files", "-z", "--cached"], pathsOnly));
     await checkedPaths(root, zeroSeparated(staged));
     const diff = await runner(root, ["diff", "--cached", "--quiet", "--no-ext-diff", "--exit-code"], options);
     if (diff.ok) return { skipped: true };
@@ -227,4 +228,16 @@ export async function getGitDiff(root: string, refA = "HEAD", refB?: string, run
   const refs = [await resolve(refA)];
   if (refB !== undefined) refs.push(await resolve(refB));
   return stdout(await runner(root, ["diff", "--no-ext-diff", "--no-textconv", "--no-color", ...refs, "--"]));
+}
+
+export async function getGitCommitPatch(root: string, commit: string, skillName: string | undefined, runner: CommandRunner = runGit): Promise<string> {
+  if (!/^[a-f0-9]{7,64}$/i.test(commit)) throw new Error("提交哈希无效。");
+  if (skillName !== undefined && !isPortableSkillName(skillName)) throw new Error("无效的技能目录名。");
+  if (await localGitDir(root, runner) === null) return "";
+  const resolved = stdout(await runner(root, ["rev-parse", "--verify", "--end-of-options", commit + "^{commit}"])).trim();
+  if (!/^[a-f0-9]{40,64}$/.test(resolved)) throw new Error("无法解析 Git 版本。");
+  const args = ["-c", "core.quotepath=false", "--literal-pathspecs", "show", "--format=", "--no-color",
+    "--no-ext-diff", "--no-textconv", "--no-renames", resolved, "--"];
+  if (skillName !== undefined) args.push(skillName);
+  return stdout(await runner(root, args));
 }

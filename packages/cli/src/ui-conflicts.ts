@@ -28,7 +28,7 @@ export function registerConflictRoutes(app: Hono, ctx: UiRouteContext): void {
   app.post("/api/conflicts/:name/resolve", (c) => withStore(ctx, c, "conflicts-resolve", async (paths) => {
     const command = "conflicts-resolve";
     const body = await c.req.json<unknown>().catch(() => null);
-    const result = await performConflictResolution(paths, c.req.param("name"), body);
+    const result = await performConflictResolution(paths, c.req.param("name"), body, ctx.home);
     return result.ok ? c.json({ ...result, command }) : err(c, command, result.code, result.message);
   }));
 }

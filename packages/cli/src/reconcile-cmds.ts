@@ -7,6 +7,7 @@ import {
   type HubPaths,
   type ReconcilePlan,
 } from "@skills-hub/core";
+import { autoVersionSkillAssets } from "./git-ops.js";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { scrub } from "./llm/errors.js";
@@ -78,6 +79,9 @@ export function reconcilePreview(plan: ReconcilePlan) {
 export async function performReconcile(home: string, paths: HubPaths, includeExternalLinks: boolean) {
   const outcome = await executeReconcile(home, paths, { includeExternalLinks, pruneDangling: true });
   if (!outcome.ok) return { ...outcome, message: scrub(outcome.message) };
+  if (outcome.adoptedCount > 0 || outcome.conflictCount > 0) {
+    await autoVersionSkillAssets(home, paths, "chore(skills): reconcile client versions");
+  }
   return { ...outcome, failures: outcome.failures.map((failure) => ({ ...failure, reason: scrub(failure.reason) })) };
 }
 
