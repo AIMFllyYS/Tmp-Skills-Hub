@@ -78,6 +78,6 @@
 
 ## 五、版本管理与发布约定
 
-- **Workspace 内部包**：`@skills-hub/core`、`@skills-hub/cli`、`@skills-hub/web`、`@skills-hub/desktop` 在试验阶段保持 `private: true`，版本号（当前 `0.1.0`）随里程碑同步演进，不向公共 npm registry 发布。
+- **Workspace 内部包**：`@skills-hub/core`、`@skills-hub/cli`、`@skills-hub/web`、`@skills-hub/desktop` 在试验阶段保持 `private: true`，版本号（当前 `0.2.0`）随里程碑同步演进，不向公共 npm registry 发布。
 - **桌面端分发版本**：`apps/desktop/package.json` 的 `version` 字段即 `electron-builder` 产物版本；当前面向社团内部默认采用**无签名（unsigned）分发**（详见 [desktop-shell-v0.md](../designs/desktop-shell-v0.md)），发布前须确认全仓构建与桌面端打包产物在沙箱下可启动并连通本地服务。
 - **干线发布（`dev` → `main`）**：仅当阶段性验收通过且用户明确要求更新演示干线时，将 `dev` 合并至 `main` 并打版本 tag，不在日常开发中直接提交 `main`。
