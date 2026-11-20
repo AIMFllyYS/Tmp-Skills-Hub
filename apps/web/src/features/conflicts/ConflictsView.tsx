@@ -238,8 +238,8 @@ export function ConflictsView({
                         : "text-ink-mid hover:bg-surface/70 hover:text-ink-strong",
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5">
+                    <div className="flex w-full min-w-0 items-center justify-between gap-2">
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
                         {item.shorterContentWarning && (
                           <Tooltip label="较新版本内容更短，请优先核对" side="right">
                             <AlertTriangle
