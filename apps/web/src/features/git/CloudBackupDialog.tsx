@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { GitVaultGlyph, ICON_STROKE, IconBadge } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -94,10 +95,17 @@ export function CloudBackupDialog({
         className="flex max-h-[min(42rem,90vh)] max-w-xl flex-col"
         data-testid="cloud-backup-dialog"
       >
-        <DialogTitle>一键创建云端备份仓库</DialogTitle>
-        <DialogDescription>
-          通过本机 gh CLI 在你的 GitHub 账号下创建仓库，并将唯一真源目录推送至 origin。
-        </DialogDescription>
+        <div className="flex items-start gap-3">
+          <IconBadge size="md" tone="obsidian">
+            <GitVaultGlyph size={18} />
+          </IconBadge>
+          <div className="min-w-0 flex-1">
+            <DialogTitle>一键创建云端备份仓库</DialogTitle>
+            <DialogDescription>
+              通过本机 gh CLI 在你的 GitHub 账号下创建仓库，并将唯一真源目录推送至 origin。
+            </DialogDescription>
+          </div>
+        </div>
 
         <ScrollArea className="mt-4 min-h-0 flex-1">
           <form
@@ -149,20 +157,24 @@ export function CloudBackupDialog({
                   disabled={effectiveBusy}
                   onClick={() => selectVisibility("private")}
                   className={cn(
-                    "motion-press motion-fill flex flex-col gap-1.5 rounded-xl border p-3.5 text-left outline-none focus-visible:border-line-strong focus-visible:ring-1 focus-visible:ring-line-strong disabled:pointer-events-none disabled:opacity-50",
+                    "motion-card-lift flex flex-col gap-2 rounded-2xl border p-4 text-left outline-none focus-visible:border-line-strong focus-visible:ring-1 focus-visible:ring-line-strong disabled:pointer-events-none disabled:opacity-50",
                     visibility === "private"
-                      ? "border-ink-strong bg-surface"
+                      ? "border-ink-strong bg-canvas/80 shadow-[var(--shadow-card)]"
                       : "border-line bg-white hover:border-line-strong",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-strong">
-                      <Lock className="size-4 text-ink-mid" aria-hidden />
+                    <span className="inline-flex items-center gap-2 text-sm font-medium text-ink-strong">
+                      <IconBadge size="xs" tone={visibility === "private" ? "obsidian" : "surface"}>
+                        <Lock className="size-3.5" strokeWidth={ICON_STROKE} />
+                      </IconBadge>
                       Private
                     </span>
-                    <Badge tone="success">推荐默认</Badge>
+                    <Badge tone="success" dot>
+                      推荐默认
+                    </Badge>
                   </div>
-                  <p className="text-xs text-ink-mid">
+                  <p className="text-xs leading-relaxed text-ink-mid">
                     仅你自己可见，安全备份个人工作流与私密经验。
                   </p>
                 </button>
@@ -175,20 +187,24 @@ export function CloudBackupDialog({
                   disabled={effectiveBusy}
                   onClick={() => selectVisibility("public")}
                   className={cn(
-                    "motion-press motion-fill flex flex-col gap-1.5 rounded-xl border p-3.5 text-left outline-none focus-visible:border-line-strong focus-visible:ring-1 focus-visible:ring-line-strong disabled:pointer-events-none disabled:opacity-50",
+                    "motion-card-lift flex flex-col gap-2 rounded-2xl border p-4 text-left outline-none focus-visible:border-line-strong focus-visible:ring-1 focus-visible:ring-line-strong disabled:pointer-events-none disabled:opacity-50",
                     visibility === "public"
-                      ? "border-ink-strong bg-surface"
+                      ? "border-ink-strong bg-canvas/80 shadow-[var(--shadow-card)]"
                       : "border-line bg-white hover:border-line-strong",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-strong">
-                      <Globe className="size-4 text-ink-mid" aria-hidden />
+                    <span className="inline-flex items-center gap-2 text-sm font-medium text-ink-strong">
+                      <IconBadge size="xs" tone={visibility === "public" ? "warning" : "surface"}>
+                        <Globe className="size-3.5" strokeWidth={ICON_STROKE} />
+                      </IconBadge>
                       Public
                     </span>
-                    <Badge tone="warning">公开可见</Badge>
+                    <Badge tone="warning" dot>
+                      公开可见
+                    </Badge>
                   </div>
-                  <p className="text-xs text-ink-mid">
+                  <p className="text-xs leading-relaxed text-ink-mid">
                     所有人均可浏览与克隆，推送前会强制扫描敏感密钥。
                   </p>
                 </button>
@@ -214,40 +230,38 @@ export function CloudBackupDialog({
                   description="强烈建议先清理或脱敏以下行，或改用 Private 私有仓库后再推送。"
                 />
 
-                <div className="overflow-x-auto rounded-lg border border-line">
-                  <Table className="table-fixed">
-                    <TableHead>
-                      <TableRow className="h-9">
-                        <TableTh className="w-5/12">文件</TableTh>
-                        <TableTh className="w-14">行号</TableTh>
-                        <TableTh className="w-6/12">脱敏片段</TableTh>
+                <Table className="table-fixed">
+                  <TableHead>
+                    <TableRow className="h-9 hover:bg-canvas">
+                      <TableTh className="w-5/12">文件</TableTh>
+                      <TableTh className="w-16">行号</TableTh>
+                      <TableTh className="w-6/12">脱敏片段</TableTh>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {findings.map((item, idx) => (
+                      <TableRow key={item.file + ":" + String(item.line) + ":" + String(idx)}>
+                        <TableTd className="break-all font-mono text-xs text-ink-strong">
+                          <span>{item.file}</span>
+                          {item.rule !== undefined && item.rule !== "" && (
+                            <Badge tone="neutral" className="ml-1.5">
+                              {item.rule}
+                            </Badge>
+                          )}
+                        </TableTd>
+                        <TableTd className="font-mono text-xs text-ink-mid">
+                          L{String(item.line)}
+                        </TableTd>
+                        <TableTd className="break-all font-mono text-xs text-red-700">
+                          {item.preview}
+                        </TableTd>
                       </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {findings.map((item, idx) => (
-                        <TableRow key={item.file + ":" + String(item.line) + ":" + String(idx)}>
-                          <TableTd className="break-all font-mono text-xs text-ink-strong">
-                            <span>{item.file}</span>
-                            {item.rule !== undefined && item.rule !== "" && (
-                              <Badge tone="neutral" className="ml-1.5">
-                                {item.rule}
-                              </Badge>
-                            )}
-                          </TableTd>
-                          <TableTd className="font-mono text-xs text-ink-mid">
-                            L{String(item.line)}
-                          </TableTd>
-                          <TableTd className="break-all font-mono text-xs text-red-700">
-                            {item.preview}
-                          </TableTd>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
 
                 {needsSecretAck && (
-                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/90 p-3.5 text-xs leading-relaxed text-amber-900">
                     <Checkbox
                       checked={confirmPublicSecrets}
                       onCheckedChange={setConfirmPublicSecrets}
@@ -271,7 +285,7 @@ export function CloudBackupDialog({
           </form>
         </ScrollArea>
 
-        <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-line pt-3">
+        <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-line pt-3.5">
           <Button
             type="button"
             variant="outline"
@@ -287,7 +301,7 @@ export function CloudBackupDialog({
             data-testid="cloud-create-submit"
             disabled={submitDisabled}
           >
-            <CloudUpload className="size-4 text-white" aria-hidden />
+            <CloudUpload className="size-3.5 text-white" strokeWidth={ICON_STROKE} aria-hidden />
             {effectiveBusy
               ? "创建并推送中…"
               : visibility === "public"

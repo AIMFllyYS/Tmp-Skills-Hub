@@ -2,6 +2,7 @@ import { FileCode2, FileMinus2, FilePlus2, FileText } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "./badge.js";
+import { ICON_STROKE } from "./icon.js";
 import { ScrollArea } from "./scroll-area.js";
 
 export type DiffFileStatus = "added" | "removed" | "modified" | "unchanged";
@@ -38,7 +39,7 @@ const STATUS_META: Record<
   unchanged: { label: "相同", tone: "neutral", icon: FileText },
 };
 
-/** 确定性逐文件 Unified Diff 视图（复用于冲突对比与 Git 历史抽屉，严守克制灰阶 + 浅绿/浅红语义）。 */
+/** 确定性逐文件 Unified Diff 视图（复用于冲突对比与 Git 历史抽屉，同心圆角 + 精雕线宽 + 克制浅绿/浅红语义）。 */
 export function DiffViewer({
   files,
   emptyText = "两个版本间没有文件差异。",
@@ -54,20 +55,26 @@ export function DiffViewer({
 
   if (files.length === 0) {
     return (
-      <div className={cn("rounded-xl border border-line bg-surface p-6 text-center text-sm text-ink-mid", className)}>
+      <div className={cn("rounded-2xl border border-line bg-canvas p-6 text-center text-sm text-ink-mid", className)}>
         {emptyText}
       </div>
     );
   }
 
   return (
-    <div className={cn("grid min-h-0 grid-cols-1 overflow-hidden rounded-xl border border-line bg-white md:grid-cols-[220px_minmax(0,1fr)]", className)}>
-      <div className="min-w-0 overflow-hidden border-b border-line bg-surface md:border-r md:border-b-0">
-        <div className="border-b border-line px-3 py-2 text-xs font-medium text-ink-mid">
-          变更文件（{String(files.length)}）
+    <div
+      className={cn(
+        "grid min-h-0 grid-cols-1 overflow-hidden rounded-2xl border border-line bg-white shadow-[var(--shadow-card)] md:grid-cols-[232px_minmax(0,1fr)]",
+        className,
+      )}
+    >
+      <div className="min-w-0 overflow-hidden border-b border-line bg-canvas md:border-r md:border-b-0">
+        <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5 text-xs font-medium text-ink-mid">
+          <span>变更文件</span>
+          <span className="font-mono text-[11px] text-ink-faint">{String(files.length)}</span>
         </div>
         <ScrollArea className="max-h-64 md:max-h-[420px]">
-          <ul className="divide-y divide-line">
+          <ul className="space-y-0.5 p-1.5">
             {files.map((file) => {
               const meta = STATUS_META[file.status];
               const Icon = meta.icon;
@@ -78,15 +85,17 @@ export function DiffViewer({
                     type="button"
                     onClick={() => setSelectedPath(file.relPath)}
                     className={cn(
-                      "motion-row flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2 text-left text-xs outline-none",
-                      active ? "bg-white font-medium text-ink-strong" : "text-ink-mid hover:bg-white/60",
+                      "motion-row flex w-full min-w-0 items-center justify-between gap-2 rounded-[9px] px-2.5 py-2 text-left text-xs outline-none",
+                      active
+                        ? "border border-line bg-white font-medium text-ink-strong shadow-[var(--shadow-thumb)]"
+                        : "border border-transparent text-ink-mid hover:bg-white/70 hover:text-ink-strong",
                     )}
                   >
                     <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-                      <Icon className="size-3.5 shrink-0 text-ink-mid" aria-hidden />
+                      <Icon className="size-3.5 shrink-0 text-ink-faint" strokeWidth={ICON_STROKE} aria-hidden />
                       <span className="truncate font-mono">{file.relPath}</span>
                     </span>
-                    <Badge tone={meta.tone} className="shrink-0 text-[11px]">
+                    <Badge tone={meta.tone} className="shrink-0 px-2 py-0 text-[11px]">
                       {meta.label}
                     </Badge>
                   </button>
@@ -97,14 +106,16 @@ export function DiffViewer({
         </ScrollArea>
       </div>
 
-      <div className="flex min-w-0 flex-col">
+      <div className="flex min-w-0 flex-col bg-white">
         {current !== null && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-white px-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-white px-4 py-2.5">
               <span className="font-mono text-xs font-medium text-ink-strong">{current.relPath}</span>
               <div className="flex items-center gap-2">
                 {current.truncated === true && <Badge tone="warning">超长已截断</Badge>}
-                <Badge tone={STATUS_META[current.status].tone}>{STATUS_META[current.status].label}</Badge>
+                <Badge tone={STATUS_META[current.status].tone} dot>
+                  {STATUS_META[current.status].label}
+                </Badge>
               </div>
             </div>
             <ScrollArea className="max-h-[420px]">
@@ -120,7 +131,7 @@ export function DiffViewer({
                 <div className="font-mono text-xs leading-6">
                   {current.hunks.map((hunk, hi) => (
                     <div key={hi}>
-                      <div className="border-y border-line bg-surface px-3 py-1 text-ink-faint">
+                      <div className="border-y border-line bg-canvas px-3.5 py-1 text-[11px] text-ink-faint">
                         {hunk.header}
                       </div>
                       {hunk.lines.map((line, li) => (
@@ -128,15 +139,15 @@ export function DiffViewer({
                           key={li}
                           className={cn(
                             "grid grid-cols-[40px_40px_20px_minmax(0,1fr)] px-2",
-                            line.kind === "add" && "bg-green-50 text-green-700",
-                            line.kind === "del" && "bg-red-50 text-red-700",
+                            line.kind === "add" && "bg-emerald-50/75 text-emerald-900",
+                            line.kind === "del" && "bg-red-50/80 text-red-800",
                             line.kind === "context" && "text-ink-mid",
                           )}
                         >
-                          <span className="select-none pr-2 text-right text-ink-faint">
+                          <span className="select-none pr-2 text-right text-ink-faint/80 tabular-nums">
                             {line.oldLine !== undefined ? String(line.oldLine) : ""}
                           </span>
-                          <span className="select-none pr-2 text-right text-ink-faint">
+                          <span className="select-none pr-2 text-right text-ink-faint/80 tabular-nums">
                             {line.newLine !== undefined ? String(line.newLine) : ""}
                           </span>
                           <span className="select-none text-center font-medium">

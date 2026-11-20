@@ -3,7 +3,6 @@ import {
   ChevronRight,
   ExternalLink,
   FolderSync,
-  ShieldCheck,
   ShieldOff,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -12,10 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { DeferredReveal } from "@/components/ui/deferred-reveal";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ICON_STROKE, IconBadge, ShieldAuditGlyph, SymlinkMeshGlyph } from "@/components/ui/icon";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonRowList } from "@/components/ui/skeleton";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { StepList, type StepItem } from "@/components/ui/step-list";
 import { TruncateTip } from "@/components/ui/tooltip";
@@ -60,6 +61,7 @@ function PreviewSection({
         <span className="flex min-w-0 items-center gap-2">
           <ChevronRight
             className={cn("motion-chevron size-4 shrink-0 text-ink-mid", expanded && "rotate-90")}
+            strokeWidth={ICON_STROKE}
             aria-hidden
           />
           {icon}
@@ -85,7 +87,7 @@ export interface ReconcileDialogProps {
   onApply: () => Promise<void>;
 }
 
-/** 一键接管预览与确认弹窗：展示强制备份校验保障、新收录/换链、冲突预警、外部软链勾选与非 skill 保留清单。 */
+/** 一键接管预览与确认弹窗：晚加载骨架过渡 + 强制备份保障 + 新收录/换链/冲突/外部软链明细。 */
 export function ReconcileDialog({
   open,
   onOpenChange,
@@ -166,25 +168,33 @@ export function ReconcileDialog({
         className="flex max-h-[min(44rem,90vh)] max-w-2xl flex-col"
         data-testid="reconcile-dialog"
       >
-        <DialogTitle>预览备份与一键接管方案</DialogTitle>
-        <DialogDescription>
-          将客户端中未接管的真实目录收敛入唯一真源，并原地替换为纯软链接。系统保留目录与未勾选的外部软链接保持原样不动。
-        </DialogDescription>
+        <div className="flex items-start gap-3">
+          <IconBadge size="md" tone="obsidian">
+            <SymlinkMeshGlyph size={18} />
+          </IconBadge>
+          <div className="min-w-0 flex-1">
+            <DialogTitle>预览备份与一键接管方案</DialogTitle>
+            <DialogDescription>
+              将客户端中未接管的真实目录收敛入唯一真源，并原地替换为纯软链接。系统保留目录与未勾选的外部软链接保持原样不动。
+            </DialogDescription>
+          </div>
+        </div>
 
         <ScrollArea className="mt-4 min-h-0 flex-1">
-          <div className="space-y-4 pr-1">
-            {loading || preview === null ? (
-              <div className="space-y-3" aria-busy="true" aria-label="正在生成接管预览">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
+          <DeferredReveal
+            loading={loading || preview === null}
+            skeleton={
+              <div className="space-y-3.5 pr-1" aria-label="正在生成接管预览">
+                <Skeleton className="h-20 w-full rounded-xl" />
+                <SkeletonRowList rows={3} />
               </div>
-            ) : (
-              <>
+            }
+          >
+            {preview !== null && (
+              <div className="space-y-4 pr-1">
                 <StatusBanner
                   surface="card"
-                  tone={preview.conflicts.length > 0 ? "warning" : "neutral"}
+                  tone={preview.conflicts.length > 0 ? "warning" : "info"}
                   title={
                     preview.backupRequired
                       ? "执行前将强制生成去重备份快照至 " + preview.backupDir
@@ -193,7 +203,7 @@ export function ReconcileDialog({
                   description="只有当备份快照校验通过后，才会开始移出客户端真实目录并切换软链接。"
                 />
 
-                <div className="rounded-xl border border-line bg-surface p-4">
+                <div className="rounded-2xl border border-line bg-canvas p-4">
                   <StepList items={guaranteeSteps} />
                 </div>
 
@@ -210,22 +220,22 @@ export function ReconcileDialog({
                   <PreviewSection
                     title="新增 / 同内容转纯软链接"
                     count={combinedNewAndRelink.length}
-                    icon={<FolderSync className="size-4 shrink-0 text-ink-mid" aria-hidden />}
+                    icon={<FolderSync className="size-4 shrink-0 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />}
                     defaultOpen={true}
                     testId="reconcile-section-adopt"
                   >
-                    <ul className="divide-y divide-line rounded-xl border border-line bg-white">
+                    <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
                       {combinedNewAndRelink.map((item) => (
                         <li
                           key={item.action + ":" + item.skillName + ":" + item.hash}
-                          className="space-y-1.5 px-3.5 py-2.5"
+                          className="space-y-1.5 px-4 py-3"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                               <span className="truncate font-mono text-xs font-medium text-ink-strong">
                                 {item.skillName}
                               </span>
-                              <Badge tone={item.action === "adopt" ? "success" : "neutral"}>
+                              <Badge tone={item.action === "adopt" ? "success" : "neutral"} dot>
                                 {item.action === "adopt" ? "新收录" : "同内容换链"}
                               </Badge>
                               {item.replacesBrokenLink === true && (
@@ -253,23 +263,25 @@ export function ReconcileDialog({
                     title="同名多版本冲突（全变体入池留底）"
                     count={preview.conflicts.length}
                     badgeTone="warning"
-                    icon={<AlertTriangle className="size-4 shrink-0 text-amber-800" aria-hidden />}
+                    icon={<AlertTriangle className="size-4 shrink-0 text-amber-700" strokeWidth={ICON_STROKE} aria-hidden />}
                     defaultOpen={true}
                     testId="reconcile-section-conflicts"
                   >
-                    <p className="px-1 text-xs text-ink-mid">
+                    <p className="px-1 text-xs leading-relaxed text-ink-mid">
                       所有异版都会完整留存至 <code className="font-mono text-ink-strong">~/.skills-hub/conflicts/</code>
                       ；按目录内有效文件最新修改时间暂定唯一真源并立即挂回软链，合并后可在「Skills 管理 → 冲突」逐文件 Diff 裁决。
                     </p>
-                    <ul className="divide-y divide-line rounded-xl border border-line bg-white">
+                    <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
                       {preview.conflicts.map((item) => (
-                        <li key={item.skillName} className="space-y-2 px-3.5 py-3">
+                        <li key={item.skillName} className="space-y-2 px-4 py-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                               <span className="truncate font-mono text-xs font-medium text-ink-strong">
                                 {item.skillName}
                               </span>
-                              <Badge tone="warning">{String(item.variantCount) + " 个版本"}</Badge>
+                              <Badge tone="warning" dot>
+                                {String(item.variantCount) + " 个版本"}
+                              </Badge>
                               {item.shorterContentWarning && (
                                 <Badge tone="warning" data-testid="reconcile-shorter-warning">
                                   最新内容显著更短或时间差过近，请复核
@@ -312,11 +324,11 @@ export function ReconcileDialog({
                   <PreviewSection
                     title="外部托管软链接（默认跳过不动）"
                     count={preview.skippedExternalLinks.length}
-                    icon={<ExternalLink className="size-4 shrink-0 text-ink-mid" aria-hidden />}
+                    icon={<ExternalLink className="size-4 shrink-0 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />}
                     defaultOpen={true}
                     testId="reconcile-section-external"
                   >
-                    <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-surface px-3.5 py-3">
+                    <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-canvas px-3.5 py-3">
                       <Checkbox
                         checked={includeExternalLinks}
                         disabled={isBusy}
@@ -331,11 +343,11 @@ export function ReconcileDialog({
                         </p>
                       </div>
                     </label>
-                    <ul className="divide-y divide-line rounded-xl border border-line bg-white">
+                    <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
                       {preview.skippedExternalLinks.map((item) => (
                         <li
                           key={item.clientId + ":" + item.skillName + ":" + item.linkPath}
-                          className="space-y-1 px-3.5 py-2.5"
+                          className="space-y-1 px-4 py-2.5"
                         >
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="font-mono text-xs font-medium text-ink-strong">
@@ -358,15 +370,15 @@ export function ReconcileDialog({
                   <PreviewSection
                     title="保持不动的非 Skill 文件与保留目录"
                     count={preview.untouchedNonSkill.length}
-                    icon={<ShieldOff className="size-4 shrink-0 text-ink-mid" aria-hidden />}
+                    icon={<ShieldOff className="size-4 shrink-0 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />}
                     defaultOpen={false}
                     testId="reconcile-section-untouched"
                   >
-                    <ul className="divide-y divide-line rounded-xl border border-line bg-white">
+                    <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
                       {preview.untouchedNonSkill.map((entry) => (
                         <li
                           key={entry.clientId + ":" + entry.name + ":" + (entry.path ?? "")}
-                          className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2"
+                          className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
                         >
                           <div className="flex min-w-0 items-center gap-2">
                             <span className="truncate font-mono text-xs text-ink-strong">{entry.name}</span>
@@ -378,16 +390,16 @@ export function ReconcileDialog({
                     </ul>
                   </PreviewSection>
                 )}
-              </>
+              </div>
             )}
-          </div>
+          </DeferredReveal>
         </ScrollArea>
 
         <Separator className="mt-4" />
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-ink-mid">
-            <ShieldCheck className="size-4 shrink-0 text-ink-mid" aria-hidden />
+          <div className="flex items-center gap-2 text-xs text-ink-mid">
+            <ShieldAuditGlyph size={16} className="text-ink-mid" />
             {loading || preview === null ? (
               <span>正在分析客户端差异…</span>
             ) : actionableCount > 0 ? (

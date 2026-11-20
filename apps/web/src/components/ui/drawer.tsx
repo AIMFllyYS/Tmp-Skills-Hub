@@ -17,7 +17,7 @@ export interface DrawerProps {
   testId?: string;
 }
 
-/** 右侧滑入抽屉（无毛玻璃、无大阴影，使用 --ease-smooth 动效，用于历史抽屉与详情检查）。 */
+/** 右侧滑入抽屉（无毛玻璃，商务精雕阴影 + --ease-smooth 滑入，用于历史抽屉与详情检查）。 */
 export function Drawer({
   open,
   onOpenChange,
@@ -32,39 +32,39 @@ export function Drawer({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="dialog-backdrop fixed inset-0 z-50 bg-ink-strong/40" />
+        <DialogPrimitive.Backdrop className="dialog-backdrop fixed inset-0 z-50 bg-ink-strong/35" />
         <DialogPrimitive.Popup
           data-testid={testId}
           className={cn(
-            "drawer-popup fixed top-0 right-0 bottom-0 z-50 flex w-full max-w-xl flex-col border-l border-line bg-white outline-none",
+            "drawer-popup fixed top-0 right-0 bottom-0 z-50 flex w-full max-w-xl flex-col border-l border-line bg-white shadow-[var(--shadow-overlay)] outline-none",
             className,
           )}
         >
-          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-5 py-4">
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-white px-6 py-4">
             <div className="min-w-0 flex-1">
-              <DialogPrimitive.Title className="text-base font-medium text-ink-strong">
+              <DialogPrimitive.Title className="text-base font-semibold tracking-tight text-ink-strong">
                 {title}
               </DialogPrimitive.Title>
               {description !== undefined && description !== "" && (
-                <DialogPrimitive.Description className="mt-1 text-xs text-ink-mid">
+                <DialogPrimitive.Description className="mt-1 text-xs leading-relaxed text-ink-mid">
                   {description}
                 </DialogPrimitive.Description>
               )}
-              {headerExtra !== undefined && <div className="mt-2">{headerExtra}</div>}
+              {headerExtra !== undefined && <div className="mt-2.5">{headerExtra}</div>}
             </div>
             <DialogPrimitive.Close
               render={
                 <Button type="button" variant="ghost" size="icon" aria-label="关闭抽屉">
-                  <X className="size-4 text-ink-mid" aria-hidden />
+                  <X className="size-4 text-ink-mid" strokeWidth={1.6} aria-hidden />
                 </Button>
               }
             />
           </div>
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="p-5">{children}</div>
+          <ScrollArea className="min-h-0 flex-1 bg-canvas/45">
+            <div className="p-6">{children}</div>
           </ScrollArea>
           {footer !== undefined && (
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-line bg-white px-6 py-3.5">
               {footer}
             </div>
           )}

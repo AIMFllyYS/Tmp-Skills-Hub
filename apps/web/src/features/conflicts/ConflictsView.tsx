@@ -5,19 +5,19 @@ import {
   Check,
   CheckCircle2,
   GitBranchPlus,
-  GitCompareArrows,
-  Search,
   ShieldCheck,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { UnifiedDiffFile } from "@/components/ui/diff-viewer";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ConflictConvergeGlyph, ICON_STROKE, IconBadge } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { SearchInput } from "@/components/ui/search-input";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { Tooltip, TruncateTip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -170,18 +170,16 @@ export function ConflictsView({
   if (conflicts.length === 0) {
     return (
       <div
-        className="motion-enter flex min-h-0 flex-1 items-center justify-center p-6"
+        className="motion-enter flex min-h-0 flex-1 items-center justify-center bg-canvas/50 p-6"
         data-testid="conflicts-empty"
       >
-        <Card className="max-w-md space-y-2 text-center">
-          <div className="mx-auto flex size-9 items-center justify-center rounded-full bg-green-50 text-green-700">
-            <CheckCircle2 className="size-4" aria-hidden />
-          </div>
-          <p className="text-sm font-medium text-ink-strong">当前没有待处理的同名冲突</p>
-          <p className="text-xs text-ink-mid">
-            所有客户端中的同名 Skill 均已收敛至唯一真源，不存在未决版本分叉。
-          </p>
-        </Card>
+        <EmptyState
+          icon={<CheckCircle2 className="size-5" strokeWidth={ICON_STROKE} />}
+          iconTone="success"
+          title="当前没有待处理的同名冲突"
+          description="所有客户端中的同名 Skill 均已收敛至唯一真源，不存在未决版本分叉。"
+          className="max-w-md bg-white"
+        />
       </div>
     );
   }
@@ -191,23 +189,16 @@ export function ConflictsView({
       className="motion-enter flex min-h-0 flex-1 overflow-hidden bg-white"
       data-testid="conflicts-view"
     >
-      <aside className="flex w-64 shrink-0 flex-col border-r border-line">
-        <div className="shrink-0 space-y-2 border-b border-line p-3">
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint"
-              aria-hidden
-            />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索冲突 Skill 或客户端…"
-              aria-label="搜索冲突 Skill"
-              data-testid="conflicts-search"
-              className="pl-8"
-            />
-          </div>
-          <p className="text-xs text-ink-faint">
+      <aside className="flex w-68 shrink-0 flex-col border-r border-line bg-canvas/65">
+        <div className="shrink-0 space-y-2 border-b border-line bg-white p-3">
+          <SearchInput
+            value={query}
+            onValueChange={setQuery}
+            placeholder="搜索冲突 Skill 或客户端…"
+            aria-label="搜索冲突 Skill"
+            testId="conflicts-search"
+          />
+          <p className="px-0.5 text-xs text-ink-faint">
             {query.trim() === ""
               ? "共 " + String(conflicts.length) + " 项待处理冲突"
               : "匹配 " + String(filteredConflicts.length) + " / " + String(conflicts.length) + " 项"}
@@ -218,7 +209,7 @@ export function ConflictsView({
           {filteredConflicts.length === 0 ? (
             <p className="px-4 py-3 text-xs text-ink-mid">未找到匹配的冲突 Skill。</p>
           ) : (
-            <div className="space-y-1 px-2">
+            <div className="space-y-1.5 px-2.5">
               {filteredConflicts.map((item) => {
                 const selected = activeConflict?.skillName === item.skillName;
                 const clients = collectConflictClients(item);
@@ -232,10 +223,10 @@ export function ConflictsView({
                     data-testid={"conflict-item-" + item.skillName}
                     onClick={() => onSelectSkill(item.skillName)}
                     className={cn(
-                      "motion-row flex w-full flex-col gap-1.5 rounded-lg px-3 py-2.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-line-strong",
+                      "motion-row flex w-full flex-col gap-2 rounded-xl border px-3 py-2.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-line-strong",
                       selected
-                        ? "bg-surface text-ink-strong"
-                        : "text-ink-mid hover:bg-surface/70 hover:text-ink-strong",
+                        ? "border-line bg-white text-ink-strong shadow-[var(--shadow-card)]"
+                        : "border-transparent text-ink-mid hover:border-line/70 hover:bg-white/75 hover:text-ink-strong",
                     )}
                   >
                     <div className="flex w-full min-w-0 items-center justify-between gap-2">
@@ -243,7 +234,8 @@ export function ConflictsView({
                         {item.shorterContentWarning && (
                           <Tooltip label="较新版本内容更短，请优先核对" side="right">
                             <AlertTriangle
-                              className="size-4 shrink-0 text-amber-800"
+                              className="size-3.5 shrink-0 text-amber-700"
+                              strokeWidth={ICON_STROKE}
                               aria-label="内容变短预警"
                             />
                           </Tooltip>
@@ -253,19 +245,24 @@ export function ConflictsView({
                           className="min-w-0 flex-1 text-sm font-medium text-ink-strong"
                         />
                       </span>
-                      <Badge tone={item.shorterContentWarning ? "warning" : "neutral"} className="shrink-0">
+                      <Badge
+                        tone={item.shorterContentWarning ? "warning" : "neutral"}
+                        className="shrink-0 px-2 py-0 text-[11px]"
+                      >
                         {String(item.variants.length)} 变体
                       </Badge>
                     </div>
                     {visibleClients.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {visibleClients.map((client) => (
-                          <Badge key={client} tone="neutral">
+                          <Badge key={client} tone="neutral" className="px-2 py-0 text-[11px]">
                             {client}
                           </Badge>
                         ))}
                         {extraClientCount > 0 && (
-                          <Badge tone="neutral">+{String(extraClientCount)}</Badge>
+                          <Badge tone="neutral" className="px-2 py-0 text-[11px]">
+                            +{String(extraClientCount)}
+                          </Badge>
                         )}
                       </div>
                     )}
@@ -277,19 +274,25 @@ export function ConflictsView({
         </ScrollArea>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-canvas/35">
         {activeConflict !== null && (
           <>
             <header className="shrink-0 border-b border-line bg-white px-6 py-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <GitCompareArrows className="size-4 shrink-0 text-ink-mid" aria-hidden />
-                  <h2 className="truncate text-base font-medium text-ink-strong">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <IconBadge size="sm" tone={activeConflict.shorterContentWarning ? "warning" : "slate"}>
+                    <ConflictConvergeGlyph size={16} />
+                  </IconBadge>
+                  <h2 className="truncate text-base font-semibold tracking-tight text-ink-strong">
                     {activeConflict.skillName}
                   </h2>
-                  <Badge className="font-mono">{activeConflict.activeHash.slice(0, 12)}</Badge>
+                  <Badge tone="slate" className="font-mono">
+                    {activeConflict.activeHash.slice(0, 12)}
+                  </Badge>
                   {activeConflict.shorterContentWarning && (
-                    <Badge tone="warning">内容变短预警</Badge>
+                    <Badge tone="warning" dot>
+                      内容变短预警
+                    </Badge>
                   )}
                 </div>
                 <span className="text-xs text-ink-faint">
@@ -297,7 +300,7 @@ export function ConflictsView({
                 </span>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-3.5 flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -306,7 +309,7 @@ export function ConflictsView({
                   disabled={effectiveBusy}
                   onClick={() => setConfirmAction("keep-active")}
                 >
-                  <ShieldCheck className="size-4 text-ink-mid" aria-hidden />
+                  <ShieldCheck className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
                   保留当前真源
                 </Button>
 
@@ -318,7 +321,7 @@ export function ConflictsView({
                   disabled={effectiveBusy || effectiveVariantId === null}
                   onClick={() => setConfirmAction("promote-variant")}
                 >
-                  <Check className="size-4 text-ink-mid" aria-hidden />
+                  <Check className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
                   设为真源
                 </Button>
 
@@ -330,7 +333,7 @@ export function ConflictsView({
                   disabled={effectiveBusy || effectiveVariantId === null}
                   onClick={openSplitDialog}
                 >
-                  <GitBranchPlus className="size-4 text-ink-mid" aria-hidden />
+                  <GitBranchPlus className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
                   拆分为独立 Skill
                 </Button>
 
@@ -347,7 +350,7 @@ export function ConflictsView({
                     )
                   }
                 >
-                  <Bot className="size-4 text-white" aria-hidden />
+                  <Bot className="size-3.5 text-white" strokeWidth={ICON_STROKE} aria-hidden />
                   交给 Agent 分析并合并
                 </Button>
               </div>

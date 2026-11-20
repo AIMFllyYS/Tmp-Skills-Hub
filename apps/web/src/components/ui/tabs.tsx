@@ -11,7 +11,7 @@ export interface SegmentedTabItem<T extends string> {
   badge?: number;
 }
 
-/** 分段胶囊控制器：浅灰底槽 + 白底选中块，弹簧过渡。 */
+/** 分段胶囊控制器：同心圆角（外槽 10px / 内块 7px）+ 浅石膏槽 + 白底微高度选中块。 */
 export function SegmentedTabs<T extends string>({
   value,
   onChange,
@@ -29,23 +29,26 @@ export function SegmentedTabs<T extends string>({
 }): React.JSX.Element {
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const onKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
-    if (disabled) return;
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
-    const item = items[stepTabIndex(items.findIndex((it) => it.id === value), e.key, items.length)];
-    if (item === undefined) return;
-    e.preventDefault();
-    onChange(item.id);
-    const i = items.findIndex((it) => it.id === item.id);
-    if (i >= 0) buttons.current[i]?.focus();
-  }, [disabled, items, onChange, value]);
+  const onKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (disabled) return;
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
+      const item = items[stepTabIndex(items.findIndex((it) => it.id === value), e.key, items.length)];
+      if (item === undefined) return;
+      e.preventDefault();
+      onChange(item.id);
+      const i = items.findIndex((it) => it.id === item.id);
+      if (i >= 0) buttons.current[i]?.focus();
+    },
+    [disabled, items, onChange, value],
+  );
 
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
-      className="inline-flex rounded-lg bg-surface p-1"
+      className="inline-flex rounded-[10px] border border-line/80 bg-surface p-0.5"
     >
       {items.map((item, i) => {
         const active = item.id === value;
@@ -63,9 +66,9 @@ export function SegmentedTabs<T extends string>({
             }}
             onClick={() => onChange(item.id)}
             className={cn(
-              "inline-flex items-center rounded-md outline-none motion-press",
+              "inline-flex items-center rounded-[7px] outline-none motion-press",
               "focus-visible:ring-1 focus-visible:ring-line-strong",
-              size === "sm" ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm",
+              size === "sm" ? "px-2.5 py-1 text-xs" : "px-3.5 py-1.5 text-sm",
               active
                 ? "bg-white font-medium text-ink-strong shadow-[var(--shadow-thumb)]"
                 : "text-ink-mid hover:text-ink-strong",
@@ -75,8 +78,10 @@ export function SegmentedTabs<T extends string>({
             {item.badge !== undefined && item.badge > 0 && (
               <span
                 className={cn(
-                  "ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums",
-                  active ? "bg-surface text-ink-strong" : "bg-amber-50 text-amber-800",
+                  "ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full px-1.5 text-[11px] font-medium tabular-nums",
+                  active
+                    ? "bg-ink-strong text-white"
+                    : "border border-amber-200 bg-amber-50 text-amber-800",
                 )}
               >
                 {String(item.badge)}

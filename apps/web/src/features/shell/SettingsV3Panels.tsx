@@ -5,7 +5,6 @@ import {
   FileWarning,
   Link2Off,
   Monitor,
-  Wrench,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -14,10 +13,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ICON_STROKE, IconBadge, ShieldAuditGlyph } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PathField } from "@/components/ui/path-field";
 import { Separator } from "@/components/ui/separator";
+import { SettingGroup, SettingRow } from "@/components/ui/setting-row";
 import { StepList, type StepItem } from "@/components/ui/step-list";
 import { Switch } from "@/components/ui/switch";
 import { TruncateTip } from "@/components/ui/tooltip";
@@ -217,8 +218,8 @@ export function MigrateStoreDialog({
 
         <div className="mt-4 space-y-4">
           <div className="space-y-1">
-            <span className="text-xs text-ink-faint">当前唯一真源</span>
-            <div className="rounded-lg border border-line bg-surface px-3 py-2">
+            <span className="text-xs font-medium text-ink-faint">当前唯一真源</span>
+            <div className="rounded-xl border border-line bg-canvas px-3 py-2">
               <TruncateTip
                 text={currentSkillsRoot === "" ? "未配置" : currentSkillsRoot}
                 className="font-mono text-xs text-ink-mid"
@@ -254,7 +255,7 @@ export function MigrateStoreDialog({
 
           <Separator />
 
-          <div className="space-y-2">
+          <div className="space-y-2.5 rounded-xl border border-line bg-canvas/70 p-4">
             <p className="text-xs font-medium text-ink-mid">迁移将按以下 4 步安全执行</p>
             <StepList items={steps} />
           </div>
@@ -328,41 +329,55 @@ export function SelfHealSection({
     <section className={cn("space-y-3", className)} data-testid="self-heal-section">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Wrench className="size-4 text-ink-mid" aria-hidden />
+          <IconBadge size="xs" tone={healthy ? "success" : "warning"}>
+            <ShieldAuditGlyph size={14} />
+          </IconBadge>
           <Label>自愈与健康检查</Label>
         </div>
         {healthy ? (
-          <Badge tone="success">状态健康</Badge>
+          <Badge tone="success" dot>
+            状态健康
+          </Badge>
         ) : (
-          <Badge tone="warning">{String(issueTotal) + " 项待处理"}</Badge>
+          <Badge tone="warning" dot>
+            {String(issueTotal) + " 项待处理"}
+          </Badge>
         )}
       </div>
 
       {healthy ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200/80 bg-emerald-50/50 px-4 py-3.5">
           <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="size-4 shrink-0 text-green-700" aria-hidden />
-            <p className="text-sm text-ink-mid">未发现悬空客户端台账或内容指纹漂移。</p>
+            <IconBadge size="xs" tone="success">
+              <CheckCircle2 className="size-3.5" strokeWidth={ICON_STROKE} />
+            </IconBadge>
+            <p className="text-sm text-emerald-900">未发现悬空客户端台账或内容指纹漂移。</p>
           </div>
-          <Badge tone="success">全部正常</Badge>
+          <Badge tone="success" dot>
+            全部正常
+          </Badge>
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {safeDangling > 0 && (
             <div
-              className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-line bg-white p-4"
+              className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-line bg-white p-4 shadow-[var(--shadow-card)]"
               data-testid="self-heal-dangling-row"
             >
-              <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                <Link2Off className="mt-0.5 size-4 shrink-0 text-amber-800" aria-hidden />
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <IconBadge size="sm" tone="warning" className="mt-0.5">
+                  <Link2Off className="size-4" strokeWidth={ICON_STROKE} />
+                </IconBadge>
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium text-ink-strong">
                       {String(safeDangling) + " 条悬空客户端台账记录"}
                     </p>
-                    <Badge tone="warning">doctor --prune</Badge>
+                    <Badge tone="warning" className="font-mono">
+                      doctor --prune
+                    </Badge>
                   </div>
-                  <p className="text-xs text-ink-mid">
+                  <p className="text-xs leading-relaxed text-ink-mid">
                     对应客户端目录或软链接已不存在，清理仅移除 links.json 失效条目，不触碰本机任何文件。
                   </p>
                 </div>
@@ -382,20 +397,24 @@ export function SelfHealSection({
 
           {driftedSkills.length > 0 && (
             <div
-              className="space-y-3 rounded-xl border border-line bg-white p-4"
+              className="space-y-3 rounded-2xl border border-line bg-white p-4 shadow-[var(--shadow-card)]"
               data-testid="self-heal-drifted-row"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                  <FileWarning className="mt-0.5 size-4 shrink-0 text-amber-800" aria-hidden />
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <IconBadge size="sm" tone="warning" className="mt-0.5">
+                    <FileWarning className="size-4" strokeWidth={ICON_STROKE} />
+                  </IconBadge>
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-medium text-ink-strong">
                         {String(driftedSkills.length) + " 个 Skill 内容已在外部更新"}
                       </p>
-                      <Badge tone="warning">verify --accept</Badge>
+                      <Badge tone="warning" className="font-mono">
+                        verify --accept
+                      </Badge>
                     </div>
-                    <p className="text-xs text-ink-mid">
+                    <p className="text-xs leading-relaxed text-ink-mid">
                       认领当前唯一真源文件内容，重算确定性 SHA-256 指纹并同步更新索引与软链接台账。
                     </p>
                   </div>
@@ -412,7 +431,7 @@ export function SelfHealSection({
                 </Button>
               </div>
 
-              <div className="flex flex-wrap gap-1.5 pl-6">
+              <div className="flex flex-wrap gap-1.5 pl-11">
                 {visibleDrifted.map((name) => (
                   <Badge key={name} tone="warning" className="font-mono">
                     {name}
@@ -421,7 +440,7 @@ export function SelfHealSection({
               </div>
 
               {extraDrifted.length > 0 && (
-                <Collapsible open={driftedExpanded} onOpenChange={setDriftedExpanded} className="pl-6">
+                <Collapsible open={driftedExpanded} onOpenChange={setDriftedExpanded} className="pl-11">
                   <CollapsibleTrigger className="px-2.5 py-1.5 text-xs text-ink-mid">
                     <span>
                       {driftedExpanded
@@ -430,6 +449,7 @@ export function SelfHealSection({
                     </span>
                     <ChevronRight
                       className={cn("motion-chevron size-3.5 text-ink-faint", driftedExpanded && "rotate-90")}
+                      strokeWidth={ICON_STROKE}
                       aria-hidden
                     />
                   </CollapsibleTrigger>
@@ -524,50 +544,43 @@ export function DesktopAutoLaunchSection({
 
   return (
     <section className={cn("space-y-3", className)} data-testid="desktop-autolaunch-section">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label>桌面启动与托盘巡检</Label>
-        {!isDesktop && <Badge>仅在桌面客户端中可用</Badge>}
-      </div>
-
-      <div className="divide-y divide-line rounded-xl border border-line bg-white">
-        <div className={cn("flex items-center justify-between gap-4 p-4", !isDesktop && "opacity-65")}>
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
-            <Monitor className="mt-0.5 size-4 shrink-0 text-ink-mid" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-ink-strong">开机自启</p>
-              <p className="mt-0.5 text-xs text-ink-mid">
-                登录系统后自动启动 Skills Hub 本地服务与客户端状态巡检。
-              </p>
-            </div>
-          </div>
-          <Switch
-            checked={autoLaunch}
-            disabled={controlsDisabled || busyKey === "autoLaunch"}
-            aria-label="开机自启"
-            data-testid="settings-auto-launch-switch"
-            onCheckedChange={(next) => void handleToggle("autoLaunch", next, onAutoLaunchChange)}
-          />
-        </div>
-
-        <div className={cn("flex items-center justify-between gap-4 p-4", !isDesktop && "opacity-65")}>
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
-            <BellRing className="mt-0.5 size-4 shrink-0 text-ink-mid" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-ink-strong">静默启动至托盘</p>
-              <p className="mt-0.5 text-xs text-ink-mid">
-                开机时不弹出主窗口，仅在巡检发现野生真目录或同名版本冲突时推送提醒。
-              </p>
-            </div>
-          </div>
-          <Switch
-            checked={silentTray}
-            disabled={controlsDisabled || busyKey === "silentTray"}
-            aria-label="静默启动至托盘"
-            data-testid="settings-silent-tray-switch"
-            onCheckedChange={(next) => void handleToggle("silentTray", next, onSilentTrayChange)}
-          />
-        </div>
-      </div>
+      <SettingGroup
+        title="桌面启动与托盘巡检"
+        badge={!isDesktop ? <Badge tone="slate">仅在桌面客户端中可用</Badge> : undefined}
+      >
+        <SettingRow
+          icon={<Monitor className="size-4" strokeWidth={ICON_STROKE} />}
+          iconTone="surface"
+          title="开机自启"
+          description="登录系统后自动启动 Skills Hub 本地服务与客户端状态巡检。"
+          disabled={!isDesktop}
+          control={
+            <Switch
+              checked={autoLaunch}
+              disabled={controlsDisabled || busyKey === "autoLaunch"}
+              aria-label="开机自启"
+              data-testid="settings-auto-launch-switch"
+              onCheckedChange={(next) => void handleToggle("autoLaunch", next, onAutoLaunchChange)}
+            />
+          }
+        />
+        <SettingRow
+          icon={<BellRing className="size-4" strokeWidth={ICON_STROKE} />}
+          iconTone="surface"
+          title="静默启动至托盘"
+          description="开机时不弹出主窗口，仅在巡检发现野生真目录或同名版本冲突时推送提醒。"
+          disabled={!isDesktop}
+          control={
+            <Switch
+              checked={silentTray}
+              disabled={controlsDisabled || busyKey === "silentTray"}
+              aria-label="静默启动至托盘"
+              data-testid="settings-silent-tray-switch"
+              onCheckedChange={(next) => void handleToggle("silentTray", next, onSilentTrayChange)}
+            />
+          }
+        />
+      </SettingGroup>
 
       {!isDesktop && (
         <p className="text-xs text-ink-faint">

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Check, Copy, ExternalLink, KeyRound, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { ICON_STROKE, IconBadge, ShieldAuditGlyph } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StepList, type StepItem } from "@/components/ui/step-list";
 import type { GhLoginSession } from "./types.js";
@@ -150,23 +151,28 @@ export function GhLoginDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md space-y-4" data-testid="gh-login-dialog">
-        <div>
-          <div className="flex items-center justify-between gap-2">
-            <DialogTitle>通过 gh 登录 GitHub</DialogTitle>
-            {session?.status === "authenticated" && <Badge tone="success">已授权</Badge>}
-            {session?.status === "pending" && <Badge tone="neutral">等待授权</Badge>}
-            {session?.status === "expired" && <Badge tone="warning">已过期</Badge>}
-            {session?.status === "error" && <Badge tone="danger">异常</Badge>}
+        <div className="flex items-start gap-3">
+          <IconBadge size="md" tone="obsidian">
+            <KeyRound className="size-4" strokeWidth={ICON_STROKE} />
+          </IconBadge>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle>通过 gh 登录 GitHub</DialogTitle>
+              {session?.status === "authenticated" && <Badge tone="success" dot>已授权</Badge>}
+              {session?.status === "pending" && <Badge tone="slate" dot>等待授权</Badge>}
+              {session?.status === "expired" && <Badge tone="warning" dot>已过期</Badge>}
+              {session?.status === "error" && <Badge tone="danger" dot>异常</Badge>}
+            </div>
+            <DialogDescription>
+              使用 GitHub 官方设备码（Device Flow）完成本机 gh CLI 登录，无需手动申请或复制 Token。
+            </DialogDescription>
           </div>
-          <DialogDescription>
-            使用 GitHub 官方设备码（Device Flow）完成本机 gh CLI 登录，无需手动申请或复制 Token。
-          </DialogDescription>
         </div>
 
         {session === null ? (
           isStarting ? (
             <div className="space-y-3" aria-busy="true" aria-label="正在获取设备验证码">
-              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full rounded-xl" />
               <StepList
                 items={[
                   {
@@ -179,8 +185,8 @@ export function GhLoginDialog({
               />
             </div>
           ) : (
-            <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
-              <p className="text-sm text-ink-mid">
+            <div className="space-y-3 rounded-2xl border border-line bg-canvas p-4">
+              <p className="text-sm leading-relaxed text-ink-mid">
                 点击下方按钮获取 8 位一次性设备码，随后在浏览器中粘贴并确认即可完成授权。
               </p>
               <Button
@@ -190,18 +196,20 @@ export function GhLoginDialog({
                 data-testid="gh-login-start"
                 onClick={() => void handleStart()}
               >
-                <KeyRound className="size-4 text-white" aria-hidden />
+                <KeyRound className="size-4 text-white" strokeWidth={ICON_STROKE} aria-hidden />
                 获取一次性设备码
               </Button>
             </div>
           )
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl border border-line bg-surface px-4 py-5 text-center">
-              <p className="text-xs text-ink-faint">一次性设备验证码</p>
+            <div className="rounded-2xl border border-line bg-canvas px-4 py-5 text-center shadow-[var(--shadow-card)]">
+              <p className="text-[11px] font-medium uppercase tracking-widest text-ink-faint">
+                一次性设备验证码
+              </p>
               <p
                 data-testid="gh-device-code"
-                className="mt-2 select-all font-mono text-2xl font-semibold tracking-[0.22em] text-ink-strong"
+                className="mt-2 select-all font-mono text-2xl font-semibold tracking-[0.24em] text-ink-strong"
               >
                 {session.userCode}
               </p>
@@ -220,12 +228,12 @@ export function GhLoginDialog({
                 onClick={handleCopyAndOpen}
               >
                 {copied ? (
-                  <Check className="size-4 text-white" aria-hidden />
+                  <Check className="size-4 text-white" strokeWidth={ICON_STROKE} aria-hidden />
                 ) : (
-                  <Copy className="size-4 text-white" aria-hidden />
+                  <Copy className="size-4 text-white" strokeWidth={ICON_STROKE} aria-hidden />
                 )}
                 <span>{copied ? "已复制验证码并打开授权页" : "复制验证码并打开 GitHub 授权页"}</span>
-                <ExternalLink className="size-4 text-white" aria-hidden />
+                <ExternalLink className="size-3.5 text-white/80" strokeWidth={ICON_STROKE} aria-hidden />
               </Button>
 
               {(session.status === "expired" || session.status === "error") && (
@@ -237,13 +245,15 @@ export function GhLoginDialog({
                   disabled={isStarting}
                   onClick={() => void handleStart()}
                 >
-                  <RefreshCw className="size-4 text-ink-mid" aria-hidden />
+                  <RefreshCw className="size-3.5 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />
                   {isStarting ? "重新获取中…" : "重新获取设备码"}
                 </Button>
               )}
             </div>
 
-            <StepList items={buildLoginSteps(session)} />
+            <div className="rounded-2xl border border-line bg-white p-4">
+              <StepList items={buildLoginSteps(session)} />
+            </div>
           </div>
         )}
 
@@ -253,8 +263,8 @@ export function GhLoginDialog({
           </p>
         )}
 
-        <div className="flex items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink-mid">
-          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ink-mid" aria-hidden />
+        <div className="flex items-start gap-2.5 rounded-xl border border-line bg-canvas px-3.5 py-2.5 text-xs leading-relaxed text-ink-mid">
+          <ShieldAuditGlyph size={16} className="mt-0.5 text-ink-mid" />
           <span>
             凭据安全说明：授权凭据仅由本机官方 gh CLI 托管，Skills Hub 全程不读取、不记录、不保存任何明文 GitHub Token。
           </span>
