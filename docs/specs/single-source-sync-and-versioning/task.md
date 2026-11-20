@@ -127,7 +127,7 @@
 
 ### E5: 可选 Git 版本控制与 GitHub CLI 云端备份 | Epic #238 | Block A + B + C | PRD L384-L445
 
-- [ ] **T5.1** `[cli]` Git 进程封装、环境检测、安全 `.gitignore` 与确定性自动 Commit 引擎 — [#251](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/251) | [PRD.md#L386-L401](./PRD.md#L386-L401)
+- [x] **T5.1** `[cli]` Git 进程封装、环境检测、安全 `.gitignore` 与确定性自动 Commit 引擎 — [#251](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/251) | [PRD.md#L386-L401](./PRD.md#L386-L401)
   - **depends-on**: T1.2 (#240)
   - **负责模块**: `packages/cli/src/git/{git-runner.ts,git-repo.ts,secret-scan.ts,index.ts}`(新增), `packages/cli/test/git.test.ts`(新增)
   - **复用资产**: `scrub` (`llm/errors.ts`), `HubPaths`, `isIgnoredSkillEntry`
