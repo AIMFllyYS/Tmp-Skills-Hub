@@ -62,7 +62,7 @@ export function DiffViewer({
 
   return (
     <div className={cn("grid min-h-0 grid-cols-1 overflow-hidden rounded-xl border border-line bg-white md:grid-cols-[220px_minmax(0,1fr)]", className)}>
-      <div className="border-b border-line bg-surface md:border-r md:border-b-0">
+      <div className="min-w-0 overflow-hidden border-b border-line bg-surface md:border-r md:border-b-0">
         <div className="border-b border-line px-3 py-2 text-xs font-medium text-ink-mid">
           变更文件（{String(files.length)}）
         </div>
@@ -73,16 +73,16 @@ export function DiffViewer({
               const Icon = meta.icon;
               const active = current?.relPath === file.relPath;
               return (
-                <li key={file.relPath}>
+                <li key={file.relPath} className="min-w-0">
                   <button
                     type="button"
                     onClick={() => setSelectedPath(file.relPath)}
                     className={cn(
-                      "motion-row flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs outline-none",
+                      "motion-row flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2 text-left text-xs outline-none",
                       active ? "bg-white font-medium text-ink-strong" : "text-ink-mid hover:bg-white/60",
                     )}
                   >
-                    <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
                       <Icon className="size-3.5 shrink-0 text-ink-mid" aria-hidden />
                       <span className="truncate font-mono">{file.relPath}</span>
                     </span>

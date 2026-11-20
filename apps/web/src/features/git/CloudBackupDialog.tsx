@@ -91,7 +91,7 @@ export function CloudBackupDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="flex max-h-[min(42rem,90vh)] max-w-lg flex-col"
+        className="flex max-h-[min(42rem,90vh)] max-w-xl flex-col"
         data-testid="cloud-backup-dialog"
       >
         <DialogTitle>一键创建云端备份仓库</DialogTitle>
@@ -214,35 +214,37 @@ export function CloudBackupDialog({
                   description="强烈建议先清理或脱敏以下行，或改用 Private 私有仓库后再推送。"
                 />
 
-                <Table>
-                  <TableHead>
-                    <TableRow className="h-9">
-                      <TableTh>文件</TableTh>
-                      <TableTh className="w-16">行号</TableTh>
-                      <TableTh>脱敏片段</TableTh>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {findings.map((item, idx) => (
-                      <TableRow key={item.file + ":" + String(item.line) + ":" + String(idx)}>
-                        <TableTd className="font-mono text-xs text-ink-strong">
-                          <span>{item.file}</span>
-                          {item.rule !== undefined && item.rule !== "" && (
-                            <Badge tone="neutral" className="ml-1.5">
-                              {item.rule}
-                            </Badge>
-                          )}
-                        </TableTd>
-                        <TableTd className="font-mono text-xs text-ink-mid">
-                          L{String(item.line)}
-                        </TableTd>
-                        <TableTd className="font-mono text-xs text-red-700">
-                          {item.preview}
-                        </TableTd>
+                <div className="overflow-x-auto rounded-lg border border-line">
+                  <Table className="table-fixed">
+                    <TableHead>
+                      <TableRow className="h-9">
+                        <TableTh className="w-5/12">文件</TableTh>
+                        <TableTh className="w-14">行号</TableTh>
+                        <TableTh className="w-6/12">脱敏片段</TableTh>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {findings.map((item, idx) => (
+                        <TableRow key={item.file + ":" + String(item.line) + ":" + String(idx)}>
+                          <TableTd className="break-all font-mono text-xs text-ink-strong">
+                            <span>{item.file}</span>
+                            {item.rule !== undefined && item.rule !== "" && (
+                              <Badge tone="neutral" className="ml-1.5">
+                                {item.rule}
+                              </Badge>
+                            )}
+                          </TableTd>
+                          <TableTd className="font-mono text-xs text-ink-mid">
+                            L{String(item.line)}
+                          </TableTd>
+                          <TableTd className="break-all font-mono text-xs text-red-700">
+                            {item.preview}
+                          </TableTd>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
 
                 {needsSecretAck && (
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">

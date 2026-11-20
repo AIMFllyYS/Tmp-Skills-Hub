@@ -14,8 +14,8 @@ export function ScrollArea({
 }): React.JSX.Element {
   return (
     <ScrollAreaPrimitive.Root className={cn("min-h-0 overflow-hidden", className)}>
-      <ScrollAreaPrimitive.Viewport ref={viewportRef} className="h-full overscroll-contain">
-        <ScrollAreaPrimitive.Content className="min-h-full">{children}</ScrollAreaPrimitive.Content>
+      <ScrollAreaPrimitive.Viewport ref={viewportRef} className="h-full w-full overscroll-contain">
+        <ScrollAreaPrimitive.Content className="min-h-full w-full min-w-0">{children}</ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
     </ScrollAreaPrimitive.Root>
   );
