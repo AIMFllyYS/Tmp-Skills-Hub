@@ -105,7 +105,7 @@
   - **depends-on**: T2.2 (#243)
   - **负责模块**: `packages/core/src/conflict-diff.ts`(新增), `packages/core/src/conflict-resolve.ts`(新增), `conflicts.ts`, `index.ts`
   - **复用资产**: `listSkillFiles`, `readSkillFile`, `saveSkillFile`, `hashSkillFolder`, `zipDirectory`, `readStoreIndex`, `writeStoreIndex`, `readGroups`, `writeGroups`, `readUsageStats`, `readLinksLedger`, `writeLinksLedger`
-- [ ] **T3.2** `[cli]` `conflicts` CLI 命令、`/api/conflicts/*` 端点与 4 个 Agent 一等合并工具 — [#247](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/247) | [PRD.md#L305-L328](./PRD.md#L305-L328)
+- [x] **T3.2** `[cli]` `conflicts` CLI 命令、`/api/conflicts/*` 端点与 4 个 Agent 一等合并工具 — [#247](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/247) | [PRD.md#L305-L328](./PRD.md#L305-L328)
   - **depends-on**: T3.1 (#246)
   - **负责模块**: `packages/cli/src/conflict-cmds.ts`(新增), `ui-conflicts.ts`(新增), `agent/tools.ts`, `agent/prompt.ts`, `ui-server.ts`, `index.ts`
   - **复用资产**: `conflicts.ts`, `conflict-diff.ts`, `conflict-resolve.ts`, `safeToolExecute`, `dump`, `WRITE_TOOL_NAMES`, `requireWriteAuth`

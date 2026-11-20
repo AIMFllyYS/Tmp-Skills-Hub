@@ -1,10 +1,10 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ToolSet } from "ai";
 import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
-import { initializeStoreLayout } from "@skills-hub/core";
+import { executeReconcile, initializeStoreLayout, readConflicts, type HubPaths } from "@skills-hub/core";
 import { createSkillsHubAgent, parseWritePolicy } from "../src/agent/agent.js";
 import { buildAgentSystemPrompt } from "../src/agent/prompt.js";
 import {
@@ -180,6 +180,49 @@ describe("createAgentTools", () => {
 });
 
 describe("createSkillsHubAgent", () => {
+  it("reads conflict evidence before requesting approval and leaves the active version intact", async () => {
+    const home = await mkdtemp(path.join(os.tmpdir(), "skills-hub-agent-conflicts-"));
+    tempDirs.push(home);
+    const paths: HubPaths = { stateRoot: path.join(home, "state"), skillsRoot: path.join(home, "assets"), layoutMode: "split" };
+    await initializeStoreLayout(paths);
+    const content = (text: string) => "---\nname: demo\ndescription: sandbox only\n---\n" + text;
+    const secret = "ghp_" + "x".repeat(36);
+    for (const [client, text, time] of [
+      ["claude", "secret fixture " + secret, 1_750_000_000], ["codex", "new draft", 1_750_000_100],
+    ] as const) {
+      const folder = path.join(home, "." + client, "skills", "demo");
+      await mkdir(folder, { recursive: true });
+      const md = path.join(folder, "SKILL.md");
+      await writeFile(md, content(text));
+      await utimes(md, time, time);
+    }
+    expect(await executeReconcile(home, paths)).toMatchObject({ ok: true, conflictCount: 1, failures: [] });
+    const record = (await readConflicts(paths))[0]!;
+    const variantId = record.variants.find((variant) => variant.hash !== record.activeHash)!.variantId;
+    const calls = [
+      ["list_conflicts", {}],
+      ["diff_conflict_variants", { skillName: "demo", variantB: variantId }],
+      ["read_conflict_file", { skillName: "demo", variantId, path: "SKILL.md" }],
+      ["apply_conflict_resolution", { skillName: "demo", mode: "pick", winnerVariantId: variantId, summary: "恢复完整版本" }],
+    ] as const;
+    const model = new MockLanguageModelV3({
+      doGenerate: calls.map(([toolName, input], i) => ({
+        content: [{ type: "tool-call" as const, toolCallId: "conflict-" + String(i), toolName, input: JSON.stringify(input) }],
+        finishReason: { unified: "tool-calls" as const, raw: undefined },
+        usage, warnings: [],
+      })),
+    });
+    const agent = createSkillsHubAgent({ model, env: { home, storeRoot: paths.stateRoot, paths }, clients: [], writePolicy: "ask" });
+    const result = await agent.generate({ prompt: "请先检查证据，再提交决议等我确认" });
+    expect(result.steps.flatMap((step) => step.toolCalls).map((call) => call.toolName)).toEqual(calls.map(([name]) => name));
+    const results = JSON.stringify(result.steps.flatMap((step) => step.toolResults));
+    expect(results).toContain("[redacted]");
+    expect(results).not.toContain(secret);
+    expect(result.content.some((part) => part.type === "tool-approval-request")).toBe(true);
+    expect(await readConflicts(paths)).toEqual([record]);
+    expect(await readFile(path.join(paths.skillsRoot, "demo", "SKILL.md"), "utf8")).toBe(content("new draft"));
+  });
+
   it("无工具调用时 generate 返回正文", async () => {
     const model = new MockLanguageModelV3({
       doGenerate: {

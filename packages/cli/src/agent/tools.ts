@@ -12,6 +12,7 @@ import {
   listArchivedSkills,
   listBackupSnapshots,
   listDrafts,
+  readConflicts,
   readGroups,
   readLinksLedger,
   readSkillFile,
@@ -25,6 +26,7 @@ import {
 import type { AnalyzeGenerate } from "../analyze.js";
 import { performAnalyze } from "../analyze.js";
 import { performAllocate, performCommit, performDiscard } from "../create-cmds.js";
+import { conflictAgentDecision, getSharedConflictDiff, performConflictResolution, readConflictText } from "../conflict-cmds.js";
 import { collectDoctorReport } from "../doctor.js";
 import {
   performCreateGroup,
@@ -57,6 +59,7 @@ export const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "group_update",
   "group_delete",
   "group_members",
+  "apply_conflict_resolution",
 ]);
 
 export interface ToolEnv {
@@ -150,6 +153,43 @@ async function linkChange(
 
 export function createAgentTools(env: ToolEnv): ToolSet {
   return {
+    list_conflicts: tool({
+      description: "列出所有同名技能冲突和各版本的来源、时间与大小。",
+      inputSchema: z.object({}),
+      execute: safeToolExecute(async () => {
+        const root = needStore(env);
+        if ("ok" in root) return root;
+        return dump({ ok: true, conflicts: await readConflicts(root) });
+      }),
+    }),
+    diff_conflict_variants: tool({
+      description: "比较两个技能冲突变体，列出逐文件差异。variantA 默认 active（唯一真源）。",
+      inputSchema: z.object({ skillName: z.string(), variantA: z.string().optional(), variantB: z.string() }),
+      execute: safeToolExecute(async ({ skillName, variantA, variantB }) => {
+        const root = needStore(env);
+        if ("ok" in root) return root;
+        return dump({ ok: true, ...await getSharedConflictDiff(root, skillName, variantA, variantB) });
+      }),
+    }),
+    read_conflict_file: tool({
+      description: "读取冲突变体中的某个 UTF-8 文本文件。path 是相对路径，例如 SKILL.md。",
+      inputSchema: z.object({ skillName: z.string(), variantId: z.string(), path: z.string() }),
+      execute: safeToolExecute(async ({ skillName, variantId, path: relative }) => {
+        const root = needStore(env);
+        if ("ok" in root) return root;
+        const result = await readConflictText(root, skillName, variantId, relative);
+        return result.ok ? { ...result, content: clip(result.content) } : result;
+      }),
+    }),
+    apply_conflict_resolution: tool({
+      description: "提交已说明理由的冲突决议。pick 指定 winnerVariantId，merge 提供 mergedFiles 与可选 deletePaths，split 提供 variantId 和 newName。",
+      inputSchema: conflictAgentDecision,
+      execute: safeToolExecute(async ({ skillName, ...decision }) => {
+        const root = needStore(env);
+        if ("ok" in root) return root;
+        return dump(await performConflictResolution(root, skillName, decision));
+      }),
+    }),
     list_skills: tool({
       description: "列出库存全部 skill(dirName、hash 前缀、描述、已启用客户端)",
       inputSchema: z.object({}),

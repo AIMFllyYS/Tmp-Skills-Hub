@@ -12,6 +12,7 @@ export const AGENT_WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "commit_draft",
   "discard_draft",
   "write_skill_file",
+  "apply_conflict_resolution",
   "group_create",
   "group_update",
   "group_delete",
