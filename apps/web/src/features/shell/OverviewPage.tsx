@@ -4,6 +4,7 @@ import { CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { RescanTriggerButton, type RescanTriggerButtonProps } from "../reconcile/ReconcileBanner.js";
 import type { ClientInfo, DoctorResponse, SkillRecord } from "../skills/types.js";
 import type { ShellNav } from "./page.js";
 import { SelfHealSection } from "./SettingsV3Panels.js";
@@ -19,6 +20,7 @@ interface OverviewPageProps {
   doctorLoading?: boolean;
   backupsLoading?: boolean;
   onGo: (target: ShellNav) => void;
+  rescan: RescanTriggerButtonProps | undefined;
 }
 
 interface IssueItem {
@@ -70,6 +72,7 @@ export function OverviewPage({
   doctorLoading = false,
   backupsLoading = false,
   onGo,
+  rescan,
 }: OverviewPageProps): React.JSX.Element {
   const healthLoading = doctorLoading || backupsLoading;
   const cover = coverageOf(skills);
@@ -94,7 +97,10 @@ export function OverviewPage({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="p-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">总览</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">总览</h1>
+          {rescan !== undefined && <RescanTriggerButton {...rescan} />}
+        </div>
         <p className="mt-1 text-sm text-ink-mid">本机技能库存的整体情况。</p>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <MetricButton

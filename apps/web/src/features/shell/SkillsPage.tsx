@@ -3,6 +3,8 @@ import { Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ConflictConvergeGlyph } from "@/components/ui/icon";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,6 +31,7 @@ const SKILLS_TABS: SegmentedTabItem<SkillsTab>[] = [
   { id: "apps", label: "应用", testId: "skills-tab-apps" },
   { id: "content", label: "内容", testId: "skills-tab-content" },
 ];
+const CONFLICTS_TAB: SegmentedTabItem<SkillsTab> = { id: "conflicts", label: "冲突", testId: "skills-tab-conflicts" };
 
 interface SkillsPageProps {
   tab: SkillsTab;
@@ -153,10 +156,25 @@ export function SkillsPage({
       <header className="shrink-0 border-b border-line px-6 py-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">Skills 管理</h1>
-          <SegmentedTabs ariaLabel="Skills 管理页签" value={tab} onChange={onTab} items={SKILLS_TABS} />
+          <SegmentedTabs
+            ariaLabel="Skills 管理页签"
+            value={tab}
+            onChange={onTab}
+            items={tab === "conflicts" ? [...SKILLS_TABS, CONFLICTS_TAB] : SKILLS_TABS}
+          />
         </div>
       </header>
 
+      {tab === "conflicts" && (
+        <div className="p-6">
+          <EmptyState
+            icon={<ConflictConvergeGlyph size={20} />}
+            title="冲突变体已保存"
+            description="各版本已单独入库。冲突处理界面将在后续更新开放。"
+            action={<Button variant="outline" onClick={() => onTab("content")}>查看当前真源</Button>}
+          />
+        </div>
+      )}
       {tab === "apps" && (
         <div className="motion-enter flex min-h-0 flex-1" data-testid="skills-apps-pane">
           <div className="flex w-52 shrink-0 flex-col border-r border-line">
