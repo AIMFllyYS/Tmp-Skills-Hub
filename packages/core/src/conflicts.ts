@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readFile, realpath } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rmdir } from "node:fs/promises";
 import path from "node:path";
 import { copyTreeJunctionSafe, moveDirSafe, unlinkNoFollow, writeFileAtomicSafe } from "./fs-atomic.js";
 import { hashSkillFolder } from "./hash.js";
@@ -7,6 +7,27 @@ import { isPortableSkillName } from "./skill-name.js";
 import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 
 export const CONFLICTS_FILE_VERSION = 1;
+
+export class ConflictWriteBusy extends Error {
+  constructor() {
+    super("库存正在执行接管或冲突决议，请稍后重试");
+  }
+}
+
+/** Reconcile and conflict resolution both replace the shared inventory and conflict registry. */
+export async function withConflictWriteLock<T>(paths: HubPaths, action: () => Promise<T>): Promise<T> {
+  const lock = path.join(paths.stateRoot, "tmp", "conflict-write.lock");
+  await mkdir(path.dirname(lock), { recursive: true });
+  await mkdir(lock).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "EEXIST") throw new ConflictWriteBusy();
+    throw error;
+  });
+  try {
+    return await action();
+  } finally {
+    await rmdir(lock);
+  }
+}
 
 export interface ConflictVariant {
   variantId: string;

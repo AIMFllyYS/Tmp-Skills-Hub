@@ -15,6 +15,7 @@ import type { SkillRecord, SkillSource } from "./types.js";
 
 interface SkillRevision {
   dirName: string;
+  createOnly?: boolean;
   hash: string;
   sourcePath: string;
   origins: SkillSource[];
@@ -25,6 +26,9 @@ interface SkillRevision {
 export async function installSkillRevision(paths: HubPaths, revision: SkillRevision): Promise<SkillRecord> {
   if (!isPortableSkillName(revision.dirName)) throw new Error("非法技能目录名");
   const index = await readStoreIndexFile(paths);
+  if (revision.createOnly && index.skills.some((skill) => skill.dirName.toLowerCase() === revision.dirName.toLowerCase())) {
+    throw new Error("库存已有同名技能: " + revision.dirName);
+  }
   if (index.drafts.some((draft) => draft.dirName === revision.dirName)) throw new Error("已有同名草稿: " + revision.dirName);
   if (index.skills.some((skill) => skill.dirName !== revision.dirName && skill.hash === revision.hash)) {
     throw new Error("内容指纹已被另一技能使用");

@@ -1,7 +1,7 @@
 import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { createBackupSnapshot, verifyBackupSnapshot, STORE_BACKUPS_DIR } from "./backup.js";
-import { recordConflict, storeConflictVariant, type ConflictRecord, type ConflictVariant } from "./conflicts.js";
+import { recordConflict, storeConflictVariant, withConflictWriteLock, type ConflictRecord, type ConflictVariant } from "./conflicts.js";
 import { inspectClientPath } from "./link-probe.js";
 import { applyLinkSet } from "./link-switch.js";
 import { readLinksLedger, writeLinksLedger } from "./links.js";
@@ -119,67 +119,71 @@ async function prepareSkill(paths: HubPaths, skill: DriftSkill): Promise<SkillRe
 
 export async function executeReconcile(home: string, paths: HubPaths, options: ExecuteOptions = {}): Promise<ReconcileResult | ReconcileError> {
   try {
-    const plan = await planReconcile(home, paths, options);
-    const backup = await createBackupSnapshot(paths, home);
-    const verified = await (options.verifyBackup ?? verifyBackupSnapshot)(paths, backup.snapshotId);
-    if (!verified.ok) {
-      return {
-        ok: false, code: "verify-failed", snapshotId: backup.snapshotId,
-        message: "备份校验失败: " + verified.issues.map((issue) => issue.reason).join(", "),
-      };
-    }
-    const batches = new Map<string, ReconcileLinkCandidate[]>();
-    const result: ReconcileResult = {
-      ok: true, snapshotId: backup.snapshotId, backupVerified: true, adoptedCount: 0, relinkedCount: 0,
-      linksCreated: 0, conflictCount: 0, externalLinksAdopted: 0, danglingPruned: 0,
-      skippedExternalLinks: plan.skippedExternalLinks.length, failures: [],
-    };
-    for (const skill of [...plan.toAdopt, ...plan.toRelinkIdentical, ...plan.conflicts]) {
-      try {
-        const active = await prepareSkill(paths, skill);
-        if (skill.kind === "new-skill") result.adoptedCount++;
-        if (skill.kind === "name-conflict") result.conflictCount++;
-        for (const variant of skill.variants) {
-          for (const source of variant.sources) {
-            const batch = batches.get(source.skillsDir) ?? [];
-            batch.push({ source, hash: variant.hash, skill: active });
-            batches.set(source.skillsDir, batch);
-          }
-        }
-      } catch (error) {
-        for (const source of skill.variants.flatMap((variant) => variant.sources)) {
-          result.failures.push({
-            clientId: source.clientId, skillName: skill.skillName,
-            reason: error instanceof Error ? error.message : String(error), rolledBack: !(error instanceof AggregateError),
-          });
-        }
-      }
-    }
-    const runId = uniqueTmpId();
-    let number = 0;
-    for (const batch of batches.values()) {
-      const outcome = await reconcileLinkBatch(paths, runId, number++, batch, options.switchLinks ?? applyLinkSet);
-      result.linksCreated += outcome.linksCreated;
-      result.externalLinksAdopted += outcome.externalLinksAdopted;
-      result.relinkedCount += outcome.linksCreated;
-      result.failures.push(...outcome.failures);
-    }
-    if (options.pruneDangling && plan.danglingToPrune > 0) {
-      const stale = new Set<string>();
-      for (const entry of plan.scan.entries) {
-        if (entry.kind !== "dangling-link" || !entry.registered) continue;
-        const disk = await inspectClientPath(entry.entryPath);
-        if (disk.kind === "missing" || disk.kind === "dead-link") stale.add(entry.registered.id);
-      }
-      if (stale.size > 0) {
-        const ledger = await readLinksLedger(paths);
-        const next = ledger.filter((entry) => !stale.has(entry.id));
-        await writeLinksLedger(paths, next);
-        result.danglingPruned = ledger.length - next.length;
-      }
-    }
-    return result;
+    return await withConflictWriteLock(paths, () => executeLockedReconcile(home, paths, options));
   } catch (error) {
     return { ok: false, code: "io-error", message: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function executeLockedReconcile(home: string, paths: HubPaths, options: ExecuteOptions): Promise<ReconcileResult | ReconcileError> {
+  const plan = await planReconcile(home, paths, options);
+  const backup = await createBackupSnapshot(paths, home);
+  const verified = await (options.verifyBackup ?? verifyBackupSnapshot)(paths, backup.snapshotId);
+  if (!verified.ok) {
+    return {
+      ok: false, code: "verify-failed", snapshotId: backup.snapshotId,
+      message: "备份校验失败: " + verified.issues.map((issue) => issue.reason).join(", "),
+    };
+  }
+  const batches = new Map<string, ReconcileLinkCandidate[]>();
+  const result: ReconcileResult = {
+    ok: true, snapshotId: backup.snapshotId, backupVerified: true, adoptedCount: 0, relinkedCount: 0,
+    linksCreated: 0, conflictCount: 0, externalLinksAdopted: 0, danglingPruned: 0,
+    skippedExternalLinks: plan.skippedExternalLinks.length, failures: [],
+  };
+  for (const skill of [...plan.toAdopt, ...plan.toRelinkIdentical, ...plan.conflicts]) {
+    try {
+      const active = await prepareSkill(paths, skill);
+      if (skill.kind === "new-skill") result.adoptedCount++;
+      if (skill.kind === "name-conflict") result.conflictCount++;
+      for (const variant of skill.variants) {
+        for (const source of variant.sources) {
+          const batch = batches.get(source.skillsDir) ?? [];
+          batch.push({ source, hash: variant.hash, skill: active });
+          batches.set(source.skillsDir, batch);
+        }
+      }
+    } catch (error) {
+      for (const source of skill.variants.flatMap((variant) => variant.sources)) {
+        result.failures.push({
+          clientId: source.clientId, skillName: skill.skillName,
+          reason: error instanceof Error ? error.message : String(error), rolledBack: !(error instanceof AggregateError),
+        });
+      }
+    }
+  }
+  const runId = uniqueTmpId();
+  let number = 0;
+  for (const batch of batches.values()) {
+    const outcome = await reconcileLinkBatch(paths, runId, number++, batch, options.switchLinks ?? applyLinkSet);
+    result.linksCreated += outcome.linksCreated;
+    result.externalLinksAdopted += outcome.externalLinksAdopted;
+    result.relinkedCount += outcome.linksCreated;
+    result.failures.push(...outcome.failures);
+  }
+  if (options.pruneDangling && plan.danglingToPrune > 0) {
+    const stale = new Set<string>();
+    for (const entry of plan.scan.entries) {
+      if (entry.kind !== "dangling-link" || !entry.registered) continue;
+      const disk = await inspectClientPath(entry.entryPath);
+      if (disk.kind === "missing" || disk.kind === "dead-link") stale.add(entry.registered.id);
+    }
+    if (stale.size > 0) {
+      const ledger = await readLinksLedger(paths);
+      const next = ledger.filter((entry) => !stale.has(entry.id));
+      await writeLinksLedger(paths, next);
+      result.danglingPruned = ledger.length - next.length;
+    }
+  }
+  return result;
 }
