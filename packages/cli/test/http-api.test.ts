@@ -619,6 +619,10 @@ describe("http-api 契约", () => {
   it("enable:写端点成功 + 链接建立 + visibleIn 更新 + 计数", async () => {
     const list = await (await app.request("/api/skills")).json() as { skills: { hash: string }[] };
     const hash = list.skills[0]!.hash;
+    const beforeStats = (await (await app.request("/api/stats")).json()) as {
+      stats: { counters: Record<string, { enable: number }> };
+    };
+    const prevEnable = beforeStats.stats.counters[hash]?.enable ?? 0;
     const res = await app.request("/api/skills/" + hash.slice(0, 12) + "/enable", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -638,7 +642,7 @@ describe("http-api 契约", () => {
       stats: { counters: Record<string, { enable: number }> };
       ranking: { skillHash?: string; hash?: string }[];
     };
-    expect(stats.stats.counters[hash]?.enable).toBe(1);
+    expect(stats.stats.counters[hash]?.enable).toBe(prevEnable + 1);
     expect(stats.ranking.some((r) => r.skillHash === hash)).toBe(true);
     for (const row of stats.ranking) {
       expect(typeof row.skillHash).toBe("string");
