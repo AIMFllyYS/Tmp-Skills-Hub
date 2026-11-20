@@ -7,6 +7,7 @@ describe("ACTION_REGISTRY", () => {
   it("现有写动作都在表里,id 与动词稳定", () => {
     const ids = Object.keys(ACTION_REGISTRY);
     for (const id of CORE) expect(ids).toContain(id);
+    expect(ids).not.toContain("apply-links");
     expect(getAction("enable").verb).toBe("启用");
     expect(getAction("disable").verb).toBe("停用");
     expect(getAction("archive").verb).toBe("归档");
@@ -21,7 +22,6 @@ describe("ACTION_REGISTRY", () => {
       expect(a.supportsPreview).toBe(false);
     }
     expect(getAction("preview-links").supportsPreview).toBe(true);
-    expect(getAction("apply-links").supportsPreview).toBe(true);
     expect(getAction("apply-clean-links").supportsPreview).toBe(true);
     expect(getAction("apply-clean-links").verb).toBe("批量挂链");
     expect(getAction("adopt").verb).toBe("收录");

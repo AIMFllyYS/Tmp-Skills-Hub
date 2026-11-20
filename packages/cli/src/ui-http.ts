@@ -17,14 +17,16 @@ export interface UiRouteContext {
   home: string;
 }
 
-export type ApiErrorStatus = 400 | 404 | 409 | 422 | 500 | 502 | 503;
+export type ApiErrorStatus = 400 | 403 | 404 | 409 | 413 | 415 | 422 | 500 | 502 | 503;
 
 /** docs/specs/http-api-v0.md §4 */
 const STATUS_BY_CODE: Record<string, ApiErrorStatus> = {
   "bad-usage": 400,
   outside: 400,
   "draft-incomplete": 400,
+  forbidden: 403,
   "not-found": 404,
+  "translation-not-found": 404,
   "group-not-found": 404,
   "draft-not-found": 404,
   "link-failed": 409,
@@ -40,6 +42,7 @@ const STATUS_BY_CODE: Record<string, ApiErrorStatus> = {
   "github-fetch-failed": 502,
   "analyze-failed": 502,
   "github-push-failed": 502,
+  "invalid-response": 502,
   "store-not-configured": 503,
   "not-configured": 503,
   "auth-required": 503,

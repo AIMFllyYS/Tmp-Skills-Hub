@@ -15,7 +15,7 @@ import {
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
 import { performLinkChange } from "./link-actions.js";
-import { POINTER_REL, runAdopt, writePointerFile } from "./store-cmds.js";
+import { performAdopt, POINTER_REL, printAdoptSummary, writePointerFile } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
 
 /**
@@ -48,13 +48,17 @@ export interface BootstrapOptions {
    * 测试注入:结束时是否启动 ui 服务(默认 true)。
    * 传函数则调用该函数而不真起服务,便于断言传入的 home。
    */
-  ui?: boolean | ((opts: StartUiServerOptions) => Promise<void>);
+  ui?: boolean | ((opts: StartUiServerOptions) => Promise<unknown>);
+  /** 打包后的 Electron resources/self-skill 目录覆写 */
+  selfSkillDir?: string;
 }
 
-async function defaultReadLine(): Promise<(prompt: string) => Promise<string>> {
+function defaultReadLine(): { ask: (prompt: string) => Promise<string>; close: () => void } {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (prompt: string) => new Promise<string>((resolve) => rl.question(prompt, resolve));
-  return ask;
+  return {
+    ask: (prompt: string) => new Promise<string>((resolve) => rl.question(prompt, resolve)),
+    close: () => rl.close(),
+  };
 }
 
 /** 发现并收录:扫描 base 下全部客户端 root,收集达标 skill 目录,一次批量 adopt。 */
@@ -80,8 +84,9 @@ export async function migrateAllSkills(
   }
   const discovered = dirs.length;
   if (dirs.length === 0) return { discovered, adopted: 0, dryRun: false };
-  await runAdopt({ _: dirs, home: storeRoot, yes: true, dryRun: false, json: false });
-  return { discovered, adopted: dirs.length, dryRun: false };
+  const report = await performAdopt(storeRoot, dirs, { dryRun: false });
+  printAdoptSummary(report, false);
+  return { discovered, adopted: report.adopted, dryRun: false };
 }
 
 export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions = {}): Promise<void> {
@@ -103,36 +108,42 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
     process.exitCode = 2;
     return;
   }
-  const ask = opts.readLine ?? (await defaultReadLine());
+  const rlHandle = opts.readLine === undefined ? defaultReadLine() : null;
+  const ask = opts.readLine ?? rlHandle!.ask;
 
-  // 1. 库存位置(默认:--home 直用,否则 ~/.skills-hub)
-  const defaultRoot = args.home !== undefined && args.home !== "" ? path.resolve(args.home) : path.join(base, ".skills-hub");
-  const rawRoot = args.yes === true ? defaultRoot : (await ask(`库存将保存在哪个目录?(直接回车使用默认: ${defaultRoot}) > `)).trim();
-  const storeRoot = rawRoot === "" ? defaultRoot : path.resolve(rawRoot);
+  let storeRoot: string;
+  try {
+    // 1. 库存位置(默认:--home 直用,否则 ~/.skills-hub)
+    const defaultRoot = args.home !== undefined && args.home !== "" ? path.resolve(args.home) : path.join(base, ".skills-hub");
+    const rawRoot = args.yes === true ? defaultRoot : (await ask(`库存将保存在哪个目录?(直接回车使用默认: ${defaultRoot}) > `)).trim();
+    storeRoot = rawRoot === "" ? defaultRoot : path.resolve(rawRoot);
 
-  // 2. 备份确认
-  const doBackup = args.yes === true ||
-    (await ask(`\n${RED}${BOLD}⚠ 即将把本机全部客户端(如 .claude/.cursor/.codex 等)的 skills 收录进统一库存。${RESET}\n先帮你备份一份保险,如果出现问题可以一键恢复。\n是否自动备份?(Y=备份后继续 / N=跳过备份) > `)).trim().toUpperCase() === "Y";
+    // 2. 备份确认
+    const doBackup = args.yes === true ||
+      (await ask(`\n${RED}${BOLD}⚠ 即将把本机全部客户端(如 .claude/.cursor/.codex 等)的 skills 收录进统一库存。${RESET}\n先帮你备份一份保险,如果出现问题可以一键恢复。\n是否自动备份?(Y=备份后继续 / N=跳过备份) > `)).trim().toUpperCase() === "Y";
 
-  if (doBackup) {
-    const backupDir = path.join(storeRoot, "backups");
-    console.log("正在备份(只读源目录,写入 " + backupDir + ")…");
-    const bak = await createBackupSnapshot(storeRoot, base);
-    warn(
-      "✓ 已备份快照 " + bak.snapshotId +
-        " (" + bak.manifest.files.length + " 个文件, " + bak.manifest.links.length + " 条链接, 新增 blob " +
-        bak.manifest.blobsWritten + ")\n  校验: skills-hub backup verify。还原: skills-hub backup restore，或面板「恢复到初始化前」。",
-    );
-  } else {
-    console.log("已跳过备份。");
-  }
+    if (doBackup) {
+      const backupDir = path.join(storeRoot, "backups");
+      console.log("正在备份(只读源目录,写入 " + backupDir + ")…");
+      const bak = await createBackupSnapshot(storeRoot, base);
+      warn(
+        "✓ 已备份快照 " + bak.snapshotId +
+          " (" + bak.manifest.files.length + " 个文件, " + bak.manifest.links.length + " 条链接, 新增 blob " +
+          bak.manifest.blobsWritten + ")\n  校验: skills-hub backup verify。还原: skills-hub backup restore，或面板「恢复到初始化前」。",
+      );
+    } else {
+      console.log("已跳过备份。");
+    }
 
-  // 3. 迁移确认
-  const doMigrate = args.yes === true ||
-    (await ask(`${RED}${BOLD}⚠ 即将把全部 skills 收录进库存 ${storeRoot}(重复内容自动去重,冲突绝不覆盖)。${RESET}\n输入 Y 开始迁移,输入其他任意键取消 > `)).trim().toUpperCase() === "Y";
-  if (!doMigrate) {
-    console.log("已取消,未做任何改动。");
-    return;
+    // 3. 迁移确认
+    const doMigrate = args.yes === true ||
+      (await ask(`${RED}${BOLD}⚠ 即将把全部 skills 收录进库存 ${storeRoot}(重复内容自动去重,冲突绝不覆盖)。${RESET}\n输入 Y 开始迁移,输入其他任意键取消 > `)).trim().toUpperCase() === "Y";
+    if (!doMigrate) {
+      console.log("已取消,未做任何改动。");
+      return;
+    }
+  } finally {
+    rlHandle?.close();
   }
 
   // 4. 自动执行:建布局 → 收录全部 → 完成提示
@@ -141,7 +152,7 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
   if (result.discovered === 0) console.log("未发现任何达标 skill(缺 name/description 的目录不计入)。");
 
   // 4b. 收录并启用自身 skill(#169)
-  await adoptAndEnableSelfSkill(base, storeRoot);
+  await adoptAndEnableSelfSkill(base, storeRoot, opts.selfSkillDir);
 
   // 5. 自动启动面板——必须传 home 基座,不能传 storeRoot(#95)
   if (opts.ui !== false) {
@@ -154,8 +165,12 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
  * Adopt the skills-hub self-skill and enable it to all discovered clients.
  * Idempotent: skips if already in the store.
  */
-async function adoptAndEnableSelfSkill(home: string, storeRoot: string): Promise<void> {
-  const selfSkillDir = findSelfSkillDir();
+export async function adoptAndEnableSelfSkill(
+  home: string,
+  storeRoot: string,
+  selfSkillDirOverride?: string,
+): Promise<void> {
+  const selfSkillDir = findSelfSkillDir(selfSkillDirOverride);
   if (selfSkillDir === null) return;
   try {
     const outcome = await adoptSkillFolder(storeRoot, selfSkillDir, { kind: "authored", reference: "bootstrap" });
@@ -177,23 +192,31 @@ async function adoptAndEnableSelfSkill(home: string, storeRoot: string): Promise
   }
 }
 
-function findSelfSkillDir(): string | null {
+function findSelfSkillDir(overrideDir?: string): string | null {
+  const candidates: string[] = [];
+  if (overrideDir !== undefined && overrideDir !== "") {
+    candidates.push(path.join(overrideDir, "SKILL.md"));
+  }
+  const envDir = process.env.SKILLSHUB_SELF_SKILL_DIR;
+  if (envDir !== undefined && envDir !== "") {
+    candidates.push(path.join(envDir, "SKILL.md"));
+  }
   try {
     const thisFile = fileURLToPath(import.meta.url);
     const cliSrc = path.dirname(thisFile);
-    const candidates = [
+    candidates.push(
       path.resolve(cliSrc, "..", "self-skill", "SKILL.md"),
       path.resolve(cliSrc, "self-skill", "SKILL.md"),
-    ];
-    for (const c of candidates) {
-      try {
-        if (statSync(c).isFile()) return path.dirname(c);
-      } catch {
-        // continue
-      }
-    }
+    );
   } catch {
     // fallback
+  }
+  for (const c of candidates) {
+    try {
+      if (statSync(c).isFile()) return path.dirname(c);
+    } catch {
+      // continue
+    }
   }
   return null;
 }
@@ -201,7 +224,10 @@ function findSelfSkillDir(): string | null {
 /** 启动面板:home 永远是客户端发现基座。测试可注入函数替身。 */
 async function launchUi(port: number, home: string, opts: BootstrapOptions): Promise<void> {
   if (opts.ui === false) return;
-  const start = typeof opts.ui === "function" ? opts.ui : startUiServer;
-  await start({ port, home });
-  if (typeof opts.ui !== "function") openBrowser("http://127.0.0.1:" + port);
+  if (typeof opts.ui === "function") {
+    await opts.ui({ port, home });
+    return;
+  }
+  const handle = await startUiServer({ port, home });
+  openBrowser(handle.url);
 }

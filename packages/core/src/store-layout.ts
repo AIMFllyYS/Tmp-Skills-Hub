@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { uniqueTmpId } from "./tmp-id.js";
 
 /**
  * 库存目录布局初始化(spec §2)。
@@ -25,6 +26,7 @@ export const STORE_DATA_FILES = ["index.json", "links.json", "groups.json", "sta
 export interface StoreManifest {
   version: number;
   createdAt: string;
+  trustedRepo?: string;
 }
 
 export interface InitLayoutResult {
@@ -71,11 +73,13 @@ async function readManifest(manifestPath: string): Promise<StoreManifest | null>
   } catch {
     throw new Error(`manifest.json 已存在但无法解析: ${manifestPath}`);
   }
-  const v = data as { version?: unknown; createdAt?: unknown };
+  const v = data as { version?: unknown; createdAt?: unknown; trustedRepo?: unknown };
   if (typeof v.version !== "number" || typeof v.createdAt !== "string") {
     throw new Error(`manifest.json 已存在但缺少 version/createdAt 字段: ${manifestPath}`);
   }
-  return { version: v.version, createdAt: v.createdAt };
+  const manifest: StoreManifest = { version: v.version, createdAt: v.createdAt };
+  if (typeof v.trustedRepo === "string") manifest.trustedRepo = v.trustedRepo;
+  return manifest;
 }
 
 /** 原子写:先写 tmp 再 rename,避免读到半成品(spec §2 tmp 目录的用途)。 */
@@ -83,7 +87,7 @@ async function writeFileAtomic(target: string, content: string): Promise<void> {
   const tmpPath = path.join(
     path.dirname(target),
     STORE_TMP_DIR,
-    `${path.basename(target)}.init-${process.pid}-${Date.now()}.tmp`,
+    `${path.basename(target)}.init-${uniqueTmpId()}.tmp`,
   );
   await writeFile(tmpPath, content, "utf8");
   await rename(tmpPath, target);

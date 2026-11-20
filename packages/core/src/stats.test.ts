@@ -67,4 +67,13 @@ describe("stats(#27)", () => {
     expect(rank[0]!.total).toBe(2);
     expect(rank[1]!.skillHash).toBe("b");
   });
+
+  it("缺失 tmp/ 目录时不死循环卡死,自动补建并成功落盘", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-stats-notmp-"));
+    tempDirs.push(dir);
+    const started = Date.now();
+    await recordUsage(dir, "hash-no-tmp", "show");
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect((await readUsageStats(dir)).counters["hash-no-tmp"]).toEqual({ show: 1, enable: 0 });
+  });
 });

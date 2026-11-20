@@ -52,12 +52,14 @@ describe("discoverClientRoots: 目录形状扫描", () => {
     const home = await fakeHome();
     await mkdir(path.join(home, ".cursor", "skills-cursor"), { recursive: true });
     await mkdir(path.join(home, ".gemini", "antigravity", "skills"), { recursive: true });
+    await mkdir(path.join(home, ".gemini", "config", "skills"), { recursive: true });
     await mkdir(path.join(home, ".codeium", "windsurf", "skills"), { recursive: true });
 
     const roots = await discoverClientRoots(home);
-    expect(roots.map((r) => r.clientId).sort()).toEqual(["cursor", "gemini", "windsurf"]);
+    expect(roots.map((r) => r.clientId).sort()).toEqual(["antigravity", "cursor", "gemini", "windsurf"]);
     const byId = new Map(roots.map((r) => [r.clientId, r.skillsDir]));
     // 返回值为 realpath 归一化结果(CI 上 tmpdir 可能是 8.3 短名,须按归一化后比较)
+    expect(byId.get("antigravity")).toBe(await realpath(path.join(home, ".gemini", "config", "skills")));
     expect(byId.get("cursor")).toBe(await realpath(path.join(home, ".cursor", "skills-cursor")));
     expect(byId.get("gemini")).toBe(await realpath(path.join(home, ".gemini", "antigravity", "skills")));
     expect(byId.get("windsurf")).toBe(await realpath(path.join(home, ".codeium", "windsurf", "skills")));
@@ -141,6 +143,23 @@ describe("discoverClientRoots: 真实路径去重", () => {
     expect(roots[0]!.skillsDir).toBe(path.join(home, "store", "skills"));
     expect(roots[0]!.skillsDir).not.toContain(".cursor");
   });
+
+  it("Antigravity .gemini/config/skills 与其它目录互为链接时按 realpath 去重", async () => {
+    const home = await fakeHome();
+    const antigravitySkills = path.join(home, ".gemini", "config", "skills");
+    await mkdir(antigravitySkills, { recursive: true });
+    await mkdir(path.join(home, ".agents"), { recursive: true });
+    try {
+      await symlink(antigravitySkills, path.join(home, ".agents", "skills"), "junction");
+    } catch {
+      return;
+    }
+
+    const roots = await discoverClientRoots(home);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.clientId).toBe("agents");
+    expect(roots[0]!.skillsDir).toBe(await realpath(antigravitySkills));
+  });
 });
 
 describe("isOwnClientId", () => {
@@ -164,6 +183,8 @@ describe("isExcludedRoot: 排除清单", () => {
   it("插件/市场缓存被排除", () => {
     expect(isExcludedRoot(HOME + "/.claude/plugins/skills", HOME)).toBe(true);
     expect(isExcludedRoot(HOME + "/.cursor/plugins", HOME)).toBe(true);
+    expect(isExcludedRoot(HOME + "/.gemini/config/plugins", HOME)).toBe(true);
+    expect(isExcludedRoot(HOME + "/.gemini/config/plugins/skills", HOME)).toBe(true);
     expect(isExcludedRoot(HOME + "/.config/cache/skills", HOME)).toBe(true);
   });
 
@@ -188,6 +209,7 @@ describe("isExcludedRoot: 排除清单", () => {
     expect(isExcludedRoot(HOME + "/.codex/skills", HOME)).toBe(false);
     expect(isExcludedRoot(HOME + "/.cursor/skills-cursor", HOME)).toBe(false);
     expect(isExcludedRoot(HOME + "/.gemini/antigravity/skills", HOME)).toBe(false);
+    expect(isExcludedRoot(HOME + "/.gemini/config/skills", HOME)).toBe(false);
     expect(isExcludedRoot(HOME + "/.codeium/windsurf/skills", HOME)).toBe(false);
     expect(isExcludedRoot(HOME + "/.trae-cn/skills", HOME)).toBe(false);
     expect(isExcludedRoot(HOME + "/.quickwork/skills", HOME)).toBe(false);
@@ -281,5 +303,16 @@ describe("discoverClientRoots: 本项目目录与库存根", () => {
 
     const roots = await discoverClientRoots(home, { storeRoot: home });
     expect(roots.map((r) => r.clientId)).toEqual(["claude"]);
+  });
+
+  it("忽略 .gemini/config/plugins,同时保留 .gemini/config/skills", async () => {
+    const home = await fakeHome();
+    await mkdir(path.join(home, ".gemini", "config", "skills"), { recursive: true });
+    await mkdir(path.join(home, ".gemini", "config", "plugins", "skills"), { recursive: true });
+
+    const roots = await discoverClientRoots(home);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.clientId).toBe("antigravity");
+    expect(roots[0]!.skillsDir).toBe(await realpath(path.join(home, ".gemini", "config", "skills")));
   });
 });

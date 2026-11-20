@@ -1,0 +1,28 @@
+{
+  "name": "@skills-hub/desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "skill-hub 桌面端外壳(Electron)",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/main.mjs",
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "build": "node scripts/build-main.mjs",
+    "test": "vitest run",
+    "dev": "node scripts/build-main.mjs && electron .",
+    "package:dir": "node scripts/build-main.mjs && electron-builder --dir",
+    "package:win": "node scripts/build-main.mjs && electron-builder --win"
+  },
+  "dependencies": {
+    "@skills-hub/cli": "workspace:^",
+    "@skills-hub/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "electron": "^39.8.10",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "vitest": "^4.1.10"
+  }
+}

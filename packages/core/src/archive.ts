@@ -6,6 +6,7 @@ import { readLinksLedger } from "./links.js";
 import { readSkillMeta } from "./skill-md.js";
 import { readStoreIndex, writeStoreIndex } from "./store.js";
 import { STORE_ARCHIVE_DIR, STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 import { unzipDirectory, zipDirectory } from "./zip.js";
 
 /**
@@ -76,7 +77,7 @@ export async function archiveSkill(storeRoot: string, dirName: string): Promise<
   const archivedAt = new Date().toISOString();
   const stamp = archivedAt.slice(0, 19).replace(/[:]/g, "-");
   const zipName = dirName + "-" + stamp + ".zip";
-  const tmpZip = path.join(storeRoot, STORE_TMP_DIR, "archive." + process.pid + "-" + Date.now() + ".zip");
+  const tmpZip = path.join(storeRoot, STORE_TMP_DIR, "archive." + uniqueTmpId() + ".zip");
   const archiveFile = path.join(storeRoot, STORE_ARCHIVE_DIR, zipName);
   const activeDir = path.join(storeRoot, STORE_SKILLS_DIR, dirName);
   try {
@@ -146,7 +147,7 @@ export async function restoreArchivedSkill(storeRoot: string, name: string): Pro
   if (index.some((s) => s.dirName === pick.name) || (await existsDir(dest))) {
     return { ok: false, code: "conflict", message: "活跃区已有 " + pick.name + ",未覆盖" };
   }
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "restore." + process.pid + "-" + Date.now());
+  const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "restore." + uniqueTmpId());
   try {
     await mkdir(tmpDir, { recursive: true });
     await unzipDirectory(await readFile(pick.file), tmpDir);

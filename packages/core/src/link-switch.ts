@@ -1,8 +1,10 @@
 import { lstat, mkdir, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { unlinkNoFollow } from "./backup-restore.js";
 import { readLinkTarget } from "./link-probe.js";
 import { readLinksLedger, writeLinksLedger, type LinkEntry } from "./links.js";
 import { STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 
 /**
  * 受管链接集合的原子切换与失败回滚(#21)。
@@ -96,19 +98,24 @@ export async function applyLinkSet(
   const removedEntries = oldLedger.filter((e) => sameDir(e) && !newIds.has(e.id));
   const replacedEntries = oldLedger.filter((e) => sameDir(e) && newIds.has(e.id));
 
-  // 3. 预检摘除:磁盘上必须是链接(或已缺失);用户占名 → 中止
+  // 3. 预检摘除:磁盘上必须是链接(或已缺失),或台账显式登记为 kind === "copy";用户占名 → 中止
   for (const entry of [...removedEntries, ...replacedEntries]) {
     const p = path.join(entry.targetDir, entry.entryName);
     if (!(await exists(p))) continue;
     if ((await readLinkTarget(p)) === null) {
-      return { ok: false, code: "not-link-conflict", message: "台账条目落点已被用户替换为非链接,绝不触碰", at: p };
+      const ledgerEntry = oldLedger.find(
+        (e) => e.targetDir === entry.targetDir && e.entryName === entry.entryName,
+      );
+      if (ledgerEntry?.kind !== "copy") {
+        return { ok: false, code: "not-link-conflict", message: "台账条目落点已被用户替换为非链接,绝不触碰", at: p };
+      }
     }
   }
 
   // 4. journal 先行(库存 tmp 区)
   const tmpDir = path.join(storeRoot, STORE_TMP_DIR);
   await mkdir(tmpDir, { recursive: true });
-  const journalFile = path.join(tmpDir, "switch." + process.pid + "-" + Date.now() + ".json");
+  const journalFile = path.join(tmpDir, "switch." + uniqueTmpId() + ".json");
   const journal: Journal = {
     storeRoot,
     targetDir: plan.targetDir,
@@ -120,12 +127,18 @@ export async function applyLinkSet(
   const createdPaths: string[] = [];
   const removedPaths: string[] = [];
   try {
-    // 5. 摘除旧链接(unlink 不跟随,只删链接本身)
+    // 5. 摘除旧条目(链接 unlink 不跟随;仅台账显式为 kind === "copy" 的受管目录才安全移除)
     for (const entry of [...removedEntries, ...replacedEntries]) {
       step();
       const p = path.join(entry.targetDir, entry.entryName);
       if (!(await exists(p))) continue;
-      await unlink(p);
+      if ((await readLinkTarget(p)) !== null) {
+        await unlink(p);
+      } else if (entry.kind === "copy") {
+        await unlinkNoFollow(p);
+      } else {
+        throw new Error("台账条目落点非链接且非受管 copy,拒绝删除: " + p);
+      }
       removedPaths.push(p);
     }
     // 6. 建立新条目(按 kind:junction/symlink 建链接,copy 复制目录)
@@ -133,8 +146,15 @@ export async function applyLinkSet(
       step();
       const p = path.join(entry.targetDir, entry.entryName);
       if (await exists(p)) {
-        // 更新场景残留:摘掉旧链接(预检保证是登记条目)
-        await unlink(p);
+        // 更新场景残留:摘掉旧链接或受管 copy(预检保证是登记条目)
+        const prev = oldLedger.find((e) => e.targetDir === entry.targetDir && e.entryName === entry.entryName);
+        if ((await readLinkTarget(p)) !== null) {
+          await unlink(p);
+        } else if (prev?.kind === "copy") {
+          await unlinkNoFollow(p);
+        } else {
+          throw new Error("落点非链接且未登记为 copy,拒绝删除: " + p);
+        }
         removedPaths.push(p);
       }
       const storeSkill = path.join(storeRoot, STORE_SKILLS_DIR, entry.entryName);
@@ -165,12 +185,12 @@ export async function applyLinkSet(
 
 /** 回滚:摘掉本次新建;按 journal 重建已摘除的链接/副本。单条失败不阻断其余(尽力而为)。 */
 async function rollback(journal: Journal, createdPaths: string[]): Promise<void> {
-  // 摘掉新建:copy 是真实目录,rm 前确认不是链接;链接直接 unlink
+  // 摘掉新建:copy 是真实目录,用 unlinkNoFollow 不跟随内部链接;链接直接 unlink
   for (const p of [...createdPaths].reverse()) {
     if ((await readLinkTarget(p)) !== null) {
       await unlink(p).catch(() => undefined);
     } else {
-      await rm(p, { recursive: true, force: true }).catch(() => undefined);
+      await unlinkNoFollow(p).catch(() => undefined);
     }
   }
   // 重建已摘除的旧条目

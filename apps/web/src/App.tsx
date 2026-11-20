@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { usePanelRef } from "react-resizable-panels";
 import { toast } from "sonner";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Button } from "@/components/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { cn } from "@/lib/utils";
-import { AgentPage } from "./features/agent/AgentPage.js";
 import { OverviewPage } from "./features/shell/OverviewPage.js";
-import { SettingsDialog } from "./features/shell/SettingsDialog.js";
 import { Sidebar } from "./features/shell/Sidebar.js";
-import { SkillsPage } from "./features/shell/SkillsPage.js";
-import { StatsPage } from "./features/shell/StatsPage.js";
+import { StoreOnboarding } from "./features/shell/StoreOnboarding.js";
 import type { AppPage, ShellNav, SkillsTab } from "./features/shell/page.js";
 import {
   readShellPrefs,
@@ -22,6 +21,19 @@ import {
   type ShellPrefs,
 } from "./features/shell/shell-prefs.js";
 import { useCatalog } from "./features/skills/use-catalog.js";
+
+const AgentPage = lazy(() => import("./features/agent/AgentPage.js").then((m) => ({ default: m.AgentPage })));
+const SettingsDialog = lazy(() =>
+  import("./features/shell/SettingsDialog.js").then((m) => ({ default: m.SettingsDialog })),
+);
+const SkillsPage = lazy(() => import("./features/shell/SkillsPage.js").then((m) => ({ default: m.SkillsPage })));
+const StatsPage = lazy(() => import("./features/shell/StatsPage.js").then((m) => ({ default: m.StatsPage })));
+
+const PAGE_LABELS: Record<Exclude<AppPage, "agent">, string> = {
+  overview: "总览",
+  stats: "统计",
+  skills: "Skills 管理",
+};
 
 export default function App() {
   const [prefs] = useState<ShellPrefs>(readShellPrefs);
@@ -104,123 +116,157 @@ export default function App() {
   };
 
   return (
-    <div className="h-dvh overflow-hidden bg-white">
-      <Toaster />
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className={cn("h-full w-full", sidebarMotion && "sidebar-motion", sidebarDragging && "sidebar-dragging")}
-      >
-        <ResizablePanel
-          id="shell-nav"
-          panelRef={sidebarPanelRef}
-          collapsible
-          collapsedSize={SIDEBAR_ICON_PX}
-          defaultSize={prefs.collapsed ? SIDEBAR_ICON_PX : prefs.width}
-          minSize={collapsed || sidebarMotion ? SIDEBAR_ICON_PX : SIDEBAR_MIN_PX}
-          maxSize={SIDEBAR_MAX_PX}
-          groupResizeBehavior="preserve-pixel-size"
-          className="overflow-hidden"
-          style={{ overflow: "hidden" }}
-          onResize={(size) => {
-            if (sidebarMotionRef.current) return;
-            const px = Math.round(size.inPixels);
-            const nowCollapsed = px <= SIDEBAR_ICON_PX + 8;
-            setCollapsed(nowCollapsed);
-            if (nowCollapsed) return;
-            if (widthRaf.current !== null) cancelAnimationFrame(widthRaf.current);
-            widthRaf.current = requestAnimationFrame(() => {
-              widthRaf.current = null;
-              setSidebarWidth(px);
-            });
-          }}
+    <ErrorBoundary onRetry={catalog.reload}>
+      <div className="h-dvh overflow-hidden bg-white">
+        <Toaster />
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className={cn("h-full w-full", sidebarMotion && "sidebar-motion", sidebarDragging && "sidebar-dragging")}
         >
-          <Sidebar
-            page={page}
-            collapsed={collapsed}
-            settingsOpen={settingsOpen}
-            onPage={setPage}
-            onSettings={() => setSettingsOpen(true)}
-            onToggleCollapsed={toggleCollapsed}
+          <ResizablePanel
+            id="shell-nav"
+            panelRef={sidebarPanelRef}
+            collapsible
+            collapsedSize={SIDEBAR_ICON_PX}
+            defaultSize={prefs.collapsed ? SIDEBAR_ICON_PX : prefs.width}
+            minSize={collapsed || sidebarMotion ? SIDEBAR_ICON_PX : SIDEBAR_MIN_PX}
+            maxSize={SIDEBAR_MAX_PX}
+            groupResizeBehavior="preserve-pixel-size"
+            className="overflow-hidden"
+            style={{ overflow: "hidden" }}
+            onResize={(size) => {
+              if (sidebarMotionRef.current) return;
+              const px = Math.round(size.inPixels);
+              const nowCollapsed = px <= SIDEBAR_ICON_PX + 8;
+              setCollapsed(nowCollapsed);
+              if (nowCollapsed) return;
+              if (widthRaf.current !== null) cancelAnimationFrame(widthRaf.current);
+              widthRaf.current = requestAnimationFrame(() => {
+                widthRaf.current = null;
+                setSidebarWidth(px);
+              });
+            }}
+          >
+            <Sidebar
+              page={page}
+              collapsed={collapsed}
+              settingsOpen={settingsOpen}
+              onPage={setPage}
+              onSettings={() => setSettingsOpen(true)}
+              onToggleCollapsed={toggleCollapsed}
+            />
+          </ResizablePanel>
+          <ResizableHandle
+            disabled={collapsed}
+            className="w-1 bg-line motion-fill hover:bg-line-strong"
+            onPointerDown={() => {
+              setSidebarDragging(true);
+              sidebarMotionRef.current = false;
+              setSidebarMotion(false);
+              if (motionTimer.current !== null) {
+                window.clearTimeout(motionTimer.current);
+                motionTimer.current = null;
+              }
+            }}
+            onPointerUp={() => setSidebarDragging(false)}
           />
-        </ResizablePanel>
-        <ResizableHandle
-          disabled={collapsed}
-          className="w-1 bg-line motion-fill hover:bg-line-strong"
-          onPointerDown={() => {
-            setSidebarDragging(true);
-            sidebarMotionRef.current = false;
-            setSidebarMotion(false);
-            if (motionTimer.current !== null) {
-              window.clearTimeout(motionTimer.current);
-              motionTimer.current = null;
-            }
-          }}
-          onPointerUp={() => setSidebarDragging(false)}
-        />
-        <ResizablePanel id="shell-main" minSize="40%" className="min-w-0">
-          <main className="flex h-full min-h-0 min-w-0 flex-col">
-            {catalog.status === "offline" && (
-              <p className="shrink-0 bg-amber-50 px-6 py-3 text-sm text-amber-800">
-                未连接到本地数据服务。先运行一键启动,再刷新本页。
-              </p>
-            )}
-            {catalog.status === "loading" && <PageSkeleton />}
-            {catalog.status === "ready" && (
-              <div key={page} className="motion-enter flex min-h-0 flex-1 flex-col">
-                {page === "overview" && (
-                  <OverviewPage
-                    skills={catalog.skills}
-                    clients={catalog.clients}
-                    doctor={catalog.doctor}
-                    snapshotCount={catalog.snapshotCount}
-                    onGo={go}
-                  />
-                )}
-                {page === "stats" && (
-                  <StatsPage
-                    skills={catalog.skills}
-                    clients={catalog.clients}
-                    ranking={catalog.ranking}
-                    counters={catalog.usageByHash}
-                    onGo={go}
-                  />
-                )}
-                {page === "skills" && (
-                  <SkillsPage
-                    tab={skillsTab}
-                    onTab={setSkillsTab}
-                    skills={catalog.skills}
-                    clients={catalog.clients}
-                    groups={catalog.groups}
-                    archived={catalog.archived}
-                    focusedHash={catalog.focusedHash}
-                    onFocus={catalog.setFocusedHash}
-                    pendingHash={catalog.pendingHash}
-                    clientStates={catalog.clientStates}
-                    selectedClientId={catalog.selectedClientId}
-                    onSelectClient={catalog.setSelectedClientId}
-                    onToggle={catalog.toggle}
-                    onSaved={catalog.markSaved}
-                    onRefresh={catalog.refresh}
-                    onRestore={catalog.restore}
-                    onArchive={catalog.archive}
-                    onNotice={(text) => toast(text)}
-                  />
-                )}
-                {page === "agent" && <AgentPage />}
-              </div>
-            )}
-          </main>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        storeRoot={catalog.storeRoot}
-        clients={catalog.clients}
-        latestSnapshotId={catalog.latestSnapshotId}
-        onResetDone={catalog.reload}
-      />
-    </div>
+          <ResizablePanel id="shell-main" minSize="40%" className="min-w-0">
+            <main className="flex h-full min-h-0 min-w-0 flex-col">
+              {catalog.status === "offline" && (
+                <div className="flex shrink-0 items-center justify-between gap-3 bg-amber-50 px-6 py-3 text-sm text-amber-800">
+                  <p>未连接到本地数据服务。先运行一键启动,再刷新本页。</p>
+                  <Button type="button" size="sm" variant="outline" onClick={catalog.reload}>
+                    重试连接
+                  </Button>
+                </div>
+              )}
+              {catalog.status === "loading" && <PageSkeleton />}
+              {catalog.status === "unconfigured" && (
+                <ErrorBoundary key={page}>
+                  <Suspense fallback={<PageSkeleton />}>
+                    <div key={page} className="motion-enter flex min-h-0 flex-1 flex-col">
+                      {page === "agent" ? (
+                        <AgentPage onMutated={catalog.refresh} />
+                      ) : (
+                        <StoreOnboarding
+                          title={PAGE_LABELS[page]}
+                          clientCount={catalog.clients.length}
+                          onInit={catalog.initializeStore}
+                          onOpenAgent={() => setPage("agent")}
+                        />
+                      )}
+                    </div>
+                  </Suspense>
+                </ErrorBoundary>
+              )}
+              {catalog.status === "ready" && (
+                <ErrorBoundary key={page}>
+                  <Suspense fallback={<PageSkeleton />}>
+                    <div key={page} className="motion-enter flex min-h-0 flex-1 flex-col">
+                      {page === "overview" && (
+                        <OverviewPage
+                          skills={catalog.skills}
+                          clients={catalog.clients}
+                          doctor={catalog.doctor}
+                          snapshotCount={catalog.snapshotCount}
+                          doctorLoading={catalog.doctorLoading}
+                          backupsLoading={catalog.backupsLoading}
+                          onGo={go}
+                        />
+                      )}
+                      {page === "stats" && (
+                        <StatsPage
+                          skills={catalog.skills}
+                          clients={catalog.clients}
+                          ranking={catalog.ranking}
+                          counters={catalog.usageByHash}
+                          statsLoading={catalog.statsLoading}
+                          onGo={go}
+                        />
+                      )}
+                      {page === "skills" && (
+                        <SkillsPage
+                          tab={skillsTab}
+                          onTab={setSkillsTab}
+                          skills={catalog.skills}
+                          clients={catalog.clients}
+                          groups={catalog.groups}
+                          archived={catalog.archived}
+                          archiveLoading={catalog.archiveLoading}
+                          focusedHash={catalog.focusedHash}
+                          onFocus={catalog.setFocusedHash}
+                          pendingHash={catalog.pendingHash}
+                          clientStates={catalog.clientStates}
+                          selectedClientId={catalog.selectedClientId}
+                          onSelectClient={catalog.setSelectedClientId}
+                          onToggle={catalog.toggle}
+                          onSaved={catalog.markSaved}
+                          onRefresh={catalog.refresh}
+                          onRestore={catalog.restore}
+                          onArchive={catalog.archive}
+                          onNotice={(text) => toast(text)}
+                        />
+                      )}
+                      {page === "agent" && <AgentPage onMutated={catalog.refresh} />}
+                    </div>
+                  </Suspense>
+                </ErrorBoundary>
+              )}
+            </main>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+        <Suspense fallback={null}>
+          <SettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            storeRoot={catalog.storeRoot}
+            clients={catalog.clients}
+            latestSnapshotId={catalog.latestSnapshotId}
+            backupsLoading={catalog.backupsLoading}
+            onResetDone={catalog.reload}
+          />
+        </Suspense>
+      </div>
+    </ErrorBoundary>
   );
 }

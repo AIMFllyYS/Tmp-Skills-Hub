@@ -7,8 +7,10 @@ import { isToolUIPart, type UIMessage } from "ai";
 import { Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { renderMarkdown } from "@/lib/markdown.js";
+import { renderMarkdown } from "@/lib/markdown";
 import { fetchAgentModels } from "./api.js";
 import { ToolCallCard } from "./ToolCallCard.js";
 import type { AgentModel, WritePolicy } from "./types.js";
@@ -23,7 +25,7 @@ function textOf(message: UIMessage): string {
     .join("");
 }
 
-export function AgentPage(): React.JSX.Element {
+export function AgentPage({ onMutated }: { onMutated?: () => void } = {}): React.JSX.Element {
   const {
     messages,
     busy,
@@ -38,10 +40,11 @@ export function AgentPage(): React.JSX.Element {
     reset,
     approve,
     deny,
-  } = useAgentChat();
+  } = useAgentChat({ onMutated });
   const [models, setModels] = useState<AgentModel[]>([]);
   const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null);
+  const lastErrorRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +57,7 @@ export function AgentPage(): React.JSX.Element {
           res.models.map((m) => m.id),
         );
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         if (!cancelled) toast.error("模型列表加载失败: " + (e instanceof Error ? e.message : String(e)));
       });
     return () => {
@@ -63,9 +66,16 @@ export function AgentPage(): React.JSX.Element {
   }, [applyModelDefault]);
 
   useEffect(() => {
-    const el = scrollRef.current;
+    if (errorText !== null && errorText !== lastErrorRef.current) {
+      toast.error(errorText);
+    }
+    lastErrorRef.current = errorText;
+  }, [errorText]);
+
+  useEffect(() => {
+    const el = scrollViewportRef.current;
     if (el !== null) el.scrollTop = el.scrollHeight;
-  }, [messages, errorText]);
+  }, [messages]);
 
   const submit = (): void => {
     if (input.trim() === "" || busy) return;
@@ -80,78 +90,79 @@ export function AgentPage(): React.JSX.Element {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-6 py-4">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4">
         <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-ink-strong">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink-strong">
             <Bot className="size-4 text-ink-mid" aria-hidden />
             Agent
           </h1>
           <p className="mt-0.5 text-sm text-ink-mid">通过对话管理你的 skill 库存</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <select
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <NativeSelect
             aria-label="写策略"
             value={writePolicy}
             onChange={(ev) => onPolicyChange(ev.target.value === "allow" ? "allow" : "ask")}
-            className="h-9 rounded-lg border border-line bg-white px-2 text-sm text-ink-strong focus:outline-none"
+            className="w-auto"
           >
             <option value="ask">写操作需批准</option>
             <option value="allow">全部允许</option>
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             aria-label="模型"
             value={model}
             onChange={(ev) => setModel(ev.target.value)}
-            className="h-9 rounded-lg border border-line bg-white px-2 text-sm text-ink-strong focus:outline-none"
+            className="w-auto max-w-64"
           >
             {models.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label} · {m.note}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <Button variant="outline" size="sm" onClick={reset}>
             新会话
           </Button>
         </div>
-      </div>
+      </header>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
-        {messages.length === 0 && errorText === null && (
-          <div className="flex h-full flex-col items-center justify-center gap-4">
-            <p className="text-sm text-ink-faint">问我任何关于你的 skill 库存的事,我可以直接帮你查、启用、停用、归档。</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
-                <Button key={s} type="button" variant="outline" size="sm" onClick={() => send(s)}>
-                  {s}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-        {messages.map((message) => (
-          <div key={message.id} className="space-y-2">
-            {message.role === "user" ? (
-              <div className="ml-auto max-w-[80%] whitespace-pre-wrap rounded-xl bg-surface px-4 py-2 text-sm text-ink-strong">
-                {textOf(message)}
+      <ScrollArea viewportRef={scrollViewportRef} className="min-h-0 flex-1">
+        <div className="flex min-h-full flex-col space-y-4 px-6 py-4">
+          {messages.length === 0 && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12">
+              <p className="text-sm text-ink-faint">问我任何关于你的 skill 库存的事,我可以直接帮你查、启用、停用、归档。</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <Button key={s} type="button" variant="outline" size="sm" onClick={() => send(s)}>
+                    {s}
+                  </Button>
+                ))}
               </div>
-            ) : (
-              message.parts.map((part, i) =>
-                part.type === "text" ? (
-                  <div
-                    key={message.id + "-t-" + String(i)}
-                    className="skill-md max-w-full text-sm leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(part.text) }}
-                  />
-                ) : isToolUIPart(part) ? (
-                  <ToolCallCard key={part.toolCallId} part={part} onApprove={approve} onDeny={deny} />
-                ) : null,
-              )
-            )}
-          </div>
-        ))}
-        {errorText !== null && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{errorText}</p>}
-      </div>
+            </div>
+          )}
+          {messages.map((message) => (
+            <div key={message.id} className="space-y-2">
+              {message.role === "user" ? (
+                <div className="ml-auto max-w-[80%] whitespace-pre-wrap rounded-xl bg-surface px-4 py-2 text-sm text-ink-strong">
+                  {textOf(message)}
+                </div>
+              ) : (
+                message.parts.map((part, i) =>
+                  part.type === "text" ? (
+                    <div
+                      key={message.id + "-t-" + String(i)}
+                      className="skill-md max-w-full text-sm leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(part.text) }}
+                    />
+                  ) : isToolUIPart(part) ? (
+                    <ToolCallCard key={part.toolCallId} part={part} onApprove={approve} onDeny={deny} />
+                  ) : null,
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
 
       <div className="shrink-0 border-t border-line p-4">
         <div className="flex items-end gap-2">

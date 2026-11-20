@@ -4,6 +4,7 @@ import { hashSkillFolder } from "./hash.js";
 import { migrateVersionedData, type MigrationStep } from "./migrate.js";
 import { readSkillMeta } from "./skill-md.js";
 import { STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 import type { SkillMeta, SkillRecord, SkillSource } from "./types.js";
 
 /**
@@ -114,7 +115,7 @@ export async function writeStoreIndex(
   const tmpPath = path.join(
     storeRoot,
     STORE_TMP_DIR,
-    "index." + process.pid + "-" + Date.now() + ".tmp",
+    "index." + uniqueTmpId() + ".tmp",
   );
   await mkdir(path.dirname(tmpPath), { recursive: true });
   await writeFile(tmpPath, content, "utf8");
@@ -182,7 +183,7 @@ export async function adoptSkillFolder(
   if (!dryRun) {
     // 原子入位:先复制到 tmp 再 rename 到 skills/<name>
     await mkdir(path.join(storeRoot, STORE_TMP_DIR), { recursive: true });
-    const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "adopt." + process.pid + "-" + Date.now());
+    const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "adopt." + uniqueTmpId());
     await cp(folderPath, tmpDir, { recursive: true });
     await rename(tmpDir, dest);
     skills.push(record);

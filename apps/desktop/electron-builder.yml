@@ -1,0 +1,27 @@
+appId: "dev.skills-hub.desktop"
+productName: "Skills Hub"
+directories:
+  output: "release"
+npmRebuild: false
+nodeGypRebuild: false
+files:
+  - "dist/**"
+  - "package.json"
+  - "!node_modules/**"
+extraResources:
+  - from: "../web/dist"
+    to: "web"
+  - from: "../../packages/cli/self-skill"
+    to: "self-skill"
+win:
+  target:
+    - "nsis"
+    - "portable"
+  signAndEditExecutable: false
+mac:
+  target:
+    - "dmg"
+  identity: null
+linux:
+  target:
+    - "AppImage"

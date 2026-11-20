@@ -1,0 +1,68 @@
+name: Bug 报告
+description: 反馈缺陷、回归或沙箱/面板异常（需标注 Block A/B/C/D 与 DAG 依赖）
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请按 `docs/designs/architecture-initial-spec.md §7` 标注所属分块与依赖关系。
+        **切勿在日志或描述中粘贴真实的 `QINIU_API_KEY`、`GITHUB_TOKEN` 等凭据。**
+  - type: dropdown
+    id: block
+    attributes:
+      label: 所属分块（Block A/B/C/D）
+      description: 依据 architecture-initial-spec.md §2 选择主要所属分块
+      options:
+        - "A - 库存与镜像层（core / CLI 确定性内核）"
+        - "B - App 壳 / 桌面壳（web / desktop / HTTP）"
+        - "C - 分享层（share / adopt）"
+        - "D - 社区与统计层"
+        - "Ops / Docs / CI（跨分块基础设施）"
+    validations:
+      required: true
+  - type: input
+    id: depends-on
+    attributes:
+      label: 依赖哪些 issue（depends-on）
+      description: 修复本问题前置依赖的 issue 编号；无则填 none
+      placeholder: "#123, #124 或 none"
+    validations:
+      required: true
+  - type: input
+    id: blocked-by
+    attributes:
+      label: 被谁 block（blocked-by）
+      description: 当前阻断本问题推进的 issue / 外部因素；无则填 none
+      placeholder: "#125 或 none"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述与复现步骤
+      description: 说明触发路径与沙箱 `--home` 复现步骤
+      placeholder: |
+        1. 使用 `--home <sandbox>` 执行 ...
+        2. 预期行为：...
+        3. 实际行为：...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: OS（Windows/macOS/Linux）、Node 版本、pnpm 版本、运行模式（CLI / Web / Electron）
+      placeholder: |
+        - OS: Windows 11
+        - Node: v22.x
+        - Mode: skills-hub ui / Electron
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 安全与脱敏确认
+      options:
+        - label: 我已确认日志与复现信息中不包含真实密钥（QINIU_API_KEY / GITHUB_TOKEN）及个人敏感路径
+          required: true

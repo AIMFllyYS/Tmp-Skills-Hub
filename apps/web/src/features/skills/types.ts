@@ -31,6 +31,12 @@ export interface SkillsResponse {
   skills: SkillRecord[];
 }
 
+export interface StoreInitResponse {
+  ok: true;
+  command: string;
+  storeRoot: string;
+}
+
 export interface GroupsResponse {
   ok: true;
   command: "groups";
@@ -44,19 +50,6 @@ export interface ClientInfo {
 }
 
 export type ClientLinkState = "managed" | "off" | "unregistered-conflict" | "dangling";
-
-export interface ClientLinkRow {
-  clientId: string;
-  state: ClientLinkState;
-  detail: string;
-}
-
-export interface SkillLinksResponse {
-  ok: true;
-  command: "skill-links";
-  hash: string;
-  links: ClientLinkRow[];
-}
 
 export interface ClientSkillStateRow {
   hash: string;
@@ -138,13 +131,6 @@ export interface SkillFileResponse {
   sizeBytes: number;
 }
 
-export interface ApiError {
-  ok: false;
-  command: string;
-  code: string;
-  message: string;
-}
-
 export interface LinksBatchParams {
   hashes: string[];
   clientIds: string[];
@@ -196,16 +182,6 @@ export interface AdoptOutcome {
 export interface AnalyzeReportItem {
   name: string;
   reason: string;
-}
-
-export interface VerifyResponse {
-  ok: true;
-  command: "verify";
-  storeRoot: string;
-  checked: number;
-  passed: string[];
-  drifted: { name: string; recordedHash: string; actualHash: string }[];
-  missing: { name: string; recordedHash: string }[];
 }
 
 export interface DoctorResponse {

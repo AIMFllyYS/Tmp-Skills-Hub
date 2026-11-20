@@ -9,7 +9,7 @@ import {
   STORE_BACKUPS_DIR,
   verifyBackupSnapshot,
 } from "./backup.js";
-import { previewRestoreClientSkills, restoreClientSkills } from "./backup-restore.js";
+import { asideSkill, previewRestoreClientSkills, restoreClientSkills, unlinkNoFollow } from "./backup-restore.js";
 import { initializeStoreLayout, STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
 
 const temps: string[] = [];
@@ -194,6 +194,150 @@ describe("restoreClientSkills", () => {
     expect(result.skippedOwnDirs.some((s) => s.startsWith("skills-hub"))).toBe(true);
     expect(await readFile(destGamma, "utf8")).toContain("old-roots");
     expect(await existsSafe(path.join(w.home, ".skills-hub.pre-bootstrap-x"))).toBe(false);
+  });
+
+  it("Antigravity: 支持 .gemini/config/skills 的快照、canonical 选择与 roots 还原", async () => {
+    const w = await world();
+    const agDir = path.join(w.home, ".gemini", "config", "skills", "zeta");
+    await mkdir(agDir, { recursive: true });
+    await writeFile(path.join(agDir, "SKILL.md"), "---\nname: zeta\ndescription: z\n---\nantigravity-v1\n");
+    const snap = await createBackupSnapshot(w.store, w.home);
+
+    // 即使同时存在 .antigravity/skills, resolveSkillsDir 仍应选 .gemini/config/skills
+    await mkdir(path.join(w.home, ".antigravity", "skills"), { recursive: true });
+    await rm(agDir, { recursive: true, force: true });
+    const restored = await restoreClientSkills(w.store, w.home, snap.snapshotId);
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    expect(await readFile(path.join(agDir, "SKILL.md"), "utf8")).toContain("antigravity-v1");
+
+    // 空 home(尚未建出 .gemini/config/skills)还原时也应落入 .gemini/config/skills
+    const emptyHome = await tmp("skills-hub-ag-empty-home-");
+    const restoredEmpty = await restoreClientSkills(w.store, emptyHome, snap.snapshotId);
+    expect(restoredEmpty.ok).toBe(true);
+    expect(await readFile(path.join(emptyHome, ".gemini", "config", "skills", "zeta", "SKILL.md"), "utf8")).toContain("antigravity-v1");
+
+    // roots 格式包含 config/skills 也能预览与还原
+    const rootsId = "2026-08-17T10-00-00.000Z-ag-roots";
+    const snapDir = path.join(w.store, STORE_BACKUPS_DIR, rootsId);
+    const oldSrc = path.join(snapDir, "roots", "antigravity", ".gemini", "config", "skills", "theta");
+    await mkdir(oldSrc, { recursive: true });
+    await writeFile(path.join(oldSrc, "SKILL.md"), "---\nname: theta\ndescription: t\n---\nfrom-roots\n");
+    await writeFile(path.join(snapDir, "manifest.json"), JSON.stringify({
+      snapshotId: rootsId,
+      createdAt: "2026-08-17T10:00:00.000Z",
+      clientRoots: 1,
+      skillDirs: 1,
+    }) + "\n");
+    const resRoots = await restoreClientSkills(w.store, w.home, rootsId);
+    expect(resRoots.ok).toBe(true);
+    if (!resRoots.ok) return;
+    expect(await readFile(path.join(w.home, ".gemini", "config", "skills", "theta", "SKILL.md"), "utf8")).toContain("from-roots");
+  });
+
+  it("Issue #159 回归: 普通目录 + 预占旁路目录 + 连续两次 restoreClientSkills 均成功且不碰撞", async () => {
+    const w = await world();
+    const snap = await createBackupSnapshot(w.store, w.home);
+
+    // 预占基础 aside 路径(store tmp 与局部旁路)
+    await mkdir(path.join(w.store, STORE_TMP_DIR, "restore-aside-" + snap.snapshotId, "claude-alpha"), { recursive: true });
+    await mkdir(path.join(w.home, ".claude", ".skills-hub.restore-aside", snap.snapshotId, "claude-alpha"), { recursive: true });
+
+    // 第 1 次还原:普通目录被改写
+    await writeFile(path.join(w.skillA, "SKILL.md"), "---\nname: shared\ndescription: d\n---\nrun-1-edited\n");
+    const run1 = await restoreClientSkills(w.store, w.home, snap.snapshotId);
+    expect(run1.ok).toBe(true);
+    if (!run1.ok) return;
+    expect(await readFile(path.join(w.skillA, "SKILL.md"), "utf8")).toContain("same-bytes");
+    expect(run1.asideDir).not.toBe(path.join(w.store, STORE_TMP_DIR, "restore-aside-" + snap.snapshotId));
+
+    // 第 2 次还原(同一快照连续执行):再次改写后仍成功且使用不同 runId
+    await writeFile(path.join(w.skillA, "SKILL.md"), "---\nname: shared\ndescription: d\n---\nrun-2-edited\n");
+    const run2 = await restoreClientSkills(w.store, w.home, snap.snapshotId);
+    expect(run2.ok).toBe(true);
+    if (!run2.ok) return;
+    expect(run2.asideDir).not.toBe(run1.asideDir);
+    expect(await readFile(path.join(w.skillA, "SKILL.md"), "utf8")).toContain("same-bytes");
+  });
+
+  it("Issue #159: asideSkill 在 EPERM/EXDEV 时回退到 localAside 重试与 cp+unlinkNoFollow, 彻底锁定则报错指明路径", async () => {
+    const base = await tmp("skills-hub-aside-fallback-");
+    const storeAside = path.join(base, "store", "tmp", "restore-aside-r1");
+    const localAside = path.join(base, "home", ".claude", ".skills-hub.restore-aside", "r1");
+
+    // 1. storeDest 报 EXDEV → 回退到 localAside rename
+    const src1 = path.join(base, "home", ".claude", "skills", "s1");
+    await mkdir(src1, { recursive: true });
+    await writeFile(path.join(src1, "SKILL.md"), "s1-data");
+    const { rename: fsRename } = await import("node:fs/promises");
+    await asideSkill(src1, storeAside, localAside, "claude-s1", {
+      retryDelayMs: 1,
+      renameFn: async (oldP, newP) => {
+        if (newP.startsWith(storeAside)) {
+          const err = new Error("EXDEV") as NodeJS.ErrnoException;
+          err.code = "EXDEV";
+          throw err;
+        }
+        await fsRename(oldP, newP);
+      },
+    });
+    expect(await existsSafe(src1)).toBe(false);
+    expect(await readFile(path.join(localAside, "claude-s1", "SKILL.md"), "utf8")).toBe("s1-data");
+
+    // 2. rename 持续报 EPERM → 短重试后回退到 cp(localDest) + unlinkNoFollow(src), 内部目录与嵌套链接不跟随
+    const src2 = path.join(base, "home", ".claude", "skills", "s2");
+    const sub2 = path.join(src2, "sub");
+    const extTarget = path.join(base, "external-target");
+    await mkdir(sub2, { recursive: true });
+    await mkdir(extTarget, { recursive: true });
+    await writeFile(path.join(sub2, "note.md"), "s2-sub");
+    await writeFile(path.join(extTarget, "keep.txt"), "must-survive");
+    try {
+      await symlink(extTarget, path.join(src2, "nested-link"), process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      /* 无权限则仅测普通嵌套目录 */
+    }
+    // 预占一次 claude-s2 验证防碰撞命名
+    await mkdir(path.join(localAside, "claude-s2"), { recursive: true });
+    let renameCalls = 0;
+    await asideSkill(src2, storeAside, localAside, "claude-s2", {
+      retryDelayMs: 1,
+      renameFn: async () => {
+        renameCalls++;
+        const err = new Error("EPERM") as NodeJS.ErrnoException;
+        err.code = "EPERM";
+        throw err;
+      },
+    });
+    // 1 次 store + 1 次 local + 2 次重试 = 4 次 rename 尝试
+    expect(renameCalls).toBe(4);
+    expect(await existsSafe(src2)).toBe(false);
+    expect(await readFile(path.join(localAside, "claude-s2-1", "sub", "note.md"), "utf8")).toBe("s2-sub");
+    expect(await readFile(path.join(extTarget, "keep.txt"), "utf8")).toBe("must-survive");
+
+    // 3. rename 与 unlinkNoFollow 均被锁定 → 抛错含精确 src 路径和 IDE/终端锁定提示, 且原内容仍在
+    const src3 = path.join(base, "home", ".claude", "skills", "s3");
+    await mkdir(src3, { recursive: true });
+    await writeFile(path.join(src3, "SKILL.md"), "locked");
+    await expect(
+      asideSkill(src3, storeAside, localAside, "claude-s3", {
+        retryDelayMs: 1,
+        renameFn: async () => {
+          const err = new Error("EPERM") as NodeJS.ErrnoException;
+          err.code = "EPERM";
+          throw err;
+        },
+        unlinkFn: async () => {
+          const err = new Error("EBUSY") as NodeJS.ErrnoException;
+          err.code = "EBUSY";
+          throw err;
+        },
+      }),
+    ).rejects.toThrow(src3);
+    expect(await readFile(path.join(src3, "SKILL.md"), "utf8")).toBe("locked");
+    // 验证 unlinkNoFollow 对嵌套普通目录自身可正常工作
+    await unlinkNoFollow(src3);
+    expect(await existsSafe(src3)).toBe(false);
   });
 });
 

@@ -3,7 +3,7 @@
  * 只产出建议,不写盘。无密钥时 not-configured,不编造结论。
  */
 
-import { generateText, Output } from "ai";
+import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/core";
 import path from "node:path";
@@ -65,6 +65,8 @@ export function analyzeSystemPrompt(): string {
     "你是一个 Agent Skill 库存的分析助手。用户给出一个待评估的 skill 的 name 与 description,以及库存中其他 skill 的 name 与 description 列表。",
     "你的任务:判断库存里哪些 skill 与它功能相近(similar),哪些可能冲突(conflict,如职责重叠、命名易混、互相干扰)。",
     "只引用库存列表中真实存在的 name;每条给一句具体理由;没有相近或冲突就输出空数组。",
+    "只输出严格合法的 JSON 对象(不要 Markdown 代码块、不要多余说明文字),结构必须匹配:",
+    '{ "similar": [{ "name": "<库存skill名>", "reason": "<具体理由>" }], "conflict": [{ "name": "<库存skill名>", "reason": "<具体理由>" }] }',
     "这是建议,绝不执行任何写操作;不要编造库存列表之外的信息。",
   ].join("\n");
 }
@@ -75,13 +77,16 @@ export type AnalyzeGenerateResult =
 
 export type AnalyzeGenerate = (input: { system: string; prompt: string }) => Promise<AnalyzeGenerateResult>;
 
-async function defaultGenerate(input: { system: string; prompt: string }): Promise<AnalyzeGenerateResult> {
-  if (qiniuApiKey() === undefined) {
+export async function defaultGenerate(
+  input: { system: string; prompt: string },
+  opts: { model?: LanguageModel } = {},
+): Promise<AnalyzeGenerateResult> {
+  if (opts.model === undefined && qiniuApiKey() === undefined) {
     return { ok: false, code: "not-configured", message: notConfiguredMessage() };
   }
   try {
     const result = await generateText({
-      model: createQiniuModel(resolveModel()),
+      model: opts.model ?? createQiniuModel(resolveModel()),
       system: input.system,
       prompt: input.prompt,
       output: Output.object({ schema: reportSchema }),
@@ -135,6 +140,7 @@ export async function performAnalyze(storeRoot: string, input: string, opts: Run
   const result = await generate({
     system: analyzeSystemPrompt(),
     prompt:
+      "请只返回 JSON 对象({ \"similar\": [{ \"name\", \"reason\" }], \"conflict\": [{ \"name\", \"reason\" }] })。\n\n" +
       "待评估 skill:\nname: " +
       ctx.targetName +
       "\ndescription: " +
@@ -154,8 +160,7 @@ export async function performAnalyze(storeRoot: string, input: string, opts: Run
 export async function runAnalyze(args: AnalyzeArgs, opts: RunAnalyzeOptions = {}): Promise<void> {
   const input = args._.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(" ").trim();
   if (input === "") {
-    console.error("用法: skills-hub analyze <本地skill目录路径|库存skill名>");
-    process.exitCode = 2;
+    emitError(args.json === true, "analyze", "bad-usage", "用法: skills-hub analyze <本地skill目录路径|库存skill名>");
     return;
   }
   const { resolveStoreRootOrFail } = await import("./store-cmds.js");
@@ -164,8 +169,7 @@ export async function runAnalyze(args: AnalyzeArgs, opts: RunAnalyzeOptions = {}
 
   const res = await performAnalyze(storeRoot, input, { ...opts, allowLocalPath: true });
   if (!res.ok) {
-    const code = res.code === "not-found" ? "not-found" : res.code === "bad-usage" ? "bad-usage" : "analyze-failed";
-    emitError(args.json === true, "analyze", code, res.message);
+    emitError(args.json === true, "analyze", res.code, res.message);
     return;
   }
   if (args.json) {

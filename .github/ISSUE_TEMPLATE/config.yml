@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 架构规范与文档索引
+    url: https://github.com/AIMFllyYS/Tmp-Skills-Hub/blob/dev/AGENTS.md
+    about: 立项与提 issue 前请先查阅 AGENTS.md 与 docs/designs/architecture-initial-spec.md

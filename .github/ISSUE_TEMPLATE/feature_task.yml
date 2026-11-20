@@ -1,0 +1,60 @@
+name: 功能需求 / 工程任务
+description: 按架构方法论（三问开场 + Block DAG）立项新功能、重构或治理任务
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        按 `docs/designs/architecture-initial-spec.md §1 & §7`：先走三问开场，再画 DAG、标清分块与依赖，写对 issue 后才允许开工。
+  - type: dropdown
+    id: block
+    attributes:
+      label: 所属分块（Block A/B/C/D）
+      description: 依据 architecture-initial-spec.md §2 选择本任务所属分块
+      options:
+        - "A - 库存与镜像层（core / CLI 确定性内核）"
+        - "B - App 壳 / 桌面壳（web / desktop / HTTP）"
+        - "C - 分享层（share / adopt）"
+        - "D - 社区与统计层"
+        - "Ops / Docs / CI（跨分块基础设施）"
+    validations:
+      required: true
+  - type: input
+    id: depends-on
+    attributes:
+      label: 依赖哪些 issue（depends-on）
+      description: 本任务开工前必须先完成的上游 issue；无则填 none
+      placeholder: "#101 或 none"
+    validations:
+      required: true
+  - type: input
+    id: blocked-by
+    attributes:
+      label: 被谁 block（blocked-by）
+      description: 当前阻断本任务或等待裁决的事项；无则填 none
+      placeholder: "D 块账号系统 或 none"
+    validations:
+      required: true
+  - type: textarea
+    id: opening-questions
+    attributes:
+      label: 架构三问开场（architecture-initial-spec §1.1）
+      description: 任何功能立项前必须回答
+      value: |
+        1. 服务谁？（人 / Agent）：
+        2. 管什么资产？：
+        3. CRUD 落在哪一层？（core / cli / web / desktop）：
+    validations:
+      required: true
+  - type: textarea
+    id: scope-and-acceptance
+    attributes:
+      label: 改动范围与验收标准
+      description: 列出涉及的包、需要更新的契约/文档，以及可验证的完成条件（含沙箱 `--home` 测试）
+      placeholder: |
+        - 涉及包：`packages/core` / `packages/cli` / `apps/web` / `apps/desktop`
+        - 契约与文档同步：...
+        - 验收条件（`pnpm lint/typecheck/build/test` + 沙箱实测）：...
+    validations:
+      required: true

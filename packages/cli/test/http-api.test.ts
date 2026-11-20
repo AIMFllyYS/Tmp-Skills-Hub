@@ -3,10 +3,11 @@ import { mkdir, mkdtemp, readFile, readdir, readlink, rm, writeFile } from "node
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, beforeAll, expect, it } from "vitest";
+import { APICallError } from "ai";
 import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
 import { initializeStoreLayout, STORE_SKILLS_DIR, writeStoreIndex, type SkillRecord } from "@skills-hub/core";
-import { createUiApp } from "../src/ui-server.js";
+import { createUiApp, startUiServer } from "../src/ui-server.js";
 
 /** HTTP 契约测试:createUiApp 注入沙箱 storeRoot/home,app.request() 直测(不占真实端口)。 */
 
@@ -452,7 +453,7 @@ describe("http-api 契约", () => {
           { type: "text-start", id: "t0" },
           { type: "text-delta", id: "t0", delta: "好的" },
           { type: "text-end", id: "t0" },
-          { type: "finish", finishReason: "stop", usage },
+          { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
         ]),
       },
     });
@@ -618,6 +619,10 @@ describe("http-api 契约", () => {
   it("enable:写端点成功 + 链接建立 + visibleIn 更新 + 计数", async () => {
     const list = await (await app.request("/api/skills")).json() as { skills: { hash: string }[] };
     const hash = list.skills[0]!.hash;
+    const beforeStats = (await (await app.request("/api/stats")).json()) as {
+      stats: { counters: Record<string, { enable: number }> };
+    };
+    const prevEnable = beforeStats.stats.counters[hash]?.enable ?? 0;
     const res = await app.request("/api/skills/" + hash.slice(0, 12) + "/enable", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -637,7 +642,7 @@ describe("http-api 契约", () => {
       stats: { counters: Record<string, { enable: number }> };
       ranking: { skillHash?: string; hash?: string }[];
     };
-    expect(stats.stats.counters[hash]?.enable).toBe(1);
+    expect(stats.stats.counters[hash]?.enable).toBe(prevEnable + 1);
     expect(stats.ranking.some((r) => r.skillHash === hash)).toBe(true);
     for (const row of stats.ranking) {
       expect(typeof row.skillHash).toBe("string");
@@ -824,7 +829,8 @@ describe("http-api 契约", () => {
 
   it("adopt GitHub:fetch 替身收录", async () => {
     const skillMd = ["---", "name: gh-demo", "description: from github stub", "---", "", "# gh-demo"].join("\n") + "\n";
-    const fetchImpl = async (url: string): Promise<Response> => {
+    const fetchImpl: typeof fetch = async (input): Promise<Response> => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.startsWith("https://api.github.com/repos/org/repo/git/trees/main?recursive=1")) {
         return new Response(JSON.stringify({ tree: [{ path: "skills/gh-demo/SKILL.md", type: "blob" }] }), { status: 200 });
       }
@@ -853,7 +859,8 @@ describe("http-api 契约", () => {
 
   it("adopt skills.sh:fetch 替身收录", async () => {
     const skillMd = ["---", "name: sh-demo", "description: from skills.sh stub", "---", "", "# sh-demo"].join("\n") + "\n";
-    const fetchImpl = async (url: string): Promise<Response> => {
+    const fetchImpl: typeof fetch = async (input): Promise<Response> => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.startsWith("https://api.github.com/repos/org/repo/git/trees/main?recursive=1")) {
         return new Response(JSON.stringify({ tree: [{ path: "skills/sh-demo/SKILL.md", type: "blob" }] }), { status: 200 });
       }
@@ -885,7 +892,7 @@ describe("http-api 契约", () => {
     process.env.GITHUB_TOKEN = "test-token";
     try {
       const posted: Array<{ path: string }> = [];
-      const fetchImpl = async (url: string | URL, init?: RequestInit): Promise<Response> => {
+      const fetchImpl: typeof fetch = async (url, init): Promise<Response> => {
         const u = String(url);
         const method = (init?.method ?? "GET").toUpperCase();
         if (u === "https://api.github.com/repos/club/skills") return new Response(JSON.stringify({ default_branch: "main" }));
@@ -1284,5 +1291,280 @@ describe("skill 解析口径(#190)", () => {
     const g = listed.groups.find((x) => x.id === "issue-190")!;
     expect(g.memberHashes).toEqual([hashes.bravo, hashes.alpha, hashes.cafe]);
     expect(g.memberHashes).not.toContain(hashes.other);
+  });
+});
+
+describe("AI SDK v7 流式边界、本地安全加固与动态 storeInit", () => {
+  it("defaultTranslateStream(fullStream): 失败或中止不发 done 且绝不写译文缓存; 空译文也不落盘", async () => {
+    const isolated = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-translate-"));
+    tempRoots.push(isolated);
+    await initializeStoreLayout(isolated);
+    const demoDir = path.join(isolated, STORE_SKILLS_DIR, "demo");
+    await mkdir(demoDir, { recursive: true });
+    await writeFile(path.join(demoDir, "SKILL.md"), "---\nname: demo\ndescription: d\n---\nhello\n", "utf8");
+    const hash = "a".repeat(64);
+    await writeStoreIndex(isolated, [
+      {
+        hash,
+        dirName: "demo",
+        meta: { name: "demo", description: "d" },
+        origins: [{ kind: "authored", reference: "test" }],
+        visibleIn: [],
+        installedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    const failModel = new MockLanguageModelV3({
+      doStream: {
+        stream: convertArrayToReadableStream([
+          { type: "stream-start", warnings: [] },
+          { type: "text-start", id: "t0" },
+          { type: "text-delta", id: "t0", delta: "半截译文" },
+          {
+            type: "error",
+            error: new APICallError({
+              message: "rate limited",
+              url: "https://api.qnaigc.com/v1/chat/completions",
+              requestBodyValues: {},
+              statusCode: 429,
+            }),
+          },
+        ]),
+      },
+    });
+    const failApp = createUiApp({ storeRoot: isolated, home: isolated, languageModel: failModel });
+    const failRes = await failApp.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello", target: "demo", path: "SKILL.md" }),
+    });
+    expect(failRes.status).toBe(200);
+    const failText = await failRes.text();
+    expect(failText).toContain("event: error");
+    expect(failText).toContain("限流");
+    expect(failText).not.toContain("event: done");
+    const cachePath = path.join(isolated, "translations", hash, "SKILL.md");
+    await expect(readFile(cachePath, "utf8")).rejects.toThrow();
+
+    const abortModel = new MockLanguageModelV3({
+      doStream: {
+        stream: convertArrayToReadableStream([
+          { type: "stream-start", warnings: [] },
+          { type: "error", error: new DOMException("aborted", "AbortError") },
+        ]),
+      },
+    });
+    const abortApp = createUiApp({ storeRoot: isolated, home: isolated, languageModel: abortModel });
+    const abortRes = await abortApp.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello", target: "demo", path: "SKILL.md" }),
+    });
+    const abortText = await abortRes.text();
+    expect(abortText).toContain("event: error");
+    expect(abortText).toContain("aborted");
+    expect(abortText).not.toContain("event: done");
+    await expect(readFile(cachePath, "utf8")).rejects.toThrow();
+
+    const emptyApp = createUiApp({
+      storeRoot: isolated,
+      home: isolated,
+      translateStream: (async function* () {
+        yield { type: "text", delta: "   " } as const;
+        yield { type: "done" } as const;
+      }) as never,
+    });
+    const emptyRes = await emptyApp.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello", target: "demo", path: "SKILL.md" }),
+    });
+    expect(await emptyRes.text()).toContain("event: done");
+    await expect(readFile(cachePath, "utf8")).rejects.toThrow();
+  });
+
+  it("agent/chat: 无效 messages 返回 400 bad-usage; 流错误经 onError 返回中文提示", async () => {
+    const usage = {
+      inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
+      outputTokens: { total: 1, text: 1, reasoning: undefined },
+    };
+    const errModel = new MockLanguageModelV3({
+      doStream: {
+        stream: convertArrayToReadableStream([
+          { type: "stream-start", warnings: [] },
+          {
+            type: "error",
+            error: new APICallError({
+              message: "rate limited",
+              url: "https://api.qnaigc.com/v1/chat/completions",
+              requestBodyValues: {},
+              statusCode: 429,
+            }),
+          },
+          { type: "finish", finishReason: { unified: "error", raw: undefined }, usage },
+        ]),
+      },
+    });
+    const aapp = createUiApp({ storeRoot, home, languageModel: errModel });
+
+    const emptyMsgs = await aapp.request("/api/agent/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [] }),
+    });
+    expect(emptyMsgs.status).toBe(400);
+    expect(((await emptyMsgs.json()) as { code: string }).code).toBe("bad-usage");
+
+    const malformed = await aapp.request("/api/agent/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ id: "u1", role: "user" }] }),
+    });
+    expect(malformed.status).toBe(400);
+    expect(((await malformed.json()) as { code: string }).code).toBe("bad-usage");
+
+    const chatRes = await aapp.request("/api/agent/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ id: "u1", role: "user", parts: [{ type: "text", text: "hi" }] }] }),
+    });
+    expect(chatRes.status).toBe(200);
+    const streamText = await chatRes.text();
+    expect(streamText).toContain("限流");
+    expect(streamText).not.toContain("An error occurred.");
+  });
+
+  it("安全中间件: Host 校验 403、写 Origin 校验 403、非 JSON body 415、大载荷 413、未知 POST /api/* 404、缺失 /assets/* 404", async () => {
+    const badHost = await app.request("/api/skills", { headers: { host: "evil.com" } });
+    expect(badHost.status).toBe(403);
+    expect(((await badHost.json()) as { code: string }).code).toBe("forbidden");
+
+    for (const allowedHost of ["127.0.0.1:4321", "localhost", "[::1]:4321", "skills-hub"]) {
+      const ok = await app.request("/api/health", { headers: { host: allowedHost } });
+      expect(ok.status).toBe(200);
+    }
+
+    const badOrigin = await app.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://evil.com" },
+      body: JSON.stringify({ id: "x" }),
+    });
+    expect(badOrigin.status).toBe(403);
+    expect(((await badOrigin.json()) as { code: string }).code).toBe("forbidden");
+
+    const nullOrigin = await app.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "null" },
+      body: JSON.stringify({ id: "x" }),
+    });
+    expect(nullOrigin.status).toBe(403);
+
+    const electronOrigin = await app.request("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "app://skills-hub" },
+      body: "{}",
+    });
+    expect(electronOrigin.status).toBe(400);
+
+    const textPlain = await app.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: JSON.stringify({ id: "plain" }),
+    });
+    expect(textPlain.status).toBe(415);
+    expect(((await textPlain.json()) as { code: string }).code).toBe("bad-usage");
+
+    const oversizeHeader = await app.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-length": String(3 * 1024 * 1024) },
+      body: JSON.stringify({ id: "big" }),
+    });
+    expect(oversizeHeader.status).toBe(413);
+    expect(((await oversizeHeader.json()) as { code: string }).code).toBe("too-large");
+
+    const oversizeBody = await app.request("/api/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "x", name: "a".repeat(2 * 1024 * 1024 + 64) }),
+    });
+    expect(oversizeBody.status).toBe(413);
+    expect(((await oversizeBody.json()) as { code: string }).code).toBe("too-large");
+
+    const unknownPost = await app.request("/api/no-such-endpoint", { method: "POST" });
+    expect(unknownPost.status).toBe(404);
+    expect(((await unknownPost.json()) as { ok: boolean; code: string })).toMatchObject({ ok: false, code: "not-found" });
+
+    const assetApp = createUiApp({ storeRoot, home, webRoot });
+    const missingAsset = await assetApp.request("/assets/missing-chunk.js");
+    expect(missingAsset.status).toBe(404);
+  });
+
+  it("POST /api/store/init 动态初始化并更新 ctx.storeRoot; startUiServer 支持 port:0 与 close()", async () => {
+    const freshHome = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-init-"));
+    tempRoots.push(freshHome);
+    const bare = createUiApp({ storeRoot: null, home: freshHome });
+
+    const before = await bare.request("/api/skills");
+    expect(before.status).toBe(503);
+    expect(((await before.json()) as { code: string }).code).toBe("store-not-configured");
+
+    const badRel = await bare.request("/api/store/init", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ storeRoot: "relative/store" }),
+    });
+    expect(badRel.status).toBe(400);
+    expect(((await badRel.json()) as { code: string }).code).toBe("bad-usage");
+
+    const inited = await bare.request("/api/store/init", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(inited.status).toBe(200);
+    const initBody = (await inited.json()) as { ok: boolean; command: string; storeRoot: string };
+    expect(initBody.ok).toBe(true);
+    expect(initBody.command).toBe("store-init");
+    expect(initBody.storeRoot).toBe(path.join(freshHome, ".skills-hub", "store"));
+
+    const after = await bare.request("/api/skills");
+    expect(after.status).toBe(200);
+    const afterBody = (await after.json()) as { ok: boolean; storeRoot: string; total: number };
+    expect(afterBody.ok).toBe(true);
+    expect(afterBody.storeRoot).toBe(initBody.storeRoot);
+    expect(afterBody.total).toBe(0);
+
+    const handle = await startUiServer({ port: 0, home: freshHome, webRoot });
+    try {
+      expect(handle.port).toBeGreaterThan(0);
+      expect(handle.url).toBe("http://127.0.0.1:" + handle.port);
+      const health = await fetch(handle.url + "/api/health");
+      expect(health.status).toBe(200);
+      expect(await health.json()).toEqual({ ok: true });
+      await expect(startUiServer({ port: handle.port, home: freshHome, webRoot })).rejects.toThrow(/已被占用/);
+    } finally {
+      await handle.close();
+    }
+
+    const exportsMod = await import("../src/exports.js");
+    expect(typeof exportsMod.createUiApp).toBe("function");
+    expect(typeof exportsMod.startUiServer).toBe("function");
+    expect(typeof exportsMod.resolveUiStoreRoot).toBe("function");
+    expect(typeof exportsMod.loadEnvFile).toBe("function");
+    expect(typeof exportsMod.performInit).toBe("function");
+    expect(exportsMod.DEFAULT_UI_PORT).toBe(4321);
+  });
+
+  it("全局 onError 返回脱敏的 500 io-error JSON 信封", async () => {
+    const brokenHome = await mkdtemp(path.join(os.tmpdir(), "skills-hub-http-onerror-"));
+    tempRoots.push(brokenHome);
+    await writeFile(path.join(brokenHome, "index.json"), "{invalid json", "utf8");
+    const brokenApp = createUiApp({ storeRoot: brokenHome, home: brokenHome });
+    const res = await brokenApp.request("/api/skills");
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { ok: boolean; command: string; code: string; message: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("io-error");
+    expect(body.message).toContain("index.json");
   });
 });

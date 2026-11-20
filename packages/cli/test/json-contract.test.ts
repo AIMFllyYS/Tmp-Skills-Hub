@@ -219,4 +219,68 @@ describe("json 契约 v0(#28)", () => {
     expect(out.command).toBe("list");
     expect(out.code).toBe("store-not-configured");
   });
+
+  it("scan / verify / init --dry-run / archive & archive restore --json 输出纯净 JSON 信封", () => {
+    const scanned = runCli(["scan", "--home", home, "--json"]);
+    expect(scanned.code).toBe(0);
+    const so = JSON.parse(scanned.stdout) as { ok: boolean; command: string; home: string; roots: unknown[]; skills: unknown[]; total: number };
+    expect(so.ok).toBe(true);
+    expect(so.command).toBe("scan");
+    expect(Array.isArray(so.roots)).toBe(true);
+    expect(Array.isArray(so.skills)).toBe(true);
+
+    const verified = runCli(["verify", "--home", home, "--json"]);
+    expect(verified.code).toBe(0);
+    const vo = JSON.parse(verified.stdout) as { ok: boolean; command: string; checked: number; passed: string[]; drifted: unknown[]; missing: unknown[] };
+    expect(vo.ok).toBe(true);
+    expect(vo.command).toBe("verify");
+    expect(vo.passed).toContain("demo");
+    expect(vo.drifted).toEqual([]);
+
+    const initDry = runCli(["init", "--home", home, "--dry-run", "--json"]);
+    expect(initDry.code).toBe(0);
+    const ido = JSON.parse(initDry.stdout) as { ok: boolean; command: string; dryRun: boolean; storeRoot: string };
+    expect(ido.ok).toBe(true);
+    expect(ido.command).toBe("init");
+    expect(ido.dryRun).toBe(true);
+
+    const initBad = runCli(["init", "--home", "relative-bad-path", "--yes", "--json"]);
+    expect(initBad.code).toBe(2);
+    const ibo = JSON.parse(initBad.stdout) as { ok: boolean; command: string; code: string };
+    expect(ibo.ok).toBe(false);
+    expect(ibo.command).toBe("init");
+    expect(ibo.code).toBe("bad-usage");
+
+    const archived = runCli(["archive", "demo", "--home", home, "--yes", "--json"]);
+    expect(archived.code).toBe(0);
+    const ao = JSON.parse(archived.stdout) as { ok: boolean; command: string; failed: number; results: Array<{ dirName: string; ok: boolean }> };
+    expect(ao.ok).toBe(true);
+    expect(ao.command).toBe("archive");
+    expect(ao.failed).toBe(0);
+    expect(ao.results[0]?.dirName).toBe("demo");
+
+    const restored = runCli(["archive", "restore", "demo", "--home", home, "--yes", "--json"]);
+    expect(restored.code).toBe(0);
+    const aro = JSON.parse(restored.stdout) as { ok: boolean; command: string; verb: string; failed: number; results: Array<{ name: string; ok: boolean }> };
+    expect(aro.ok).toBe(true);
+    expect(aro.command).toBe("archive");
+    expect(aro.verb).toBe("restore");
+    expect(aro.failed).toBe(0);
+  });
+
+  it("analyze --json: 缺参数与无密钥均返回结构化信封与 exit 2", () => {
+    const noArg = runCli(["analyze", "--home", home, "--json"]);
+    expect(noArg.code).toBe(2);
+    const nao = JSON.parse(noArg.stdout) as { ok: boolean; command: string; code: string };
+    expect(nao.ok).toBe(false);
+    expect(nao.command).toBe("analyze");
+    expect(nao.code).toBe("bad-usage");
+
+    const noKey = runCli(["analyze", "demo", "--home", home, "--json"], { env: { QINIU_API_KEY: "" } });
+    expect(noKey.code).toBe(2);
+    const nko = JSON.parse(noKey.stdout) as { ok: boolean; command: string; code: string };
+    expect(nko.ok).toBe(false);
+    expect(nko.command).toBe("analyze");
+    expect(nko.code).toBe("not-configured");
+  });
 });

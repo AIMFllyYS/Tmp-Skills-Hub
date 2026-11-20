@@ -35,7 +35,7 @@
 | --- | --- |
 | 0 | 成功(含 dry-run 预演) |
 | 1 | 内部错误/未分类异常 |
-| 2 | 用法或业务错误(对应失败信封) |
+| 2 | 用法或业务错误(对应失败信封,含 `adopt` 拉取失败等全部 CLI 业务失败;不得返回 3 等非标准码) |
 
 ### 1.5 分页
 
@@ -114,9 +114,32 @@ doctor 是自检命令:即使库存未配置也 `ok:true`(自检结果本身就�
 
 dry-run:附加 `dryRun:true` + `wouldCreate`/`wouldRemove`(与 created/removed 互斥出现)。
 
-### 2.7 adopt / verify / archive
+### 2.7 scan / init / adopt / verify / archive
 
-照 §2.1 信封加 `ok`/`command`,数据字段沿用现有形状(outcomes / checked+ok+drifted+missing / archiveDir+results+failed)。
+- `scan --json`（只读发现，无库存依赖）：
+```json
+{ "ok": true, "command": "scan", "home": "...", "roots": [ { "clientId": "claude", "skillsDir": "..." } ], "skills": [ { "hash": "...", "clientId": "claude", "name": "...", "description": "..." } ], "total": 1 }
+```
+- `init --json`：
+```json
+{ "ok": true, "command": "init", "storeRoot": "...", "pointerFile": "...", "layoutCreated": true, "builtinGroupsWrote": true, "message": "初始化完成" }
+```
+  dry-run 时附加 `"dryRun": true`；参数缺失或路径非绝对路径时输出 `bad-usage` / `auth-required` 失败信封并退出 2。
+- `adopt --json`：
+```json
+{ "ok": true, "command": "adopt", "dryRun": false, "storeRoot": "...", "outcomes": [], "adopted": 1, "duplicates": 0, "conflicts": 0, "invalid": 0, "fetchFailed": false }
+```
+  全部远端拉取失败且 `outcomes` 为空时输出 `github-fetch-failed` 失败信封并退出 2（统一遵守 §1.4 退出码 `0|1|2`）。
+- `verify --json`（严格只读，与 HTTP `/api/verify` 同形）：
+```json
+{ "ok": true, "command": "verify", "storeRoot": "...", "checked": 1, "passed": ["demo"], "drifted": [], "missing": [] }
+```
+  通过集合键名统一为 `passed`，不与顶层信封 `ok: true` 冲突。
+- `archive --json`：
+  - 归档执行：`{ "ok": true, "command": "archive", "archiveDir": "...", "results": [], "failed": 0 }`（dry-run 含 `dryRun: true, plan`）
+  - 列出归档区：`{ "ok": true, "command": "archive", "verb": "list", "archiveDir": "...", "archived": [] }`
+  - 恢复：`{ "ok": true, "command": "archive", "verb": "restore", "results": [], "failed": 0 }`
+  - `--json` 模式下禁止向 stdout 打印人类可读文本。
 
 ### 2.8 backup
 
@@ -203,11 +226,11 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 | draft-not-found | new commit / new discard 目标不在 drafts[] 中 |
 | draft-incomplete | new commit 时 SKILL.md 缺 name 或 description |
 | io-error | 文件系统故障 |
-| not-configured | 分析/翻译缺 DEEPSEEK_API_KEY（HTTP 503；CLI `analyze` 当前可能映射为 analyze-failed，对齐见工程债） |
+| not-configured | 分析/翻译/Agent 缺 `QINIU_API_KEY`（CLI `analyze` 保留 `not-configured` 并退出 2;HTTP 503） |
 | github-fetch-failed | adopt 拉 GitHub/skills.sh 失败 |
-| analyze-failed | 分析模型调用失败 |
+| analyze-failed | 分析模型调用失败（`performAnalyze` / CLI `analyze` / `POST /api/analyze` 将除 `not-configured` 外的底层 `LlmFailureCode` 如 `invalid-response` / `timeout` / `network` / `api` 收拢为此 code,并在 `message` 附带底层码） |
 
-HTTP 另有文件读取 code：`binary` / `too-large`（422）、`outside`（400），见 [http-api-v0.md](http-api-v0.md) §4。
+内部流/LLM 失败码（`LlmFailureCode`）：`mapLlmError` 还会产出 `invalid-response`、`aborted`、`timeout`、`network`、`api`——翻译 SSE 流通过 `error` 事件直接暴露这些 `code`,HTTP `STATUS_BY_CODE` 亦为 `invalid-response` 预留 `502`（`forbidden` 403、`translation-not-found` 404、`conflict` 409、请求体 `too-large` 413 及文件读取 `binary`/`too-large` 422、`outside` 400 见 [http-api-v0.md](http-api-v0.md) §4）。
 
 ## 4. ui-server 的 GET /api/skills（库存视图）
 

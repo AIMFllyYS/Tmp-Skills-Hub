@@ -8,6 +8,7 @@ import {
   writeStoreIndex,
 } from "./store.js";
 import { STORE_ARCHIVE_DIR, STORE_SKILLS_DIR, STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 import type { SkillRecord, SkillSource } from "./types.js";
 
 /**
@@ -66,7 +67,7 @@ export async function allocateDraft(
   };
 
   await mkdir(path.join(storeRoot, STORE_TMP_DIR), { recursive: true });
-  const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "draft." + process.pid + "-" + Date.now());
+  const tmpDir = path.join(storeRoot, STORE_TMP_DIR, "draft." + uniqueTmpId());
   await mkdir(tmpDir, { recursive: true });
   await writeFile(
     path.join(tmpDir, "SKILL.md"),

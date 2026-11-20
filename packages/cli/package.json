@@ -1,11 +1,17 @@
 {
   "name": "@skills-hub/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "skill-hub 命令行:确定性内核的终端入口",
   "type": "module",
   "bin": {
     "skills-hub": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/exports.d.ts",
+      "default": "./dist/exports.js"
+    }
   },
   "files": [
     "dist",
@@ -13,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b --force",
+    "typecheck": "tsc -b --force && tsc -p tsconfig.test.json --noEmit",
     "test": "tsc -b && vitest run",
     "dev": "tsx src/index.ts"
   },

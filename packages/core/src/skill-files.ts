@@ -1,7 +1,11 @@
 import { lstat, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { readGroups, writeGroups } from "./groups.js";
 import { hashSkillFolder } from "./hash.js";
+import { readLinksLedger, writeLinksLedger } from "./links.js";
+import { migrateSkillStatsHash } from "./stats.js";
 import { readStoreIndex, writeStoreIndex } from "./store.js";
+import { uniqueTmpId } from "./tmp-id.js";
 
 /**
  * skill 内容读取(#36):文件树与文件内容,供面板查看器使用。
@@ -133,25 +137,55 @@ export async function saveSkillFile({ storeRoot, skillDir, relPath, content }: S
       const versionDir = path.join(storeRoot, "archive", "versions", name + "-" + stamp);
       const versionFile = path.join(versionDir, relPath);
       await mkdir(path.dirname(versionFile), { recursive: true });
-      const tmpV = versionFile + ".tmp-" + process.pid + "-" + Date.now();
+      const tmpV = versionFile + ".tmp-" + uniqueTmpId();
       await writeFile(tmpV, oldBuf);
       await rename(tmpV, versionFile);
     }
     // 3. 原子写回原件
-    const tmp = path.join(skillDir, "." + path.basename(safe) + ".tmp-" + process.pid + "-" + Date.now());
+    const tmp = path.join(skillDir, "." + path.basename(safe) + ".tmp-" + uniqueTmpId());
     await writeFile(tmp, content, "utf8");
     await rename(tmp, safe);
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     return { ok: false, code: "io-error", message: "写入失败(未产生半个文件): " + reason };
   }
-  // 4. 重算哈希并更新 index.json 记录(原子)
+  // 4. 重算哈希并原子同步 index.json / groups.json / stats.json / links.json
   try {
     const newHash = await hashSkillFolder(skillDir);
     const skills = await readStoreIndex(storeRoot);
     const rec = skills.find((s) => s.dirName === name);
+    const oldHash = rec?.hash;
     if (rec !== undefined) rec.hash = newHash;
     await writeStoreIndex(storeRoot, skills);
+
+    if (rec !== undefined && oldHash !== undefined && oldHash !== newHash) {
+      const groups = await readGroups(storeRoot);
+      let groupsChanged = false;
+      for (const g of groups.groups) {
+        if (g.memberHashes.includes(oldHash)) {
+          g.memberHashes = [...new Set(g.memberHashes.map((h) => (h === oldHash ? newHash : h)))];
+          groupsChanged = true;
+        }
+      }
+      if (groupsChanged) {
+        await writeGroups(storeRoot, groups);
+      }
+
+      await migrateSkillStatsHash(storeRoot, oldHash, newHash);
+
+      const ledger = await readLinksLedger(storeRoot);
+      let ledgerChanged = false;
+      for (const entry of ledger) {
+        if ((entry.skillHash === oldHash && entry.entryName === name) || entry.skillHash === oldHash) {
+          entry.skillHash = newHash;
+          ledgerChanged = true;
+        }
+      }
+      if (ledgerChanged) {
+        await writeLinksLedger(storeRoot, ledger);
+      }
+    }
+
     return { ok: true, newHash };
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);

@@ -11,8 +11,12 @@
 
 ## 现有文档
 
-- [architecture-initial-spec.md](./architecture-initial-spec.md) — 项目架构初始规范（宏观最高约束：方法论、系统分块 DAG、资产模型、五操作语义、接口抽象点）
+- [architecture-initial-spec.md](./architecture-initial-spec.md) — 项目架构初始规范（宏观最高约束：方法论、系统分块 DAG、资产模型、六操作语义、接口抽象点）
 - [tech-stack-decision.md](./tech-stack-decision.md) — 技术选型决策记录（core + CLI + Vite 壳，而不是 Next.js）
+- [app-shell-v2.md](./app-shell-v2.md) — 人用壳信息架构 v2（左侧四板块：总览 / 统计 / Skills 管理 / Agent + 左下角设置 Dialog）
+- [desktop-shell-v0.md](./desktop-shell-v0.md) — 桌面端外壳设计 v0（Electron vs Tauri、进程内 CLI 服务、PATH 共存与无签名分发权衡）
+- [panel-ia-v1.md](./panel-ia-v1.md) — 面板数据层约束（行级关系、批量一次原子提交、动作注册表；三栏骨架已由 `app-shell-v2.md` 取代）
+- [backup-mechanism-analysis.md](./backup-mechanism-analysis.md) — 客户端 skills 备份机制分析稿（共享 blob 池与还原口径）
 
 ## 文档结构模板
 

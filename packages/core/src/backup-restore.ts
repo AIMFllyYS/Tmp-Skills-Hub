@@ -1,8 +1,9 @@
-import { cp, lstat, mkdir, readdir, readFile, rename, rm, symlink, unlink, utimes, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, readFile, rename, rmdir, stat, symlink, unlink, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { discoverClientRoots, isOwnClientId } from "./clients.js";
 import { readLinkTarget } from "./link-probe.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueSuffix } from "./tmp-id.js";
 import {
   readLatestSnapshotId,
   STORE_BACKUPS_DIR,
@@ -80,6 +81,11 @@ async function readRawManifest(snapshotDir: string): Promise<unknown> {
   return JSON.parse(await readFile(path.join(snapshotDir, "manifest.json"), "utf8")) as unknown;
 }
 
+const ROOTS_REL_SKILLS = ["skills", "skills-cursor", "antigravity/skills", "config/skills"] as const;
+const RETRYABLE_RENAME_CODES = new Set(["EXDEV", "EPERM", "EACCES", "EBUSY", "EEXIST"]);
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 /** 摘链接不跟随;普通目录逐条摘内部链接后再删。 */
 export async function unlinkNoFollow(p: string): Promise<void> {
   if (!(await exists(p))) return;
@@ -91,38 +97,139 @@ export async function unlinkNoFollow(p: string): Promise<void> {
   if (st.isDirectory()) {
     const names = await readdir(p);
     for (const name of names) await unlinkNoFollow(path.join(p, name));
-    await rm(p, { recursive: false });
+    await rmdir(p);
     return;
   }
   await unlink(p);
 }
 
-/** 链接摘掉不跟随;普通目录先 rename 到库存 tmp,跨卷再落到同盘旁路。 */
-async function asideSkill(src: string, storeAside: string, localAside: string, name: string): Promise<void> {
-  if ((await readLinkTarget(src)) !== null) {
-    await unlinkNoFollow(src);
+export interface AsideOps {
+  renameFn?: (oldPath: string, newPath: string) => Promise<void>;
+  unlinkFn?: (p: string) => Promise<void>;
+  retryDelayMs?: number;
+}
+
+function isRetryableRenameError(e: unknown): boolean {
+  const code = (e as NodeJS.ErrnoException | undefined)?.code;
+  return code !== undefined && RETRYABLE_RENAME_CODES.has(code);
+}
+
+function asideFailedError(src: string, cause: unknown): Error {
+  const reason = cause instanceof Error ? cause.message : String(cause);
+  return new Error(
+    `无法将技能目录 "${src}" 暂存到旁路目录（可能被 IDE 或终端占用锁定）；请关闭相关进程后安全重试（原内容未被删除）。原因: ${reason}`,
+    { cause },
+  );
+}
+
+async function uniqueAsideDest(dir: string, name: string): Promise<string> {
+  const base = path.join(dir, name);
+  if (!(await exists(base))) return base;
+  for (let i = 1; i < 1000; i++) {
+    const candidate = path.join(dir, `${name}-${i}`);
+    if (!(await exists(candidate))) return candidate;
+  }
+  return path.join(dir, `${name}-${uniqueSuffix()}`);
+}
+
+async function copyTreeJunctionSafe(src: string, dest: string): Promise<void> {
+  const linkTarget = await readLinkTarget(src);
+  if (linkTarget !== null) {
+    const targetStat = await stat(linkTarget).catch(() => null);
+    const type = process.platform === "win32" && targetStat?.isDirectory() ? "junction" : undefined;
+    await symlink(linkTarget, dest, type);
     return;
   }
-  const storeDest = path.join(storeAside, name);
+  const st = await lstat(src);
+  if (st.isDirectory()) {
+    await mkdir(dest, { recursive: true });
+    const names = await readdir(src);
+    for (const name of names) {
+      await copyTreeJunctionSafe(path.join(src, name), path.join(dest, name));
+    }
+    return;
+  }
+  await cp(src, dest, { verbatimSymlinks: true });
+}
+
+/**
+ * 链接摘掉不跟随;普通目录先 rename 到库存 tmp,遇跨卷/占用先落同盘旁路并短重试,
+ * 仍失败则退回 cp(localDest) + unlinkNoFollow(src);绝不整目录 rename 客户端 skills,绝不真删。
+ */
+export async function asideSkill(
+  src: string,
+  storeAside: string,
+  localAside: string,
+  name: string,
+  ops?: AsideOps,
+): Promise<void> {
+  const renameFn = ops?.renameFn ?? rename;
+  const unlinkFn = ops?.unlinkFn ?? unlinkNoFollow;
+  const retryDelayMs = ops?.retryDelayMs ?? 100;
+
+  if ((await readLinkTarget(src)) !== null) {
+    try {
+      await unlinkFn(src);
+    } catch (e) {
+      throw asideFailedError(src, e);
+    }
+    return;
+  }
+
+  const storeDest = await uniqueAsideDest(storeAside, name);
   await mkdir(path.dirname(storeDest), { recursive: true });
   try {
-    await rename(src, storeDest);
+    await renameFn(src, storeDest);
     return;
   } catch (e) {
-    const err = e as NodeJS.ErrnoException;
-    if (err.code !== "EXDEV") throw e;
+    if (!isRetryableRenameError(e)) throw asideFailedError(src, e);
   }
-  const localDest = path.join(localAside, name);
-  await mkdir(path.dirname(localDest), { recursive: true });
+
+  await mkdir(localAside, { recursive: true });
+  const tryLocalRename = async (): Promise<{ ok: true } | { ok: false; err: unknown }> => {
+    const dest = await uniqueAsideDest(localAside, name);
+    try {
+      await renameFn(src, dest);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, err };
+    }
+  };
+
+  let lastRes = await tryLocalRename();
+  if (lastRes.ok) return;
+  if (!isRetryableRenameError(lastRes.err)) throw asideFailedError(src, lastRes.err);
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await sleep(retryDelayMs);
+    lastRes = await tryLocalRename();
+    if (lastRes.ok) return;
+    if (!isRetryableRenameError(lastRes.err)) throw asideFailedError(src, lastRes.err);
+  }
+
+  const cpDest = await uniqueAsideDest(localAside, name);
   try {
-    await rename(src, localDest);
-    return;
-  } catch (e) {
-    const err = e as NodeJS.ErrnoException;
-    if (err.code !== "EXDEV") throw e;
+    await cp(src, cpDest, { recursive: true, verbatimSymlinks: true });
+  } catch (cpErr) {
+    const err = cpErr as NodeJS.ErrnoException;
+    if (process.platform === "win32" && err.code === "EPERM" && err.syscall === "symlink") {
+      await unlinkNoFollow(cpDest).catch(() => undefined);
+      try {
+        await copyTreeJunctionSafe(src, cpDest);
+      } catch (fallbackErr) {
+        await unlinkNoFollow(cpDest).catch(() => undefined);
+        throw asideFailedError(src, fallbackErr);
+      }
+    } else {
+      await unlinkNoFollow(cpDest).catch(() => undefined);
+      throw asideFailedError(src, cpErr);
+    }
   }
-  await cp(src, storeDest, { recursive: true, verbatimSymlinks: true });
-  await unlinkNoFollow(src);
+  try {
+    await unlinkFn(src);
+  } catch (unlinkErr) {
+    throw asideFailedError(src, unlinkErr);
+  }
 }
 
 async function resolveSkillsDir(
@@ -133,14 +240,23 @@ async function resolveSkillsDir(
 ): Promise<string> {
   const roots = await discoverClientRoots(home, { storeRoot });
   const matches = roots.filter((r) => r.clientId === clientId);
-  if (matches.length === 0) return path.join(home, "." + clientId, "skills");
+  if (matches.length === 0) {
+    if (clientId === "antigravity") return path.join(home, ".gemini", "config", "skills");
+    return path.join(home, "." + clientId, "skills");
+  }
   if (matches.length === 1) return matches[0]!.skillsDir;
   for (const r of matches) {
     if (await exists(path.join(r.skillsDir, skill))) return r.skillsDir;
   }
   const canonical = matches.find((r) => {
     const n = r.skillsDir.replace(/\\/g, "/");
-    return n.endsWith("/skills") && !n.includes("skills-cursor") && !n.includes("antigravity");
+    if (clientId === "antigravity") return n.endsWith("/.gemini/config/skills");
+    return (
+      n.endsWith("/skills") &&
+      !n.includes("skills-cursor") &&
+      !n.includes("antigravity") &&
+      !n.endsWith("/config/skills")
+    );
   });
   return (canonical ?? matches[0]!).skillsDir;
 }
@@ -238,7 +354,7 @@ async function previewRoots(snapshotDir: string, home: string, snapshotId: strin
         if (!skippedOwnDirs.includes(dot)) skippedOwnDirs.push(dot);
         continue;
       }
-      for (const relSkills of ["skills", "skills-cursor", "antigravity/skills"]) {
+      for (const relSkills of ROOTS_REL_SKILLS) {
         const srcSkills = path.join(clientSnap, dot, ...relSkills.split("/"));
         if (!(await isDir(srcSkills))) continue;
         const destSkills = path.join(home, dot, ...relSkills.split("/"));
@@ -326,15 +442,14 @@ async function recreateLink(dest: string, target: string, _kind: BackupLinkEntry
 
 async function applyBlobRestore(
   storeRoot: string,
-  home: string,
-  snapshotId: string,
+  runId: string,
+  asideRoot: string,
   manifest: BackupManifest,
   preview: RestorePreview,
 ): Promise<void> {
-  const asideRoot = path.join(storeRoot, STORE_TMP_DIR, "restore-aside-" + snapshotId);
   for (const item of preview.wouldRestore) {
     if (await exists(item.dest)) {
-      const localAside = path.join(path.dirname(path.dirname(item.dest)), ".skills-hub.restore-aside", snapshotId);
+      const localAside = path.join(path.dirname(path.dirname(item.dest)), ".skills-hub.restore-aside", runId);
       await asideSkill(item.dest, asideRoot, localAside, item.clientId + "-" + item.skill);
     }
     if (item.kind === "link" && item.linkTarget !== undefined) {
@@ -347,15 +462,19 @@ async function applyBlobRestore(
   }
 }
 
-async function applyRootsRestore(storeRoot: string, snapshotDir: string, preview: RestorePreview): Promise<void> {
+async function applyRootsRestore(
+  runId: string,
+  asideRoot: string,
+  snapshotDir: string,
+  preview: RestorePreview,
+): Promise<void> {
   const rootsDir = path.join(snapshotDir, "roots");
-  const asideRoot = path.join(storeRoot, STORE_TMP_DIR, "restore-aside-" + preview.snapshotId);
   for (const item of preview.wouldRestore) {
     const destSkills = path.dirname(item.dest);
     const srcGuess = await findOldSkillSrc(rootsDir, item);
     if (srcGuess === null) continue;
     if (await exists(item.dest)) {
-      const localAside = path.join(path.dirname(destSkills), ".skills-hub.restore-aside", preview.snapshotId);
+      const localAside = path.join(path.dirname(destSkills), ".skills-hub.restore-aside", runId);
       await asideSkill(item.dest, asideRoot, localAside, item.clientId + "-" + item.skill);
     }
     await mkdir(destSkills, { recursive: true });
@@ -367,7 +486,7 @@ async function findOldSkillSrc(rootsDir: string, item: RestoreSkillItem): Promis
   const clientSnap = path.join(rootsDir, item.clientId);
   const dots = await readdir(clientSnap).catch(() => [] as string[]);
   for (const dot of dots) {
-    for (const relSkills of ["skills", "skills-cursor", "antigravity/skills"]) {
+    for (const relSkills of ROOTS_REL_SKILLS) {
       const src = path.join(clientSnap, dot, ...relSkills.split("/"), item.skill);
       if (await exists(src)) {
         const destNorm = item.dest.replace(/\\/g, "/");
@@ -388,11 +507,12 @@ export async function restoreClientSkills(
   const preview = await previewRestoreClientSkills(storeRoot, home, snapshotId);
   if (!preview.ok) return preview;
   const snapshotDir = snapshotDirOf(storeRoot, preview.snapshotId);
-  const asideDir = path.join(storeRoot, STORE_TMP_DIR, "restore-aside-" + preview.snapshotId);
+  const runId = preview.snapshotId + "-" + uniqueSuffix();
+  const asideDir = path.join(storeRoot, STORE_TMP_DIR, "restore-aside-" + runId);
   try {
     const raw = await readRawManifest(snapshotDir);
-    if (isBlobBackupManifest(raw)) await applyBlobRestore(storeRoot, home, preview.snapshotId, raw, preview);
-    else await applyRootsRestore(storeRoot, snapshotDir, preview);
+    if (isBlobBackupManifest(raw)) await applyBlobRestore(storeRoot, runId, asideDir, raw, preview);
+    else await applyRootsRestore(runId, asideDir, snapshotDir, preview);
   } catch (e) {
     return {
       ok: false,

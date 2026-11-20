@@ -1,6 +1,7 @@
 import { BarChart3, Blocks, Bot, LayoutDashboard, PanelLeft, PanelLeftClose, Settings } from "lucide-react";
 import type { CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -104,19 +105,21 @@ export function Sidebar({
         </div>
       </div>
       <Separator />
-      <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1" aria-label="板块">
-        {NAV.map((item) => (
-          <NavButton
-            key={item.id}
-            label={item.label}
-            testId={item.testId}
-            collapsed={collapsed}
-            icon={item.icon}
-            active={page === item.id}
-            onClick={() => onPage(item.id)}
-          />
-        ))}
-      </nav>
+      <ScrollArea className="min-h-0 flex-1">
+        <nav className="flex flex-col py-1" aria-label="板块">
+          {NAV.map((item) => (
+            <NavButton
+              key={item.id}
+              label={item.label}
+              testId={item.testId}
+              collapsed={collapsed}
+              icon={item.icon}
+              active={page === item.id}
+              onClick={() => onPage(item.id)}
+            />
+          ))}
+        </nav>
+      </ScrollArea>
       <Separator />
       <div className="shrink-0 py-1">
         <NavButton

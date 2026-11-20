@@ -1,0 +1,16 @@
+# Default owner for experimental repository AIMFllyYS/Tmp-Skills-Hub
+# When migrating back to KinomotoMio/skill-hub, expand module maintainers here.
+* @AIMFllyYS
+
+# Core deterministic kernel & CLI runtime
+/packages/core/ @AIMFllyYS
+/packages/cli/ @AIMFllyYS
+
+# Human-facing shells (Web SPA & Electron desktop wrapper)
+/apps/web/ @AIMFllyYS
+/apps/desktop/ @AIMFllyYS
+
+# Architecture specs, conventions & CI governance
+/docs/ @AIMFllyYS
+/.github/ @AIMFllyYS
+/AGENTS.md @AIMFllyYS

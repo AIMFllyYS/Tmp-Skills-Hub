@@ -36,7 +36,7 @@ afterEach(async () => {
   process.exitCode = 0;
 });
 
-function answers(seq: string[]): (p: string) => Promise<string> {
+function answers(seq: string[]): ((p: string) => Promise<string>) & { called: string[] } {
   let i = 0;
   const called: string[] = [];
   const fn = async (p: string): Promise<string> => { called.push(p); return seq[i++] ?? ""; };

@@ -5,6 +5,7 @@ import { discoverClientRoots } from "./clients.js";
 import { readLinkTarget } from "./link-probe.js";
 import { isIgnoredSkillEntry } from "./skill-ignore.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
+import { uniqueTmpId } from "./tmp-id.js";
 
 /** 备份区(与 skills/ archive/ tmp 并列)。 */
 export const STORE_BACKUPS_DIR = "backups";
@@ -75,7 +76,7 @@ async function existsFile(p: string): Promise<boolean> {
 
 async function writeAtomic(target: string, data: Uint8Array | string, tmpRoot: string): Promise<void> {
   await mkdir(tmpRoot, { recursive: true });
-  const tmp = path.join(tmpRoot, "bak." + process.pid + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8));
+  const tmp = path.join(tmpRoot, "bak." + uniqueTmpId());
   if (typeof data === "string") await writeFile(tmp, data, "utf8");
   else await writeFile(tmp, data);
   await mkdir(path.dirname(target), { recursive: true });

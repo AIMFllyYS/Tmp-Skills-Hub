@@ -15,6 +15,7 @@ import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
 import { openBrowser } from "./open-console.js";
 import { POINTER_REL, requireWriteAuth } from "./store-cmds.js";
+import { TRANSLATIONS_DIR } from "./translations.js";
 import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
 
 export interface ResetArgs {
@@ -27,7 +28,7 @@ export interface ResetArgs {
 }
 
 export interface ResetOptions {
-  ui?: boolean | ((opts: StartUiServerOptions) => Promise<void>);
+  ui?: boolean | ((opts: StartUiServerOptions) => Promise<unknown>);
 }
 
 export type ResetFailureCode =
@@ -66,6 +67,7 @@ const STORE_ASIDE_NAMES = [
   STORE_ARCHIVE_DIR,
   STORE_TMP_DIR,
   STORE_BACKUPS_DIR,
+  TRANSLATIONS_DIR,
   "manifest.json",
   ...STORE_DATA_FILES,
   ".skills-hub",
@@ -207,7 +209,10 @@ export async function runReset(args: ResetArgs, opts: ResetOptions = {}): Promis
 
   if (opts.ui === false) return;
   const port = args.port ?? DEFAULT_UI_PORT;
-  const start = typeof opts.ui === "function" ? opts.ui : startUiServer;
-  await start({ port, home });
-  if (typeof opts.ui !== "function") openBrowser("http://127.0.0.1:" + port);
+  if (typeof opts.ui === "function") {
+    await opts.ui({ port, home });
+    return;
+  }
+  const handle = await startUiServer({ port, home });
+  openBrowser(handle.url);
 }

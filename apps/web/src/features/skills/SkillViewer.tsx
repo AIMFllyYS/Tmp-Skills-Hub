@@ -9,11 +9,14 @@ import {
   FolderOpen,
   Layers,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SegmentedTabs } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { renderMarkdown } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
-import { renderMarkdown } from "../../lib/markdown.js";
 import { getAction, type TranslateParams } from "../actions/registry.js";
 import { fetchSkillFile, fetchSkillTranslation, fetchSkillTree } from "./api.js";
 import { isAbortError } from "./async-resource.js";
@@ -32,9 +35,8 @@ import {
 } from "./skill-tree.js";
 import type { SkillFileEntry, SkillRecord } from "./types.js";
 
-function Notice({ text, tone }: { text: string; tone: "warn" | "error" }): React.JSX.Element {
-  const cls = tone === "warn" ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700";
-  return <p className={"rounded-lg px-3 py-2 text-sm " + cls}>{text}</p>;
+function isPreviewDegradedReason(message: string): boolean {
+  return message.startsWith("二进制") || message.startsWith("文件过大");
 }
 
 function TreeGlyph({ node, open }: { node: SkillTreeNode; open: boolean }): React.JSX.Element {
@@ -79,10 +81,7 @@ function TreeRows({
                 className="motion-row flex w-full items-center gap-1 rounded-lg py-1 pr-2 text-left text-sm text-ink-mid hover:bg-surface hover:text-ink-strong"
               >
                 <ChevronRight
-                  className={cn(
-                    "size-3.5 shrink-0 text-ink-faint transition-transform duration-normal ease-spring motion-reduce:transition-none",
-                    open && "rotate-90",
-                  )}
+                  className={cn("motion-chevron size-3.5 shrink-0 text-ink-faint", open && "rotate-90")}
                   aria-hidden
                 />
                 <TreeGlyph node={node} open={open} />
@@ -145,24 +144,31 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
   const [entries, setEntries] = useState<SkillFileEntry[]>([]);
   const [selected, setSelected] = useState("SKILL.md");
   const [content, setContent] = useState("");
-  const [treeError, setTreeError] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
+  const [treeFailed, setTreeFailed] = useState(false);
+  const [fileDegraded, setFileDegraded] = useState<string | null>(null);
+  const [fileFailed, setFileFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
   const loadGen = useRef(0);
+  const translateAbortRef = useRef<AbortController | null>(null);
+  const translateGenRef = useRef(0);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedHash, setSavedHash] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [translated, setTranslated] = useState<string | null>(null);
   const [showTranslated, setShowTranslated] = useState(false);
-  const [translateError, setTranslateError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<{ key: string; paths: Set<string> }>({
     key: "",
     paths: new Set(),
   });
+
+  const abortTranslation = useCallback((): void => {
+    translateAbortRef.current?.abort();
+    translateAbortRef.current = null;
+    translateGenRef.current += 1;
+    setTranslating(false);
+  }, []);
 
   const tree = useMemo(() => treeFromEntries(entries), [entries]);
   const treeKey = useMemo(() => entries.map((e) => e.path).join("\n"), [entries]);
@@ -185,9 +191,11 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
     }).then((result) => {
       if (result.status === "cancelled") return;
       if (result.status === "tree-error") {
-        setTreeError(result.message);
+        setTreeFailed(true);
+        toast.error(result.message);
         return;
       }
+      setTreeFailed(false);
       setEntries(result.entries);
       if (result.status === "empty") {
         setSelected("");
@@ -195,9 +203,16 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
       }
       setSelected(result.selected);
       if (result.status === "file-error") {
-        setFileError(result.message);
+        if (isPreviewDegradedReason(result.message)) {
+          setFileDegraded(result.message);
+        } else {
+          setFileFailed(true);
+          toast.error(result.message);
+        }
         return;
       }
+      setFileDegraded(null);
+      setFileFailed(false);
       setContent(result.content);
     }).finally(() => {
       if (!cancelled && gen === loadGen.current) setLoading(false);
@@ -206,21 +221,23 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
       cancelled = true;
       ac.abort();
       loadGen.current += 1;
+      translateAbortRef.current?.abort();
+      translateAbortRef.current = null;
+      translateGenRef.current += 1;
     };
   }, [hash]);
 
   const load = useCallback(
     async (rel: string) => {
+      abortTranslation();
       const gen = ++loadGen.current;
-      setFileError(null);
+      setFileDegraded(null);
+      setFileFailed(false);
       setContent("");
       setSelected(rel);
       setFileLoading(true);
       setEditing(false);
-      setSaveError(null);
-      setSavedHash(null);
       setShowTranslated(false);
-      setTranslateError(null);
       setTranslated(null);
       try {
         const res = await fetchSkillFile(hash, rel);
@@ -228,12 +245,18 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
         setContent(res.content);
       } catch (e) {
         if (gen !== loadGen.current || isAbortError(e)) return;
-        setFileError(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        if (isPreviewDegradedReason(msg)) {
+          setFileDegraded(msg);
+        } else {
+          setFileFailed(true);
+          toast.error(msg);
+        }
       } finally {
         if (gen === loadGen.current) setFileLoading(false);
       }
     },
-    [hash],
+    [hash, abortTranslation],
   );
 
   const toggleDir = useCallback((path: string) => {
@@ -254,11 +277,15 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
       setShowTranslated(true);
       return;
     }
+    translateAbortRef.current?.abort();
+    const ac = new AbortController();
+    translateAbortRef.current = ac;
+    const gen = ++translateGenRef.current;
     setTranslating(true);
-    setTranslateError(null);
     try {
       // 译文留存复用(#208):命中缓存直接用,不再调模型;绝不写库存原件
-      const cached = selected === "" ? null : await fetchSkillTranslation(skill.hash, selected);
+      const cached = selected === "" ? null : await fetchSkillTranslation(skill.hash, selected, ac.signal);
+      if (ac.signal.aborted || gen !== translateGenRef.current) return;
       if (cached !== null) {
         setTranslated(cached);
         setShowTranslated(true);
@@ -266,36 +293,44 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
       }
       setTranslated("");
       setShowTranslated(true);
-      const params: TranslateParams = { text: content, onDelta: (full) => setTranslated(full) };
+      const params: TranslateParams = {
+        text: content,
+        signal: ac.signal,
+        onDelta: (full) => {
+          if (ac.signal.aborted || gen !== translateGenRef.current) return;
+          setTranslated(full);
+        },
+      };
       if (selected !== "") params.save = { target: skill.dirName, path: selected };
       const t = await getAction("translate").execute(params);
+      if (ac.signal.aborted || gen !== translateGenRef.current) return;
       setTranslated(t);
     } catch (e) {
+      if (ac.signal.aborted || isAbortError(e) || gen !== translateGenRef.current) return;
       setTranslated(null);
       setShowTranslated(false);
-      setTranslateError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
-      setTranslating(false);
+      if (translateAbortRef.current === ac) translateAbortRef.current = null;
+      if (gen === translateGenRef.current && !ac.signal.aborted) setTranslating(false);
     }
   }, [showTranslated, translated, content, selected, skill]);
 
   const startEdit = useCallback(() => {
     setDraft(content);
-    setSaveError(null);
     setEditing(true);
   }, [content]);
 
   const save = useCallback(async () => {
     setSaving(true);
-    setSaveError(null);
     try {
       const newHash = await getAction("save").execute({ hash, relPath: selected, content: draft });
-      setSavedHash(newHash);
       setEditing(false);
       setContent(draft);
+      toast.success("已保存");
       onSaved(hash, newHash);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -306,9 +341,14 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
     return renderMarkdown(content);
   }, [content]);
 
+  const translatedHtml = useMemo(() => {
+    if (!showTranslated || translated === null || translated === "") return "";
+    return renderMarkdown(translated);
+  }, [showTranslated, translated]);
+
   const title = skill.meta.name !== "" ? skill.meta.name : skill.dirName;
   const description = skill.meta.description.trim();
-  const canPreview = fileError === null && html !== "";
+  const canPreview = fileDegraded === null && !fileFailed && html !== "";
 
   return (
     <div className="flex h-full min-h-0">
@@ -317,24 +357,32 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
           <Layers className="size-4 shrink-0 text-ink-mid" aria-hidden />
           <span className="truncate text-sm font-medium text-ink-strong">{skill.dirName}</span>
         </div>
-        <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-          {treeError !== null && <Notice text={treeError} tone="error" />}
-          {loading && (
-            <p className="px-2 py-2 text-sm text-ink-mid" data-testid="skill-loading">加载内容…</p>
-          )}
-          {!loading && (
-            <TreeRows
-              nodes={tree}
-              depth={0}
-              selected={selected}
-              expanded={expanded}
-              onToggle={toggleDir}
-              onOpenFile={(path) => void load(path)}
-            />
-          )}
-        </nav>
+        <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
+          <nav aria-label="文件树">
+            {loading && (
+              <div className="space-y-2 px-2 py-2" data-testid="skill-loading" aria-busy="true" aria-label="加载文件树">
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-6 w-1/2" />
+                <Skeleton className="h-6 w-2/3" />
+              </div>
+            )}
+            {!loading && treeFailed && (
+              <p className="px-2 py-2 text-sm text-ink-mid">无法加载文件列表。</p>
+            )}
+            {!loading && !treeFailed && (
+              <TreeRows
+                nodes={tree}
+                depth={0}
+                selected={selected}
+                expanded={expanded}
+                onToggle={toggleDir}
+                onOpenFile={(path) => void load(path)}
+              />
+            )}
+          </nav>
+        </ScrollArea>
       </aside>
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <ScrollArea className="min-h-0 min-w-0 flex-1">
         <div className="space-y-6 p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h2 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight text-ink-strong">{title}</h2>
@@ -389,33 +437,38 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
             </p>
           </section>
           <section className="space-y-3">
-            {savedHash !== null && <p className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800">已保存</p>}
-            {fileError !== null && (
-              <Notice text={fileError} tone={fileError.startsWith("二进制") || fileError.startsWith("文件过大") ? "warn" : "error"} />
+            {fileDegraded !== null && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{fileDegraded}</p>
             )}
-            {translateError !== null && (
-              <Notice text={translateError} tone={translateError.includes("QINIU_API_KEY") ? "warn" : "error"} />
+            {fileFailed && (
+              <p className="text-sm text-ink-mid">无法读取文件内容。</p>
             )}
-            {saveError !== null && <Notice text={saveError} tone="error" />}
             {fileLoading && (
-              <div data-testid="skill-loading">
-                <span className="sr-only">加载中…</span>
-                <div className="h-24 rounded-lg bg-surface motion-safe:animate-skeleton" />
+              <div className="space-y-3" data-testid="skill-loading" aria-busy="true" aria-label="加载文件内容">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-24 w-full" />
               </div>
             )}
-            {!fileLoading && selected === "" && fileError === null && treeError === null && !loading && (
+            {!fileLoading && selected === "" && fileDegraded === null && !fileFailed && !treeFailed && !loading && (
               <p className="text-sm text-ink-mid">此 skill 没有可显示的文件</p>
             )}
-            {fileError === null && !editing && html !== "" && (
-              <div
-                className="skill-md text-sm leading-relaxed"
-                data-testid="skill-md"
-                dangerouslySetInnerHTML={{
-                  __html: showTranslated && translated !== null ? renderMarkdown(translated) : html,
-                }}
-              />
+            {fileDegraded === null && !fileFailed && !editing && html !== "" && (
+              showTranslated && translating && (translated === null || translated === "") ? (
+                <div className="space-y-3" aria-busy="true" aria-label="正在翻译">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              ) : (
+                <div
+                  className="skill-md text-sm leading-relaxed"
+                  data-testid="skill-md"
+                  dangerouslySetInnerHTML={{
+                    __html: showTranslated && translated !== null ? translatedHtml : html,
+                  }}
+                />
+              )
             )}
-            {fileError === null && editing && (
+            {fileDegraded === null && !fileFailed && editing && (
               <Textarea
                 value={draft}
                 onChange={(ev) => setDraft(ev.target.value)}
@@ -425,7 +478,7 @@ export function SkillViewer({ hash, skill, actions, onSaved }: SkillViewerProps)
             )}
           </section>
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }

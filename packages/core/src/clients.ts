@@ -8,7 +8,7 @@ import path from "node:path";
  * docs/audits/client-skills-directories-2026-08-16.md):
  * 1. <home> 下每个直接子目录,凡存在 <home>/<client>/skills 即为一个 root
  * 2. 已知嵌套惯例(存在才算):.cursor/skills-cursor、.gemini/antigravity/skills、
- *    .codeium/windsurf/skills,以及 XDG 风格 config/<client>/skills
+ *    .gemini/config/skills(Antigravity)、.codeium/windsurf/skills,以及 XDG 风格 config/<client>/skills
  *    (Devin CLI / OpenCode 的官方全局目录,见审计文档 §1.6/§1.9)
  * 3. 解析真实路径并去重(.codex/skills 与 .agents/skills 等可能互为 symlink)
  * 4. 排除:builtin_skills、插件/市场缓存、扩展目录、浏览器 profile、临时目录、
@@ -26,6 +26,7 @@ export interface ClientRoot {
 const NESTED_CONVENTIONS: ReadonlyArray<{ clientId: string; relDir: string }> = [
   { clientId: "cursor", relDir: ".cursor/skills-cursor" },
   { clientId: "gemini", relDir: ".gemini/antigravity/skills" },
+  { clientId: "antigravity", relDir: ".gemini/config/skills" },
   { clientId: "windsurf", relDir: ".codeium/windsurf/skills" },
 ];
 
