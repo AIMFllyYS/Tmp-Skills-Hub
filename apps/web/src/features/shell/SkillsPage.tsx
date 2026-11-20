@@ -1,17 +1,17 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ConflictConvergeGlyph } from "@/components/ui/icon";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonRowList } from "@/components/ui/skeleton";
 import { SegmentedTabs, type SegmentedTabItem } from "@/components/ui/tabs";
 import { TruncateTip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getAction } from "../actions/registry.js";
+import type { ConflictAgentHandoff } from "../conflicts/types.js";
+import type { ConflictCatalog } from "../conflicts/use-conflict-catalog.js";
 import { AdoptForm } from "../skills/AdoptForm.js";
 import { ArchivePanel } from "../skills/ArchivePanel.js";
 import { CreateForm } from "../skills/CreateForm.js";
@@ -31,7 +31,9 @@ const SKILLS_TABS: SegmentedTabItem<SkillsTab>[] = [
   { id: "apps", label: "应用", testId: "skills-tab-apps" },
   { id: "content", label: "内容", testId: "skills-tab-content" },
 ];
-const CONFLICTS_TAB: SegmentedTabItem<SkillsTab> = { id: "conflicts", label: "冲突", testId: "skills-tab-conflicts" };
+const ConflictsWorkspace = lazy(() =>
+  import("../conflicts/ConflictsWorkspace.js").then((module) => ({ default: module.ConflictsWorkspace })),
+);
 
 interface SkillsPageProps {
   tab: SkillsTab;
@@ -53,9 +55,11 @@ interface SkillsPageProps {
   onRestore: (name: string) => void;
   onArchive: (hash: string) => void;
   onNotice: (text: string) => void;
+  conflictCatalog: ConflictCatalog;
+  onConflictResolved: () => Promise<void>;
+  onAgentHandoff: (handoff: ConflictAgentHandoff) => void;
 }
 
-/** Skills 管理:应用 / 内容两个全幅 tab。 */
 export function SkillsPage({
   tab,
   onTab,
@@ -76,6 +80,9 @@ export function SkillsPage({
   onRestore,
   onArchive,
   onNotice,
+  conflictCatalog,
+  onConflictResolved,
+  onAgentHandoff,
 }: SkillsPageProps): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [groupId, setGroupId] = useState(ALL_GROUP);
@@ -160,20 +167,18 @@ export function SkillsPage({
             ariaLabel="Skills 管理页签"
             value={tab}
             onChange={onTab}
-            items={tab === "conflicts" ? [...SKILLS_TABS, CONFLICTS_TAB] : SKILLS_TABS}
+            items={[
+              ...SKILLS_TABS,
+              { id: "conflicts", label: "冲突", testId: "skills-tab-conflicts", badge: conflictCatalog.records.length },
+            ]}
           />
         </div>
       </header>
 
       {tab === "conflicts" && (
-        <div className="p-6">
-          <EmptyState
-            icon={<ConflictConvergeGlyph size={20} />}
-            title="冲突变体已保存"
-            description="各版本已单独入库。冲突处理界面将在后续更新开放。"
-            action={<Button variant="outline" onClick={() => onTab("content")}>查看当前真源</Button>}
-          />
-        </div>
+        <Suspense fallback={<div className="p-6"><SkeletonRowList rows={4} /></div>}>
+          <ConflictsWorkspace catalog={conflictCatalog} onResolved={onConflictResolved} onAgentHandoff={onAgentHandoff} />
+        </Suspense>
       )}
       {tab === "apps" && (
         <div className="motion-enter flex min-h-0 flex-1" data-testid="skills-apps-pane">

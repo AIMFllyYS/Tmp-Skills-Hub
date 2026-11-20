@@ -1,3 +1,5 @@
+import type { ConflictAgentHandoff } from "../conflicts/types.js";
+
 export type AppPage = "overview" | "stats" | "skills" | "agent";
 export type SkillsTab = "apps" | "content" | "conflicts";
 export type StatsTab = "overview" | "usage" | "apps" | "sources";
@@ -9,4 +11,5 @@ export interface ShellNav {
   clientId?: string;
   hash?: string;
   settings?: boolean;
+  agentHandoff?: ConflictAgentHandoff;
 }

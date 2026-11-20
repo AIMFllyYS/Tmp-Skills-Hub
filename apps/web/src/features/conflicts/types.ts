@@ -30,6 +30,16 @@ export interface ConflictDiffData {
   files: UnifiedDiffFile[];
 }
 
+export interface ConflictTarget {
+  skillName: string | null;
+  variantId: string | null;
+}
+
+export interface ConflictAgentHandoff {
+  skillName: string;
+  prompt: string;
+}
+
 /** 冲突工作区支持的人工/智能解决动作枚举。 */
 export type ConflictResolveAction = "pick" | "split" | "handoff-agent";
 
@@ -42,6 +52,16 @@ export function isActiveConflictVariant(
   activeHash: string,
 ): boolean {
   return variant.isActive === true || variant.hash === activeHash;
+}
+
+export function selectConflictTarget(records: readonly ConflictRecordView[], selection: ConflictTarget) {
+  const record = records.find((entry) => entry.skillName === selection.skillName) ?? records[0] ?? null;
+  if (record === null) return { record, variantId: null };
+  const alternatives = record.variants.filter((entry) => !isActiveConflictVariant(entry, record.activeHash));
+  const preferred = record.skillName === selection.skillName
+    ? alternatives.find((entry) => entry.variantId === selection.variantId)
+    : undefined;
+  return { record, variantId: preferred?.variantId ?? alternatives[0]?.variantId ?? null };
 }
 
 /** 校验拆分后新 Skill 名称是否符合 kebab-case 规范且不与原名冲突。 */

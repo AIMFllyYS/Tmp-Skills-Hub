@@ -21,6 +21,7 @@ interface OverviewPageProps {
   backupsLoading?: boolean;
   onGo: (target: ShellNav) => void;
   rescan: RescanTriggerButtonProps | undefined;
+  conflictCount: number;
 }
 
 interface IssueItem {
@@ -73,11 +74,15 @@ export function OverviewPage({
   backupsLoading = false,
   onGo,
   rescan,
+  conflictCount,
 }: OverviewPageProps): React.JSX.Element {
   const healthLoading = doctorLoading || backupsLoading;
   const cover = coverageOf(skills);
   const unlinked = skills.filter((s) => s.visibleIn.length === 0).length;
   const issues: IssueItem[] = [];
+  if (conflictCount > 0) {
+    issues.push({ text: String(conflictCount) + " 个同名技能冲突待处理", go: { page: "skills", tab: "conflicts" } });
+  }
   if (doctor !== null && (!doctor.store.resolved || !doctor.store.reachable)) {
     issues.push({ text: "库存不可达", go: { settings: true } });
   }
