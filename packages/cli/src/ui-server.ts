@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { serve } from "@hono/node-server";
+import { createAdaptorServer } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import {
@@ -20,13 +20,18 @@ import {
   type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
-import { performAdopt, performVerify, POINTER_REL } from "./store-cmds.js";
+import { performAdopt, performInit, performVerify, POINTER_REL } from "./store-cmds.js";
 import { resolveSkill } from "./resolve-skill.js";
 import { collectDoctorReport } from "./doctor.js";
 import { performAnalyze, type AnalyzeGenerate } from "./analyze.js";
 import { performShare } from "./share.js";
-import { createAgentUIStreamResponse, streamText, type LanguageModel } from "ai";
-import { mapLlmError } from "./llm/errors.js";
+import {
+  createAgentUIStreamResponse,
+  safeValidateUIMessages,
+  streamText,
+  type LanguageModel,
+} from "ai";
+import { mapLlmError, scrub } from "./llm/errors.js";
 import {
   createQiniuModel,
   notConfiguredMessage,
@@ -37,6 +42,7 @@ import {
 import { readTranslation, writeTranslation } from "./translations.js";
 import { createSkillsHubAgent, parseWritePolicy } from "./agent/agent.js";
 import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
+import { createAgentTools, type ToolEnv } from "./agent/tools.js";
 import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, withStore, type UiRouteContext } from "./ui-http.js";
 import { registerGroupRoutes } from "./ui-groups.js";
 import { registerDraftRoutes } from "./ui-drafts.js";
@@ -48,6 +54,9 @@ export const DEFAULT_UI_PORT = 4321;
 /** 翻译代理(#38)常量:单次截断上限防滥用;流式下发,空闲超时由 STREAM_IDLE_TIMEOUT_MS 管。 */
 export const MAX_TRANSLATE_CHARS = 200_000;
 
+/** 写请求体上限(2 MB),防大载荷耗尽内存。 */
+export const MAX_API_BODY_BYTES = 2 * 1024 * 1024;
+
 /** 翻译系统提示:保留代码块与 frontmatter 原文,只译说明性文字。 */
 export const TRANSLATE_SYSTEM_PROMPT =
   "你是 skill 文档翻译器。把用户给的 Markdown 翻译成简体中文,规则:\n" +
@@ -55,6 +64,57 @@ export const TRANSLATE_SYSTEM_PROMPT =
   "- 只译说明性文字;术语首次出现可附英文原名\n" +
   "- 保持 Markdown 结构与标题层级不变\n" +
   "- 只输出译文,不要解释";
+
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function isValidPort(portStr: string | undefined): boolean {
+  if (portStr === undefined) return true;
+  const n = Number(portStr);
+  return Number.isInteger(n) && n >= 1 && n <= 65535;
+}
+
+function isAllowedHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  if (h === "skills-hub") return true;
+  const m = /^(127\.0\.0\.1|localhost|\[::1\])(?::(\d{1,5}))?$/.exec(h);
+  return m !== null && isValidPort(m[2]);
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  const o = origin.trim().toLowerCase();
+  if (o === "app://skills-hub") return true;
+  const m = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::(\d{1,5}))?$/.exec(o);
+  return m !== null && isValidPort(m[2]);
+}
+
+async function measureBodyBytes(
+  req: Request,
+  maxBytes: number,
+): Promise<{ tooLarge: true } | { tooLarge: false; bytes: number }> {
+  const cl = req.headers.get("content-length");
+  if (cl !== null) {
+    const parsed = Number(cl);
+    if (Number.isFinite(parsed) && parsed > maxBytes) return { tooLarge: true };
+  }
+  if (req.body === null) return { tooLarge: false, bytes: 0 };
+  const cloned = req.clone();
+  if (cloned.body === null) return { tooLarge: false, bytes: 0 };
+  const reader = cloned.body.getReader();
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        return { tooLarge: true };
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return { tooLarge: false, bytes };
+}
 
 /**
  * HTTP 契约(v0,见 docs/specs/http-api-v0.md):面板数据源。
@@ -100,11 +160,25 @@ async function* defaultTranslateStream(
       system: TRANSLATE_SYSTEM_PROMPT,
       prompt: text,
       timeout: { chunkMs: STREAM_IDLE_TIMEOUT_MS },
+      onError: () => {},
     };
     if (opts.signal !== undefined) streamOpts.abortSignal = opts.signal;
     const result = streamText(streamOpts);
-    for await (const delta of result.textStream) {
-      yield { type: "text", delta };
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") {
+        yield { type: "text", delta: part.text };
+      } else if (part.type === "error") {
+        const mapped = mapLlmError(part.error);
+        yield { type: "error", code: mapped.code, message: mapped.message };
+        return;
+      } else if (part.type === "abort") {
+        yield {
+          type: "error",
+          code: "aborted",
+          message: part.reason !== undefined && part.reason !== "" ? "请求已中止: " + scrub(part.reason) : "请求已中止",
+        };
+        return;
+      }
     }
     yield { type: "done" };
   } catch (e) {
@@ -147,7 +221,6 @@ function notFoundPage(): string {
 
 export function createUiApp(opts: UiAppOptions = {}): Hono {
   const app = new Hono();
-  const storeRoot = opts.storeRoot === undefined ? null : opts.storeRoot;
   const home = opts.home ?? resolveHome();
   const translateStream: TranslateStreamFn =
     opts.translateStream ??
@@ -160,7 +233,42 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   const analyzeGenerate = opts.analyzeGenerate;
   const fetchImpl = opts.fetchImpl;
   const webRoot = opts.webRoot ?? defaultWebRoot();
-  const ctx: UiRouteContext = { storeRoot, home };
+  const ctx: UiRouteContext = {
+    storeRoot: opts.storeRoot === undefined ? null : opts.storeRoot,
+    home,
+  };
+
+  app.onError((e, c) => {
+    const message = scrub(e instanceof Error ? e.message : String(e));
+    return err(c, "server", "io-error", message === "" ? "内部服务错误" : message, 500);
+  });
+
+  // 本机安全防线:Host 白名单 + 写操作 Origin 白名单 + 2MB 请求体限制 + 非空写体必须 application/json
+  app.use("/api/*", async (c, next) => {
+    const rawHost = c.req.header("host") ?? new URL(c.req.url).host;
+    if (!isAllowedHost(rawHost)) {
+      return err(c, "security", "forbidden", "拒绝访问:Host 不在本地白名单", 403);
+    }
+    if (WRITE_METHODS.has(c.req.method.toUpperCase())) {
+      const origin = c.req.header("origin");
+      if (origin !== undefined && !isAllowedOrigin(origin)) {
+        return err(c, "security", "forbidden", "拒绝跨站写请求:Origin 不在白名单", 403);
+      }
+      const measured = await measureBodyBytes(c.req.raw, MAX_API_BODY_BYTES);
+      if (measured.tooLarge) {
+        return err(c, "security", "too-large", "请求体过大(上限 2 MB)", 413);
+      }
+      const clHeader = c.req.header("content-length");
+      const hasNonZeroCl = clHeader !== undefined && Number(clHeader) > 0;
+      if (measured.bytes > 0 || hasNonZeroCl) {
+        const mediaType = (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+        if (mediaType !== "application/json") {
+          return err(c, "security", "bad-usage", "写请求非空 body 的 Content-Type 必须为 application/json", 415);
+        }
+      }
+    }
+    await next();
+  });
 
   registerGroupRoutes(app, ctx);
   registerDraftRoutes(app, ctx);
@@ -168,6 +276,36 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   registerLinkRoutes(app, ctx);
 
   app.get("/api/health", (c) => c.json({ ok: true }));
+
+  app.post("/api/store/init", async (c) => {
+    const text = await c.req.text().catch(() => "");
+    let raw: { storeRoot?: unknown } = {};
+    if (text.trim() !== "") {
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          return err(c, "store-init", "bad-usage", "body 需要 JSON 对象 { storeRoot?: string }");
+        }
+        raw = parsed as { storeRoot?: unknown };
+      } catch {
+        return err(c, "store-init", "bad-usage", "body 需要合法 JSON");
+      }
+    }
+    if (raw.storeRoot !== undefined && typeof raw.storeRoot !== "string") {
+      return err(c, "store-init", "bad-usage", "storeRoot 必须为字符串路径");
+    }
+    const res = await performInit(home, raw.storeRoot);
+    if (!res.ok) return err(c, "store-init", res.code, res.message);
+    ctx.storeRoot = res.storeRoot;
+    return c.json({
+      ok: true,
+      command: "store-init",
+      storeRoot: res.storeRoot,
+      pointerFile: res.pointerFile,
+      layoutCreated: res.layoutCreated,
+      builtinGroupsWrote: res.builtinGroupsWrote,
+    });
+  });
 
   app.get("/api/skills", (c) =>
     withStore(ctx, c, "skills", async (root) => {
@@ -230,9 +368,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     const sourceText = body.text;
     // 译文留存(#208):target+path 都带且能解析时,流式成功结束后 best-effort 落盘;绝不写 skills/ 原件
     let persist: { root: string; hash: string; rel: string } | null = null;
-    if (storeRoot !== null && typeof body.target === "string" && body.target.trim() !== "" && typeof body.path === "string" && body.path.trim() !== "") {
-      const hit = resolveSkill(body.target.trim(), await readStoreIndex(storeRoot).catch(() => []));
-      if (hit.ok) persist = { root: storeRoot, hash: hit.skill.hash, rel: body.path.trim() };
+    const currentRoot = ctx.storeRoot;
+    if (currentRoot !== null && typeof body.target === "string" && body.target.trim() !== "" && typeof body.path === "string" && body.path.trim() !== "") {
+      const hit = resolveSkill(body.target.trim(), await readStoreIndex(currentRoot).catch(() => []));
+      if (hit.ok) persist = { root: currentRoot, hash: hit.skill.hash, rel: body.path.trim() };
     }
     return streamSSE(c, async (stream) => {
       let full = "";
@@ -244,8 +383,11 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
           await stream.writeSSE({ event: "error", data: JSON.stringify({ code: ev.code, message: ev.message }) });
           return;
         } else if (ev.type === "done") {
-          if (persist !== null) await writeTranslation(persist.root, persist.hash, persist.rel, full);
+          if (persist !== null && full.trim() !== "") {
+            await writeTranslation(persist.root, persist.hash, persist.rel, full);
+          }
           await stream.writeSSE({ event: "done", data: "{}" });
+          return;
         }
       }
     });
@@ -282,13 +424,22 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }
     const modelId = resolveAgentModel(raw?.model);
     const writePolicy = parseWritePolicy(raw?.writePolicy);
-    const clients = (await discoverClientRoots(home, clientDiscoverOpts(storeRoot))).map((r) => r.clientId);
-    const env: { home: string; storeRoot: string | null; fetchImpl?: typeof fetch; analyzeGenerate?: AnalyzeGenerate } = {
+    const currentRoot = ctx.storeRoot;
+    const clients = (await discoverClientRoots(home, clientDiscoverOpts(currentRoot))).map((r) => r.clientId);
+    const env: ToolEnv = {
       home,
-      storeRoot,
+      storeRoot: currentRoot,
     };
     if (fetchImpl !== undefined) env.fetchImpl = fetchImpl;
     if (analyzeGenerate !== undefined) env.analyzeGenerate = analyzeGenerate;
+    const tools = createAgentTools(env);
+    const validated = await safeValidateUIMessages({
+      messages,
+      tools: tools as NonNullable<Parameters<typeof safeValidateUIMessages>[0]["tools"]>,
+    });
+    if (!validated.success) {
+      return err(c, "agent-chat", "bad-usage", "messages 格式无效: " + scrub(validated.error.message));
+    }
     const agent = createSkillsHubAgent({
       model: opts.languageModel ?? createQiniuModel(modelId),
       env,
@@ -297,8 +448,11 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     });
     return createAgentUIStreamResponse({
       agent,
-      uiMessages: messages,
+      uiMessages: validated.data,
       abortSignal: c.req.raw.signal,
+      timeout: { chunkMs: STREAM_IDLE_TIMEOUT_MS },
+      sendReasoning: false,
+      onError: (e) => mapLlmError(e).message,
     });
   });
 
@@ -371,6 +525,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       const { performReset } = await import("./reset-cmds.js");
       const result = await performReset(snapshotId === undefined ? { home } : { home, snapshotId });
       if (!result.ok) return err(c, "reset", result.code, result.message);
+      ctx.storeRoot = result.storeRoot;
       return c.json({
         ok: true,
         command: "reset",
@@ -384,7 +539,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   );
 
   app.get("/api/clients", (c) =>
-    discoverClientRoots(home, clientDiscoverOpts(storeRoot)).then((roots) =>
+    discoverClientRoots(home, clientDiscoverOpts(ctx.storeRoot)).then((roots) =>
       c.json({ ok: true, command: "clients", clients: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })) }),
     ),
   );
@@ -434,22 +589,20 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }),
   );
 
-  const serveFile = async (c: Context, rel: string): Promise<Response> => {
+  const serveFile = async (c: Context, rel: string, fallbackHtml: boolean): Promise<Response> => {
     const relPath = rel === "/" ? "index.html" : rel;
     const safe = path.resolve(webRoot, "./" + relPath);
     if (safe !== webRoot && !safe.startsWith(webRoot + path.sep)) return c.text("Not found", 404);
     const file = await readFile(safe).catch(() => null);
-    if (file === null) return c.html(notFoundPage(), 200);
+    if (file === null) return fallbackHtml ? c.html(notFoundPage(), 200) : c.text("Not found", 404);
     const ext = path.extname(safe).toLowerCase();
     return new Response(file, { headers: { "content-type": MIME[ext] ?? "application/octet-stream" } });
   };
 
-  app.get("/", (c) => serveFile(c, "index.html"));
-  app.get("/assets/*", (c) => serveFile(c, c.req.path));
-  app.get("*", (c) => {
-    if (c.req.path.startsWith("/api/")) return err(c, "unknown", "not-found", "未知 API: " + c.req.path);
-    return serveFile(c, "index.html");
-  });
+  app.get("/", (c) => serveFile(c, "index.html", true));
+  app.get("/assets/*", (c) => serveFile(c, c.req.path, false));
+  app.all("/api/*", (c) => err(c, "unknown", "not-found", "未知 API: " + c.req.path));
+  app.get("*", (c) => serveFile(c, "index.html", true));
 
   return app;
 }
@@ -459,6 +612,14 @@ export interface StartUiServerOptions {
   port?: number;
   /** 客户端发现的 home 基座,不是库存根 */
   home?: string;
+  /** web 静态产物根(Electron 等编程式嵌入可覆写) */
+  webRoot?: string;
+}
+
+export interface UiServerHandle {
+  port: number;
+  url: string;
+  close: () => Promise<void>;
 }
 
 /**
@@ -474,11 +635,38 @@ export async function resolveUiStoreRoot(home: string): Promise<string | null> {
   return resolved.ok ? resolved.storeRoot : null;
 }
 
-export async function startUiServer(opts: StartUiServerOptions = {}): Promise<void> {
+export async function startUiServer(opts: StartUiServerOptions = {}): Promise<UiServerHandle> {
   const port = opts.port ?? DEFAULT_UI_PORT;
   const h = opts.home ?? resolveHome();
   const storeRoot = await resolveUiStoreRoot(h);
-  serve({ fetch: createUiApp({ storeRoot, home: h }).fetch, port, hostname: "127.0.0.1" }, (info) => {
-    console.log("skill-hub ui: http://127.0.0.1:" + info.port + "/api/skills" + (storeRoot === null ? " (库存未配置)" : ""));
+  const appOpts: UiAppOptions = { storeRoot, home: h };
+  if (opts.webRoot !== undefined) appOpts.webRoot = opts.webRoot;
+  const app = createUiApp(appOpts);
+  const server = createAdaptorServer({ fetch: app.fetch, hostname: "127.0.0.1" });
+
+  return new Promise<UiServerHandle>((resolve, reject) => {
+    const onStartupError = (e: NodeJS.ErrnoException) => {
+      if (e.code === "EADDRINUSE") {
+        reject(new Error(`端口 ${port} 已被占用,请换用 --port 指定其他端口`));
+      } else {
+        reject(e);
+      }
+    };
+    server.once("error", onStartupError);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", onStartupError);
+      const addr = server.address();
+      const actualPort = typeof addr === "object" && addr !== null ? addr.port : port;
+      const url = "http://127.0.0.1:" + actualPort;
+      console.log("skill-hub ui: " + url + "/api/skills" + (storeRoot === null ? " (库存未配置)" : ""));
+      resolve({
+        port: actualPort,
+        url,
+        close: () =>
+          new Promise<void>((res, rej) => {
+            server.close((err) => (err ? rej(err) : res()));
+          }),
+      });
+    });
   });
 }

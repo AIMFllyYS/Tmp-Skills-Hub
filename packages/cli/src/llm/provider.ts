@@ -51,6 +51,8 @@ export function createQiniuModel(modelId: string, opts: QiniuModelOptions = {}):
     name: "qiniu",
     baseURL: llmBaseUrl(),
     apiKey,
+    // 七牛云 OpenAI 兼容端点以 json_object 模式为准;配合 prompt 内显式 JSON 约束使用 Output.object
+    supportsStructuredOutputs: false,
     transformRequestBody: (body) => injectThinkingOff(body as Record<string, unknown>),
   };
   if (opts.fetch !== undefined) settings.fetch = opts.fetch;

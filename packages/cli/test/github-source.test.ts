@@ -5,9 +5,16 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { STORE_TMP_DIR } from "@skills-hub/core";
 import { GitHubSourceProvider } from "../src/github-source.js";
 
+function toUrlString(input: string | URL | Request): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
 /** 路由式 fetch 替身:URL 前缀 → JSON 或文本响应。 */
-function stubFetch(routes: Record<string, { status: number; body: string }>) {
-  return async (url: string): Promise<Response> => {
+function stubFetch(routes: Record<string, { status: number; body: string }>): typeof fetch {
+  return async (input): Promise<Response> => {
+    const url = toUrlString(input);
     // 精确边界匹配:URL 等于 key,或 key 后紧跟 "/" 或 "?" ——
     // 避免 /repos/org/repo 吞掉 git/trees/... 请求、main 吞掉 main%2Fskills 之类编码路径
     const hit = Object.entries(routes)
@@ -131,7 +138,7 @@ describe("GitHubSourceProvider", () => {
   });
 
   it("timeout:可读超时错误", async () => {
-    const fetchImpl = (_url: string, init?: RequestInit): Promise<Response> =>
+    const fetchImpl: typeof fetch = (_url, init) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
       });

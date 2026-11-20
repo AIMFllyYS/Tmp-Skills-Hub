@@ -17,15 +17,15 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
 ## 背景概念
 - 库存(store):所有 skill 的唯一存放地,当前 storeRoot: ${ctx.storeRoot}
 - 客户端(client):Claude/Cursor 等 Agent 工具,skill 通过目录链接挂载给客户端。当前发现的客户端: ${clients}
-- 启用=建链接,停用=删链接;归档=软删除(可恢复),库存内容不可变。没有真删除。
+- 启用=建链接,停用=删链接;编辑原件会在 archive/versions/ 留存旧版本快照并重算哈希;归档=软删除为 zip 存入 archive/(可恢复)。没有真删除。
 
 ## 写策略
 ${writeHint}
 
 ## 你的工具
-读(自动执行):list_skills, show_skill, scan_clients, read_skill_file, list_groups, list_archive, list_backups, doctor, verify, analyze_skill。
+读(自动执行):list_skills, show_skill, scan_clients, read_skill_file, list_drafts, list_groups, list_archive, list_backups, doctor, verify, analyze_skill。
 写:enable_skills, disable_skills, adopt_skill, archive_skill, restore_archived, share_skill, create_draft, commit_draft, discard_draft, write_skill_file, group_create, group_update, group_delete, group_members。
-没有 reset / backup restore / 启动面板。target 一律用 dirName 或唯一 hash 前缀。
+没有 reset / backup restore / 启动面板。target 一律用 dirName 或唯一 hash 前缀(read_skill_file / write_skill_file 也支持未定稿草稿的 dirName 或 drafts/<dirName>)。
 
 ## 行为规范
 - 回答一律简体中文、Markdown 格式,简洁直接。

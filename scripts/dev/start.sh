@@ -89,16 +89,20 @@ fi
 echo "== 构建全仓 =="
 pnpm build
 
-# 3. 组装 bootstrap 参数
-BOOTSTRAP_ARGS="node packages/cli/dist/index.js bootstrap --port $PORT"
+# 3. 组装 bootstrap 参数（使用 POSIX 位置参数，避免 eval 注入与含空格路径拆词）
+set -- packages/cli/dist/index.js bootstrap --port "$PORT"
 if [ -n "$HOME_DIR" ]; then
-  BOOTSTRAP_ARGS="$BOOTSTRAP_ARGS --home $HOME_DIR"
+  set -- "$@" --home "$HOME_DIR"
 fi
 if [ -n "$YES" ]; then
-  BOOTSTRAP_ARGS="$BOOTSTRAP_ARGS --yes"
+  set -- "$@" --yes
 fi
 
 # 4. 一键启动
 echo "== 启动 skill-hub =="
-echo "执行: $BOOTSTRAP_ARGS"
-eval "$BOOTSTRAP_ARGS"
+printf '执行: node'
+for arg in "$@"; do
+  printf ' %s' "$arg"
+done
+printf '\n'
+node "$@"

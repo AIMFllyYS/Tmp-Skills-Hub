@@ -17,7 +17,8 @@ import {
   writeGitHubEntries,
 } from "@skills-hub/core";
 import { emitError, emitOk } from "./json-out.js";
-import { requireWriteAuth, resolveNames, resolveStoreRootOrFail } from "./store-cmds.js";
+import { resolveSkill } from "./resolve-skill.js";
+import { requireWriteAuth, resolveStoreRootOrFail } from "./store-cmds.js";
 
 const API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
@@ -89,14 +90,15 @@ export async function performShare(storeRoot: string, target: string, opts: Perf
   if (parsed === null) return { ok: false, code: "bad-usage", message: "授信仓库地址无法解析: " + repoInput };
 
   const skills = await readStoreIndex(storeRoot);
-  let dirName: string;
-  try {
-    const hit = resolveNames(needle, skills)[0];
-    if (hit === undefined) return { ok: false, code: "not-found", message: "库存中没有 " + needle };
-    dirName = hit;
-  } catch (e) {
-    return { ok: false, code: "not-found", message: e instanceof Error ? e.message : String(e) };
+  const hit = resolveSkill(needle, skills);
+  if (!hit.ok) {
+    return {
+      ok: false,
+      code: hit.code === "ambiguous" ? "bad-usage" : "not-found",
+      message: hit.message,
+    };
   }
+  const dirName = hit.skill.dirName;
 
   const skillDir = path.join(storeRoot, STORE_SKILLS_DIR, dirName);
   const localFiles = await readLocalSkillFiles(skillDir);

@@ -16,6 +16,7 @@ export type JsonErrorCode =
   | "invalid-skill"
   | "link-failed"
   | "github-fetch-failed"
+  | "not-configured"
   | "analyze-failed"
   | "verify-failed"
   | "restore-failed"

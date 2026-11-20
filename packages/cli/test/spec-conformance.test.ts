@@ -14,16 +14,17 @@ describe("spec conformance", () => {
     const specRaw = await readFile(path.join(ROOT, "docs", "specs", "cli-commands-v0.md"), "utf8");
     const specCommands = new Set<string>();
     for (const m of specRaw.matchAll(/^\|\s*`([a-z][a-z -]*?)`/gm)) {
-      const cmd = m[1].split(" ")[0];
-      specCommands.add(cmd);
+      const cmd = (m[1] ?? "").split(" ")[0];
+      if (cmd !== undefined && cmd !== "") specCommands.add(cmd);
     }
 
     const indexRaw = await readFile(path.join(ROOT, "packages", "cli", "src", "index.ts"), "utf8");
     const subCommandsMatch = indexRaw.match(/subCommands:\s*\{([^}]+)\}/);
     expect(subCommandsMatch).not.toBeNull();
     const codeCommands = new Set<string>();
-    for (const m of subCommandsMatch![1].matchAll(/(\w+)/g)) {
+    for (const m of (subCommandsMatch?.[1] ?? "").matchAll(/(\w+)/g)) {
       const name = m[1];
+      if (name === undefined) continue;
       if (name === "newCmd") codeCommands.add("new");
       else codeCommands.add(name);
     }
@@ -41,7 +42,7 @@ describe("spec conformance", () => {
       const content = await readFile(path.join(coreDir, f), "utf8");
       const lines = content.split("\n");
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+        const line = lines[i] ?? "";
         if (
           line.includes("rm(") &&
           line.includes("recursive") &&

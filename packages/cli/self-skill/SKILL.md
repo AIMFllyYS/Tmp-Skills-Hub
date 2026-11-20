@@ -1,6 +1,6 @@
 ---
 name: skills-hub
-description: 何时调用我:你需要管理本机 Agent Skill 的库存时——收录新 skill(本地目录/GitHub/skills.sh)、查某个 skill 的分组与描述、按需启用/撤回它在某个客户端的可见性、软删除不再需要的 skill、做相近/冲突分析。只读这一份就能跑通全流程,不需要其他对话。
+description: 何时调用我:你需要管理本机 Agent Skill 的库存时——收录新 skill(本地目录/GitHub/skills.sh)、查某个 skill 的分组与描述、按需启用/撤回它在某个客户端的可见性、软删除或恢复不再需要的 skill、推送分享到授信仓库、做相近/冲突分析。只读这一份就能跑通全流程,不需要其他对话。
 ---
 
 # skills-hub:本机 Agent Skill 统一管理
@@ -11,9 +11,10 @@ description: 何时调用我:你需要管理本机 Agent Skill 的库存时—�
 - **查询**:想知道库存里有什么、某 skill 的分组与描述 → list / group list / show
 - **按需启用**:想让某个 skill 在 Claude/Codex 等客户端可见 → enable
 - **撤回**:不想让它再可见(原件保留)→ disable
-- **软删除**:确定不要了 → archive(打包进归档区,不真删除)
+- **软删除 / 恢复**:确定不要了 → archive(打包进归档区,不真删除);需要找回 → archive restore
+- **分享推送**:把库存 skill 推送到授信 GitHub 仓库 → share
 - **分析**:想知道库存里哪个 skill 与某个 skill 相近或冲突 → analyze(模型判断,只建议不写盘)
-- **按快照还原客户端**:用户说「按备份把客户端 skills 拼回去」(不动库存)→ backup restore
+- **备份与按快照还原客户端**:建快照 / 列快照 / 校验 / 按备份还原客户端 skills → backup / backup list / backup verify / backup restore
 - **回到初始化前再自动初始化**:用户说「一键恢复到 bootstrap 之前再重新收录」→ reset。人在面板设置里点重置并确认;Agent 用 `reset --yes`。不要让人再打命令。
 
 不需要调用我的场景:只是修改 skill 内容(那是 skill 自身的事,改完可 verify 校验哈希)。
@@ -30,7 +31,7 @@ CLI 入口:仓库内 node packages/cli/dist/index.js <command>(需先 pnpm build
 
     skills-hub bootstrap [--home <库存根>] [--port 4321] [--yes]
 
-- 依次交互确认:库存位置(回车用默认 ~/.skills-hub)→ 备份(Y=复制全部客户端 skills 目录到 <库存根>/backups/<时间戳>/,N=跳过)→ 迁移(Y=收录全部本机 skills)
+- 依次交互确认:库存位置(回车用默认 ~/.skills-hub)→ 备份(Y=写入 <库存根>/backups/ 增量快照,N=跳过)→ 迁移(Y=收录全部本机 skills)
 - 红字警告 + 每一步 Y 即显式授权;完成后自动启动面板并尝试打开浏览器
 - 幂等:指针文件已配置 → 零交互直接启动面板
 - 非 TTY 环境需 --yes(全自动,默认路径,跳过全部确认)
@@ -80,12 +81,22 @@ CLI 入口:仓库内 node packages/cli/dist/index.js <command>(需先 pnpm build
     skills-hub disable <skill名...> --client <claude|codex|...> --home <SANDBOX_HOME> --yes
     skills-hub disable --group <组id> --client <claude|codex|...> --home <SANDBOX_HOME> --yes
 
-### 7. 软删除(归档)
+### 7. 软删除(归档)与归档恢复
 
     skills-hub archive <skill名...> --home <SANDBOX_HOME> --yes
-    skills-hub archive --home <SANDBOX_HOME>   # 列出归档区
+    skills-hub archive --home <SANDBOX_HOME>                          # 列出归档区
+    skills-hub archive restore <归档名> --home <SANDBOX_HOME> --yes   # 从归档恢复到活跃区
 
-归档 = 先摘全部受管链接,再把库存目录打包成 zip 移入归档区,并从库存清单移除。
+- `archive` = 先摘全部受管链接,再把库存目录打包成 zip 移入归档区,并从库存清单移除。
+- `archive restore` = 从归档 zip 解压恢复到活跃区并重算哈希(不自动恢复客户端链接,也不删除归档 zip)。与 `backup restore` 不是同一条命令。
+
+### 7b. 分享推送到授信仓库
+
+    skills-hub share <skill名或哈希前缀> [--repo <owner/repo>] --home <SANDBOX_HOME> --yes
+    skills-hub share <skill名或哈希前缀> --home <SANDBOX_HOME> --dry-run --json
+
+- 把库存 skill 推送到授信 GitHub 仓库的 `skills/<name>/`(默认读取库存 `manifest.json` 的 `trustedRepo`,也可用 `--repo` 覆盖),返回可被 `adopt` 再拉回的 GitHub tree 链接。
+- 需要 `GITHUB_TOKEN`(具备目标仓库 Contents write 权限);远端已有同内容则幂等成功,远端同名不同内容报 `remote-conflict` 绝不覆盖。
 
 ### 8. 校验与自检
 
@@ -101,20 +112,25 @@ verify 重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改
 
 - 对照库存 description 给出相近(similar)与可能冲突(conflict)清单及理由;
 - 只读建议,不触发任何写操作;
-- 需要 DEEPSEEK_API_KEY(写在仓库根 .env,已被 git 忽略,绝不提交);无密钥时明确降级提示,不编造结论。
+- 需要 QINIU_API_KEY(写在当前目录 `.env` 或 `~/.skills-hub/.env`,已被 git 忽略,绝不提交);无密钥时明确降级提示,不编造结论。
 
 ### 10. 本地查看服务(面板)
 
     skills-hub ui --home <SANDBOX_HOME> --port 4321
 
-浏览器打开 http://127.0.0.1:4321。人用壳是左侧三板块(总览 / 统计 / Skills 管理)加左下角设置;可在面板上启用/编辑/归档。仅绑 127.0.0.1。
+浏览器打开 http://127.0.0.1:4321。人用壳是左侧四板块(总览 / 统计 / Skills 管理 / Agent)加左下角设置弹窗;可在面板上启用/编辑/翻译/归档,或在 Agent 页通过对话与审批调用库存工具。仅绑 127.0.0.1。
 
-### 11. 按快照还原客户端 skills(库存与指针不动)
+### 11. 备份管理与按快照还原客户端 skills(库存与指针不动)
 
-    skills-hub backup restore --home <SANDBOX_HOME> --yes
+    skills-hub backup [--full] --home <SANDBOX_HOME> --yes
+    skills-hub backup list --home <SANDBOX_HOME>
+    skills-hub backup verify [snapshotId] --home <SANDBOX_HOME>
+    skills-hub backup restore [snapshotId] --home <SANDBOX_HOME> --yes
     skills-hub backup restore <snapshotId> --home <SANDBOX_HOME> --dry-run --json
 
-先 verify 再逐条写回客户端 skill 落点;不整目录改名 skills; displaced 条目进库存 tmp/restore-aside。与 archive restore 不是同一条命令。
+- `backup` 默认增量(复用 `backups/blobs/` 共享内容池),`--full` 强制新建快照;
+- `backup list` / `backup verify` 只读,不需 `--yes`;
+- `backup restore` 先 verify 再逐条写回客户端 skill 落点;不整目录改名 `skills/`;displaced 条目移入临时旁路目录。与 `archive restore` 不是同一条命令。
 
 ### 12. 一键回到初始化前并重新收录
 
@@ -150,7 +166,7 @@ verify 重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改
 - **写操作必须显式授权**:非交互环境不带 --yes 会被拒绝(exit 2)。不要绕过,也不要替用户想当然。
 - **只写沙箱**:除非用户明确指定,库存写操作一律在沙箱 home 验证。
 - **不碰客户端目录内容**:enable/disable 只挂/摘链接(junction),绝不移动或修改用户已有目录。
-- **不提交密钥**:DEEPSEEK_API_KEY / GITHUB_TOKEN 只从环境变量或 .env 读取,不进日志、不进报告、不进发往前端的响应。
+- **不提交密钥**:QINIU_API_KEY / GITHUB_TOKEN 只从环境变量或 .env 读取,不进日志、不进报告、不进发往前端的响应。
 
 ## 机器可读输出
 
@@ -159,10 +175,4 @@ verify 重算哈希,报告被外部修改(漂移)或缺失的 skill,不自动改
 ## 开发与自测
 
 改动前后跑四检:pnpm lint / pnpm typecheck / pnpm build / pnpm test。
-沙箱 E2E:init → adopt(本地+GitHub+skills.sh)→ list/show → enable/disable(--group 批量)→ verify → archive → analyze,全部在 --home <SANDBOX_HOME> 下。
-
-## 自测记录
-
-- 2026-08-16:沙箱全流程实测 init → adopt×2 → group list(5 内置)/create/add → enable(2 链接)→ disable(清空)→ rename/delete → archive,全部通过;show/enable 计数正确写入 stats.json;exit 2 路径(重复创建、名+组互斥、空组、缺 --yes)验证通过。
-- 2026-08-16:analyze 真实密钥 E2E(命中相近+冲突,理由具体,无写操作;无密钥降级、not-found 均验证);GitHub/skills.sh 收录 E2E(404/限流可读降级、tmp 零残留)。
-- 2026-08-16:bootstrap E2E(--yes 全自动:备份 manifest + 收录 + 自动起面板 /api/skills 200);单测 5 例(全流程/跳过备份/取消/幂等/非TTY拒绝);CI 双平台绿(core 116 / cli 69)。
+沙箱 E2E:init → adopt(本地+GitHub+skills.sh)→ list/show → enable/disable(--group 批量)→ verify → archive → archive restore → share → analyze,全部在 --home <SANDBOX_HOME> 下。

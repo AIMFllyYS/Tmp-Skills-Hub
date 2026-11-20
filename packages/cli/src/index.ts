@@ -4,15 +4,15 @@ import { createInterface } from "node:readline/promises";
 import { defineCommand, runMain } from "citty";
 import {
   discoverClientRoots,
-  ensureBuiltinGroups,
-  initializeStoreLayout,
+  resolveStoreRoot,
   type StoreRootOptions,
 } from "@skills-hub/core";
 import { resolveHome } from "./home.js";
+import { emitError, emitOk } from "./json-out.js";
 import { scanKnownClients } from "./scan.js";
 import { collectDoctorReport } from "./doctor.js";
 import { runGroup } from "./group-cmds.js";
-import { POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify, writePointerFile } from "./store-cmds.js";
+import { performInit, POINTER_REL, requireWriteAuth, runAdopt, runArchive, runDisable, runEnable, runList, runShow, runVerify } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer } from "./ui-server.js";
 import { runAnalyze } from "./analyze.js";
 import { runBootstrap } from "./bootstrap.js";
@@ -30,22 +30,26 @@ const scan = defineCommand({
   },
   async run({ args }) {
     const home = resolveHome(args.home);
-    const roots = await discoverClientRoots(home);
-    const skills = await scanKnownClients(home);
+    const storeOpts: StoreRootOptions = { pointerFilePath: path.join(home, POINTER_REL) };
+    if (args.home !== undefined && args.home !== "") storeOpts.cliHome = args.home;
+    const envHome = process.env.SKILLS_HUB_HOME;
+    if (envHome !== undefined && envHome !== "") storeOpts.envHome = envHome;
+    const resolved = await resolveStoreRoot(storeOpts);
+    const storeRoot = resolved.ok ? resolved.storeRoot : undefined;
+    const roots = await discoverClientRoots(home, storeRoot !== undefined ? { storeRoot } : undefined);
+    const skills = await scanKnownClients(home, storeRoot);
     if (args.json) {
-      console.log(
-        JSON.stringify({
-          home,
-          roots: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })),
-          skills: skills.map((s) => ({
-            hash: s.hash,
-            clientId: s.clientId,
-            name: s.meta.name,
-            description: s.meta.description,
-          })),
-          total: skills.length,
-        }, null, 2),
-      );
+      emitOk("scan", {
+        home,
+        roots: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })),
+        skills: skills.map((s) => ({
+          hash: s.hash,
+          clientId: s.clientId,
+          name: s.meta.name,
+          description: s.meta.description,
+        })),
+        total: skills.length,
+      });
       return;
     }
     if (skills.length === 0) {
@@ -77,7 +81,7 @@ const init = defineCommand({
     const plan = { storeRoot, pointerFile };
     if (args.dryRun) {
       if (args.json) {
-        console.log(JSON.stringify({ dryRun: true, ...plan }, null, 2));
+        emitOk("init", { dryRun: true, ...plan });
       } else {
         console.log("将要写入:");
         console.log("  指针文件: " + pointerFile);
@@ -85,49 +89,52 @@ const init = defineCommand({
       }
       return;
     }
-    const layout = await initializeStoreLayout(storeRoot);
-    const groups = await ensureBuiltinGroups(storeRoot); // #25:内置分组,仅占位/缺失时写入
-    const pointerWritten = await writePointerFile(home, storeRoot);
+    const res = await performInit(home, storeRoot);
+    if (!res.ok) {
+      emitError(args.json === true, "init", res.code, res.message);
+      return;
+    }
     if (args.json) {
-      console.log(
-        JSON.stringify({
-          ok: true,
-          command: "init",
-          storeRoot,
-          pointerFile: pointerWritten,
-          layoutCreated: layout.created,
-          builtinGroupsWrote: groups.wrote,
-          message: "初始化完成",
-        }, null, 2),
-      );
+      emitOk("init", {
+        storeRoot: res.storeRoot,
+        pointerFile: res.pointerFile,
+        layoutCreated: res.layoutCreated,
+        builtinGroupsWrote: res.builtinGroupsWrote,
+        message: "初始化完成",
+      });
     } else {
       console.log("初始化完成:");
-      console.log("  库存根目录: " + storeRoot);
-      console.log("  指针文件: " + pointerWritten);
-      if (layout.created) console.log("  目录布局: 新建");
+      console.log("  库存根目录: " + res.storeRoot);
+      console.log("  指针文件: " + res.pointerFile);
+      if (res.layoutCreated) console.log("  目录布局: 新建");
       else console.log("  目录布局: 已存在,未改动");
-      console.log("  内置分组: " + (groups.wrote ? "已写入" : "已存在,未覆盖用户修改"));
+      console.log("  内置分组: " + (res.builtinGroupsWrote ? "已写入" : "已存在,未覆盖用户修改"));
     }
   },
 });
 
 /** 解析 init 的库存位置:--home → SKILLS_HUB_HOME → 交互提示 → 报错。写操作需 --yes 或 TTY。 */
-async function resolveStoreRootForInit(args: { home: string | undefined; yes: boolean | undefined }): Promise<string | null> {
+async function resolveStoreRootForInit(args: {
+  home: string | undefined;
+  yes: boolean | undefined;
+  json: boolean | undefined;
+}): Promise<string | null> {
   let storeRoot = args.home?.trim() ?? "";
   if (storeRoot === "") storeRoot = process.env.SKILLS_HUB_HOME?.trim() ?? "";
   if (storeRoot === "" && process.stdin.isTTY && !args.yes) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    storeRoot = (await rl.question("库存位置(绝对路径): ")).trim();
-    rl.close();
+    try {
+      storeRoot = (await rl.question("库存位置(绝对路径): ")).trim();
+    } finally {
+      rl.close();
+    }
   }
   if (storeRoot === "") {
-    console.error("未指定库存位置。请用 --home <path> 或设置 SKILLS_HUB_HOME(写操作需 --yes 授权)。");
-    process.exitCode = 2;
+    emitError(args.json === true, "init", "bad-usage", "未指定库存位置。请用 --home <path> 或设置 SKILLS_HUB_HOME(写操作需 --yes 授权)。");
     return null;
   }
   if (!path.isAbsolute(storeRoot)) {
-    console.error("库存根目录必须是绝对路径,收到: " + storeRoot);
-    process.exitCode = 2;
+    emitError(args.json === true, "init", "bad-usage", "库存根目录必须是绝对路径,收到: " + storeRoot);
     return null;
   }
   return storeRoot;
@@ -295,10 +302,15 @@ const ui = defineCommand({
     port: { type: "string", description: "监听端口", default: String(DEFAULT_UI_PORT) },
     home: { type: "string", description: "重定向 home 解析(沙箱验证与测试的唯一入口)" },
   },
-  run({ args }) {
+  async run({ args }) {
     const uiOpts: { port: number; home?: string } = { port: Number(args.port) };
     if (args.home !== undefined && args.home !== "") uiOpts.home = args.home;
-    void startUiServer(uiOpts);
+    try {
+      await startUiServer(uiOpts);
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exitCode = 1;
+    }
   },
 });
 
