@@ -1,4 +1,4 @@
-import { lstat, mkdir } from "node:fs/promises";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import {
   ensureBuiltinGroups,
@@ -118,8 +118,13 @@ export async function performInit(
       return { ok: false, code: "bad-usage", message: configured.message };
     }
     const hasRequest = typeof input === "string" ? Boolean(input.trim()) : Boolean(input?.skillsRoot?.trim());
-    if (configured.ok && hasRequest && path.relative(configured.paths.skillsRoot, paths.skillsRoot) !== "") {
-      return { ok: false, code: "bad-usage", message: "库存已初始化。请用 migrate 更换真源路径。" };
+    if (configured.ok && hasRequest) {
+      const [existing, requested] = await Promise.all([configured.paths.skillsRoot, paths.skillsRoot].map(
+        (folder) => realpath(folder).catch(() => folder),
+      ));
+      if (path.relative(existing!, requested!) !== "") {
+        return { ok: false, code: "bad-usage", message: "库存已初始化。请用 migrate 更换真源路径。" };
+      }
     }
     if (configured.ok) paths = configured.paths;
     else if (paths.layoutMode === "split") {

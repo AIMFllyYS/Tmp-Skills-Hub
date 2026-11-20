@@ -77,14 +77,16 @@ it("initializes an independent skills root over HTTP and preserves config prefer
   expect((await app.request("/api/settings")).status).toBe(503);
   const init = await request(app, "/api/store/init", "POST", { skillsRoot: custom });
   expect(init.status).toBe(200);
-  expect(await init.json()).toMatchObject({ skillsRoot: custom, stateRoot: path.join(fakeHome, ".skills-hub"), layoutMode: "split" });
+  const canonical = await realpath(custom);
+  expect(await init.json()).toMatchObject({ skillsRoot: canonical, stateRoot: path.join(fakeHome, ".skills-hub"), layoutMode: "split" });
   const patch = await request(app, "/api/settings", "PATCH", { autoLaunch: true, silentTray: true, gitEnabled: true });
   expect(patch.status).toBe(200);
   expect(await patch.json()).toMatchObject({ autoLaunch: true, silentTray: true, git: { enabled: true }, isDesktop: true });
   expect((await request(app, "/api/settings", "PATCH", { skillsRoot: paths.skillsRoot })).status).toBe(400);
   expect((await request(app, "/api/store/init", "POST", {})).status).toBe(200);
+  expect((await request(app, "/api/store/init", "POST", { skillsRoot: custom })).status).toBe(200);
   const settings = await app.request("/api/settings");
-  expect(await settings.json()).toMatchObject({ skillsRoot: custom, git: { enabled: true }, autoLaunch: true, stateDiskBytes: expect.any(Number) });
+  expect(await settings.json()).toMatchObject({ skillsRoot: canonical, git: { enabled: true }, autoLaunch: true, stateDiskBytes: expect.any(Number) });
   expect((await request(app, "/api/store/init", "POST", { skillsRoot: paths.skillsRoot })).status).toBe(400);
 });
 
@@ -102,12 +104,13 @@ it("migrates through HTTP, updates running content routes and preserves the sour
   const response = await request(app, "/api/store/migrate", "POST", { targetSkillsRoot: target });
   expect(response.status).toBe(200);
   const result = await response.json() as { aside: string; paths: HubPaths };
-  expect(result.paths.skillsRoot).toBe(target);
+  const canonical = await realpath(target);
+  expect(result.paths.skillsRoot).toBe(canonical);
   await expect(readFile(path.join(result.aside, "demo", "SKILL.md"), "utf8")).resolves.toBe(body);
   expect(await realpath(path.join(entry.targetDir, "demo"))).toBe(await realpath(path.join(target, "demo")));
   const content = await app.request("/api/skills/demo/file?path=SKILL.md");
   expect(await content.json()).toMatchObject({ ok: true, content: body });
-  expect(await (await app.request("/api/settings")).json()).toMatchObject({ skillsRoot: target, silentTray: true });
+  expect(await (await app.request("/api/settings")).json()).toMatchObject({ skillsRoot: canonical, silentTray: true });
   expect(cli("list").payload).toMatchObject({ total: 1, storeRoot: paths.stateRoot });
 });
 
@@ -169,6 +172,7 @@ it("provides stable JSON from CLI migrate and preserves settings and assets", as
   const target = path.join(home, "moved");
   expect(cli("migrate", "--to", "relative", "--yes")).toMatchObject({ code: 2, payload: { code: "bad-usage" } });
   expect(cli("migrate", "--to", target, "--dry-run")).toMatchObject({ code: 0, payload: { dryRun: true } });
-  expect(cli("migrate", "--to", target, "--yes")).toMatchObject({ code: 0, payload: { skillsRoot: target, skills: 1 } });
+  const migration = cli("migrate", "--to", target, "--yes");
+  expect(migration).toMatchObject({ code: 0, payload: { skillsRoot: await realpath(target), skills: 1 } });
   await expect(readFile(path.join(target, "demo", "SKILL.md"), "utf8")).resolves.toBe(body);
 });
