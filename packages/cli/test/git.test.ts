@@ -50,8 +50,8 @@ it("creates a baseline, stages one asset edit, reads log and diff, and skips unc
   const edit = await autoCommitSkillChange(paths(), summary, enabled);
   expect(edit).toMatchObject({ skipped: false, commitHash: expect.any(String) });
   expect(await getGitLog(root, "writing")).toMatchObject([
-    { hash: edit.commitHash, message: summary, author: "Skills Hub" },
-    { hash: initial.commitHash, message: "chore(skills): initialize single-source repository" },
+    { hash: edit.commitHash, message: summary, author: "Skills Hub", filesChanged: 1, insertions: 1, deletions: 1 },
+    { hash: initial.commitHash, message: "chore(skills): initialize single-source repository", filesChanged: 1, insertions: 1, deletions: 0 },
   ]);
   expect(await getGitDiff(root, initial.commitHash, edit.commitHash)).toContain("+edited");
   expect(await autoCommitSkillChange(paths(), "same files", enabled)).toEqual({ skipped: true });

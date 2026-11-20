@@ -87,7 +87,9 @@ it("records every active asset entry point with real sandbox Git and pauses comm
     expect(data, JSON.stringify(data)).toMatchObject({ ok: true });
     return data;
   };
+  expect(await (await app.request("/api/skills")).json()).toMatchObject({ gitEnabled: false });
   await write("/api/git/toggle", { enabled: true });
+  expect(await (await app.request("/api/skills")).json()).toMatchObject({ gitEnabled: true });
   const source = path.join(home, "source");
   await skillFile(source, "first", "before");
   await write("/api/adopt", { source });
@@ -115,10 +117,12 @@ it("records every active asset entry point with real sandbox Git and pauses comm
   ]);
   const history = await (await app.request("/api/git/log?skill=first&limit=2")).json() as { commits: Array<{ hash: string }> };
   expect(history.commits).toHaveLength(2);
+  expect(history.commits[0]).toMatchObject({ filesChanged: 1, insertions: 5, deletions: 0 });
   const patch = await (await app.request("/api/git/diff?skill=first&commit=" + history.commits[0]!.hash)).json();
   expect(patch).toMatchObject({ ok: true, patch: expect.stringContaining("+after") });
   expect((await app.request("/api/git/diff?commit=--all")).status).toBe(400);
   await write("/api/git/toggle", { enabled: false });
+  expect(await (await app.request("/api/skills")).json()).toMatchObject({ gitEnabled: false });
   await write("/api/skills/first/file?path=SKILL.md", { content: markdown("first", "git disabled") }, "PUT");
   expect(await getGitLog(paths.skillsRoot)).toEqual(log);
   await expect(readFile(path.join(paths.skillsRoot, "first", "SKILL.md"), "utf8")).resolves.toContain("git disabled");

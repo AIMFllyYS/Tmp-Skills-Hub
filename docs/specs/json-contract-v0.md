@@ -204,6 +204,10 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 
 失败:`auth-required`;`not-found`(无快照);`verify-failed`;`restore-failed`;`bad-usage`(缺确认短语)。
 
+### 2.12 git log
+
+`git log [name] --json` 返回 `{ ok, command: "git-log", commits }`。每条提交含 `hash`、`shortHash`、`timestamp`（ISO 8601）、`author`、`message`、`filesChanged`、`insertions`、`deletions`。指定技能时仅统计该技能目录。二进制文件计入文件数，行数为零。
+
 ## 3. 错误 code 枚举
 
 | code | 场景 |
@@ -241,10 +245,11 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 与 CLI `list --json` 同形的库存 `SkillRecord`，不是扫描视图：
 
 ```json
-{ "ok": true, "command": "skills", "storeRoot": "...", "total": 2, "skills": [SkillRecord] }
+{ "ok": true, "command": "skills", "storeRoot": "...", "total": 2, "skills": [SkillRecord], "gitEnabled": false }
 ```
 
 - 字段见 §2.2：含 `origins` 与 `visibleIn`，**禁止** `source` / 顶层 `clientId`。
+- `gitEnabled` 是当前库存的 Git 开关。查看 Skill 时以此决定是否提供历史记录入口。
 - 扫描视图（现扫现报、按客户端目录列出）只存在于 CLI `scan --json`，不走 `/api/skills`。
 - HTTP 完整端点表见 [http-api-v0.md](http-api-v0.md)。
 

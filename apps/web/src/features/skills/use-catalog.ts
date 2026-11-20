@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { isStoreUnconfiguredError } from "@/lib/api-client";
 import { getAction } from "../actions/registry.js";
+import { toggleGit } from "../git/api.js";
 import { sortClientsForApps } from "../shell/apps-layout.js";
 import {
   fetchArchive,
@@ -46,6 +47,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   const [status, setStatus] = useState<CatalogLoadState>("loading");
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [storeRoot, setStoreRoot] = useState("");
+  const [gitEnabled, setGitEnabled] = useState(false);
   const [clients, setClients] = useState<ClientInfo[]>([]);
   const [groups, setGroups] = useState<GroupDef[]>([]);
   const [usageByHash, setUsageByHash] = useState<Map<string, UsageCounters>>(new Map());
@@ -140,6 +142,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
       if (!mountedRef.current || loadGenRef.current !== gen) return;
       if (primary.kind === "unconfigured") {
         setStoreRoot("");
+        setGitEnabled(false);
         setSkills([]);
         setClients(sortClientsForApps(primary.clients, []));
         setStatus("unconfigured");
@@ -147,6 +150,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
       }
       const ordered = sortClientsForApps(primary.clients, primary.skills);
       setStoreRoot(primary.storeRoot);
+      setGitEnabled(primary.gitEnabled);
       setSkills(primary.skills);
       setClients(ordered);
       setSelectedClientId((prev) => prev ?? ordered[0]?.clientId ?? null);
@@ -192,6 +196,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
       .then((next) => {
         if (!mountedRef.current) return;
         setStoreRoot(next.storeRoot);
+        setGitEnabled(next.gitEnabled);
         setSkills(next.skills);
         setGroups(next.groups);
         if (next.clientStates !== null) setClientStates(next.clientStates);
@@ -218,9 +223,16 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   }, [applyPrimary]);
 
   const initializeStore = useCallback(
-    async (customStoreRoot?: string): Promise<void> => {
+    async (customStoreRoot?: string, enableGit = false): Promise<void> => {
       await initStore(customStoreRoot);
       toast.success("库存已初始化");
+      if (enableGit) {
+        try {
+          await toggleGit(true);
+        } catch (error) {
+          toast.error("Git 版本控制开启失败", { description: error instanceof Error ? error.message : String(error) });
+        }
+      }
       const gen = ++loadGenRef.current;
       const primary = await loadPrimaryCatalog();
       applyPrimary(primary, gen);
@@ -280,6 +292,8 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   return {
     status,
     storeRoot,
+    gitEnabled,
+    setGitEnabled,
     skills,
     clients,
     groups,

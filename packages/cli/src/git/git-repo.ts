@@ -200,20 +200,36 @@ export async function getGitStatus(root: string, runner: CommandRunner = runGit)
   };
 }
 
-export interface GitCommitEntry { hash: string; shortHash: string; timestamp: string; author: string; message: string }
+export interface GitCommitEntry {
+  hash: string; shortHash: string; timestamp: string; author: string; message: string;
+  filesChanged: number; insertions: number; deletions: number;
+}
 
 export async function getGitLog(root: string, skillName?: string, limit = 30, runner: CommandRunner = runGit): Promise<GitCommitEntry[]> {
   if (skillName !== undefined && !isPortableSkillName(skillName)) throw new Error("无效的技能目录名。");
   if (await localGitDir(root, runner) === null || !(await runner(root, ["rev-parse", "--verify", "HEAD"])).ok) return [];
   const count = Number.isSafeInteger(limit) ? Math.min(Math.max(limit, 1), 100) : 30;
-  const args = ["--literal-pathspecs", "log", "-z", "-n", String(count), "--format=%H%x00%h%x00%aI%x00%an%x00%s", "--"];
+  const args = ["--literal-pathspecs", "log", "-z", "-n", String(count), "--format=%x00%H%x00%h%x00%aI%x00%an%x00%s",
+    "--numstat", "--no-renames", "--no-ext-diff", "--no-textconv", "--"];
   if (skillName !== undefined) args.push(skillName);
   const fields = stdout(await runner(root, args)).split("\0");
   const rows: GitCommitEntry[] = [];
-  for (let i = 0; i + 4 < fields.length; i += 5) {
-    const [hash, shortHash, timestamp, author, message] = fields.slice(i, i + 5) as [string, string, string, string, string];
-    if (!/^[a-f0-9]{40,64}$/.test(hash)) throw new Error("Git 提交历史格式无效。");
-    rows.push({ hash, shortHash, timestamp, author, message });
+  let position = 0;
+  while (position + 5 < fields.length) {
+    const [marker, hash, shortHash, timestamp, author, message] =
+      fields.slice(position, position + 6) as [string, string, string, string, string, string];
+    if (marker !== "" || !/^[a-f0-9]{40,64}$/.test(hash)) throw new Error("Git 提交历史格式无效。");
+    position += 6;
+    let filesChanged = 0, insertions = 0, deletions = 0;
+    while (position < fields.length && fields[position] !== "") {
+      const numstat = /^\n?(\d+|-)\t(\d+|-)\t/.exec(fields[position] ?? "");
+      if (numstat === null) throw new Error("Git 变更统计格式无效。");
+      filesChanged += 1;
+      insertions += Number(numstat[1] === "-" ? 0 : numstat[1]);
+      deletions += Number(numstat[2] === "-" ? 0 : numstat[2]);
+      position += 1;
+    }
+    rows.push({ hash, shortHash, timestamp, author, message, filesChanged, insertions, deletions });
   }
   return rows;
 }
@@ -237,7 +253,7 @@ export async function getGitCommitPatch(root: string, commit: string, skillName:
   const resolved = stdout(await runner(root, ["rev-parse", "--verify", "--end-of-options", commit + "^{commit}"])).trim();
   if (!/^[a-f0-9]{40,64}$/.test(resolved)) throw new Error("无法解析 Git 版本。");
   const args = ["-c", "core.quotepath=false", "--literal-pathspecs", "show", "--format=", "--no-color",
-    "--no-ext-diff", "--no-textconv", "--no-renames", resolved, "--"];
+    "--no-ext-diff", "--no-textconv", "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "--no-relative", resolved, "--"];
   if (skillName !== undefined) args.push(skillName);
   return stdout(await runner(root, args));
 }

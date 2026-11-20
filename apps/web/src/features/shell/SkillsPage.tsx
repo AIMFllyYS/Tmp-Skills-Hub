@@ -39,6 +39,7 @@ interface SkillsPageProps {
   tab: SkillsTab;
   onTab: (tab: SkillsTab) => void;
   skills: SkillRecord[];
+  gitEnabled: boolean;
   clients: ClientInfo[];
   groups: GroupDef[];
   archived: ArchivedSkill[];
@@ -64,6 +65,7 @@ export function SkillsPage({
   tab,
   onTab,
   skills,
+  gitEnabled,
   clients,
   groups,
   archived,
@@ -330,6 +332,7 @@ export function SkillsPage({
                     key={focused.hash}
                     hash={focused.hash}
                     skill={focused}
+                    gitEnabled={gitEnabled}
                     actions={
                       <SkillActions
                         skill={focused}

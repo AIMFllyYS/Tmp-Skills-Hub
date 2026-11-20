@@ -94,10 +94,11 @@ function freePort() {
   });
 }
 
-function runCli(args) {
+function runCli(args, env = process.env) {
   return execFileSync(process.execPath, [cli, ...args], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    env,
   });
 }
 
@@ -296,15 +297,25 @@ async function main() {
       "utf8",
     );
 
-    runCli(["init", "--home", home, "--yes", "--json"]);
-    runCli(["adopt", sample, "--home", home, "--yes", "--json"]);
+    const sandboxEnv = {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: path.join(home, "git-config"),
+      GH_CONFIG_DIR: path.join(home, "gh-config"),
+    };
+    runCli(["init", "--home", home, "--yes", "--json"], sandboxEnv);
+    runCli(["git", "enable", "--home", home, "--yes", "--json"], sandboxEnv);
+    runCli(["adopt", sample, "--home", home, "--yes", "--json"], sandboxEnv);
 
     const uiPort = await freePort();
     const debugPort = await freePort();
-    if (uiPort === 4321) throw new Error("抽到了用户常用端口 4321,拒绝占用");
+    if ([uiPort, debugPort].some((port) => [4321, 5173, 4399].includes(port))) {
+      throw new Error("抽到保留端口，拒绝占用");
+    }
 
     ui = spawn(process.execPath, [cli, "ui", "--port", String(uiPort), "--home", home], {
       stdio: ["ignore", "pipe", "pipe"],
+      env: sandboxEnv,
     });
     let uiErr = "";
     ui.stderr?.on("data", (buf) => {
@@ -444,6 +455,21 @@ async function main() {
 
     const probe = JSON.parse(await evalJs("JSON.stringify(window.__smoke)"));
     const clickLongMax = probe.longTasks.length > 0 ? Math.max(...probe.longTasks) : 0;
+    const historyOpened = await evalJs(`(() => {
+      const button = document.querySelector('[data-testid=skill-history-button]');
+      if (!button) return false;
+      button.click();
+      return true;
+    })()`);
+    const historyVisible = historyOpened && await waitUntil(evalJs,
+      "!!document.querySelector('[data-testid=skill-history-timeline]')", 60, 100);
+    const historyRequests = JSON.parse(await evalJs("JSON.stringify(window.__smoke.fetchLog)"))
+      .filter((url) => url.startsWith("/api/git/log?")).length;
+    await evalJs(`(() => {
+      document.querySelector('[data-testid=skill-history-drawer] [aria-label="关闭抽屉"]')?.click();
+      return true;
+    })()`);
+    await waitUntil(evalJs, "!document.querySelector('[data-testid=skill-history-drawer]')", 20, 100);
     await evalJs(`(() => { const t = document.querySelector("[data-testid=skills-tab-apps]"); if (t) t.click(); return true; })()`);
     let switches = 0;
     for (let i = 0; i < 20; i++) {
@@ -506,6 +532,14 @@ async function main() {
       "设置页有重置按钮",
       resetEntry === true,
       "左下角设置里没有重置入口",
+    );
+    const prefetch = probe.fetchLog.some((url) => url.startsWith("/api/git/log"));
+    const rHistory = line(
+      "按需加载 Git 历史",
+      (prefetch ? "打开 Skill 时已请求" : "打开 Skill 时 0 次") + " / 打开历史后 " + historyRequests + " 次",
+      "显式点击历史时仅请求 1 次并显示时间线",
+      !prefetch && historyVisible && historyRequests === 1,
+      "历史记录必须在抽屉打开后才加载",
     );
 
     console.log("--- 性能 ---");
@@ -594,7 +628,7 @@ async function main() {
       "1000 个 skill 时 DOM 超过 3000",
     );
 
-    const checks = [r1, r2, r3, rNav, r4, r5, r6, r7, r8, r9];
+    const checks = [r1, r2, r3, rNav, rHistory, r4, r5, r6, r7, r8, r9];
     const passed = checks.filter(Boolean).length;
     console.log("");
     console.log("结果: " + passed + "/" + checks.length + " " + (passed === checks.length ? "通过" : "未通过"));

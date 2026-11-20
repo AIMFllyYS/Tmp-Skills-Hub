@@ -29,6 +29,7 @@ export interface SkillsResponse {
   storeRoot: string;
   total: number;
   skills: SkillRecord[];
+  gitEnabled?: boolean;
 }
 
 export interface StoreInitResponse {

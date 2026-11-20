@@ -6,7 +6,7 @@ export class ApiRequestError extends Error {
   readonly status: number;
   readonly code: string | undefined;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, readonly payload?: unknown) {
     super(message);
     this.name = "ApiRequestError";
     this.status = status;
@@ -57,7 +57,7 @@ export async function apiRequest<T extends { ok: true }>(
       parsed !== null && typeof parsed.code === "string" && parsed.code !== ""
         ? parsed.code
         : options.fallbackCode;
-    throw new ApiRequestError(message, res.status, code);
+    throw new ApiRequestError(message, res.status, code, parsed);
   }
   return parsed as unknown as T;
 }

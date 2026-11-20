@@ -28,7 +28,7 @@
 | 端点 | 成功响应 | 失败 |
 | --- | --- | --- |
 | GET /api/health | `{ ok: true }` | — |
-| GET /api/skills | `{ ok, command: "skills", storeRoot, total, skills: SkillRecord[] }` | 503 store-not-configured |
+| GET /api/skills | `{ ok, command: "skills", storeRoot, total, skills: SkillRecord[], gitEnabled }`。随库存列表返回 Git 开关，点开 Skill 时无需额外请求设置 | 503 store-not-configured |
 | GET /api/skills/:hash | `{ ok, command: "skill", skill: SkillRecord }` | 404 not-found; 400 bad-usage(前缀不唯一); 503 |
 | GET /api/groups | `{ ok, command: "groups", version, groups: GroupDef[] }` | 503 |
 | GET /api/stats | `{ ok, command: "stats", stats: StatsFile, ranking: UsageRankEntry[] }` | 503 |
@@ -101,7 +101,7 @@
 | POST /api/reset | `{ snapshotId?, confirm: "reset" }` | `{ ok, command: "reset", storeRoot, snapshotId, asideStore, asidePointer, adopted }`(本请求内跑完还原,与 CLI `reset --json` 同形) | 400 bad-usage(缺确认短语); 404; 409 verify-failed\|restore-failed; 500 io-error; 503 |
 | GET /api/git/status | — | `{ ok, command: "git-status", enabled, gitInstalled, gitVersion, ghInstalled, ghVersion, ghAuthenticated, ghUsername, initialized?, branch?, aheadCount?, dirtyCount?, remoteDiverged?, remoteUrl }` 及安装提示。库存未配置时仍可检测依赖 | 500 |
 | POST /api/git/toggle | `{ enabled: boolean }` | `{ ok, command: "git-toggle", enabled }`。开启时初始化真源，关闭后保留版本仓 | 400; 409 git-unavailable; 503 |
-| GET /api/git/log | `?skill=&limit=`（默认 30，最多 100） | `{ ok, command: "git-log", commits }`，每项含哈希、时间、作者和摘要 | 400; 409 git-unavailable; 503 |
+| GET /api/git/log | `?skill=&limit=`（默认 30，最多 100） | `{ ok, command: "git-log", commits }`，每项含 `hash`、`shortHash`、`timestamp`、`author`、`message`、`filesChanged`、`insertions`、`deletions`。指定 `skill` 时只汇总该目录，二进制文件只计文件数 | 400; 409 git-unavailable; 503 |
 | GET /api/git/diff | `?commit=<hash>&skill=` | `{ ok, command: "git-diff", commit, patch }`。按提交读取可选单技能的脱敏差异 | 400; 409 git-unavailable; 503 |
 | POST /api/git/gh/login/start | `{}` | `{ ok, command: "gh-login-start", sessionId, userCode, verificationUri, status: "pending", expiresAt }` | 502 gh-login-failed; 503 git-unavailable |
 | GET /api/git/gh/login/status | `?sessionId=` | `{ ok, command: "gh-login-status", sessionId, status, authenticated, username, error, expiresAt }`。内存会话状态为 pending、authenticated、expired 或 error | 404 not-found |

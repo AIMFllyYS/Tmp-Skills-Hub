@@ -312,6 +312,7 @@ function MainShellApp() {
                           tab={skillsTab}
                           onTab={setSkillsTab}
                           skills={catalog.skills}
+                          gitEnabled={catalog.gitEnabled}
                           clients={catalog.clients}
                           groups={catalog.groups}
                           archived={catalog.archived}
@@ -358,6 +359,7 @@ function MainShellApp() {
             backupsLoading={catalog.backupsLoading}
             maintenance={maintenance}
             onResetDone={maintenance.reload}
+            onGitEnabledChange={catalog.setGitEnabled}
           />
         </Suspense>
       </div>

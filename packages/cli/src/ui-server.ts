@@ -51,6 +51,7 @@ import { registerReconcileRoutes } from "./ui-reconcile.js";
 import { registerConflictRoutes } from "./ui-conflicts.js";
 import { checkBundledSelfSkill } from "./self-skill.js";
 import { registerSettingsRoutes } from "./ui-settings.js";
+import { readStorePreferences } from "./store-preferences.js";
 import { registerGitRoutes } from "./ui-git.js";
 import { archiveManagedSkill, restoreManagedSkill } from "./skill-write-ops.js";
 import { createGhDeviceLogin } from "./git/index.js";
@@ -344,8 +345,11 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   app.get("/api/skills", (c) =>
     withStore(ctx, c, "skills", async (root) => {
-      const skills = attachVisibleIn(await readStoreIndex(root), await readLinksLedger(root));
-      return c.json({ ok: true, command: "skills", storeRoot: root.stateRoot, total: skills.length, skills });
+      const [index, links, { git }] = await Promise.all([
+        readStoreIndex(root), readLinksLedger(root), readStorePreferences(ctx.home),
+      ]);
+      const skills = attachVisibleIn(index, links);
+      return c.json({ ok: true, command: "skills", storeRoot: root.stateRoot, total: skills.length, skills, gitEnabled: git.enabled });
     }),
   );
 
