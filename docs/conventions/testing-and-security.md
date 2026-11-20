@@ -51,6 +51,8 @@
 2. **异常日志与响应脱敏**：
    - 所有外部 LLM / HTTP 异常进入返回信息前必须经过 `scrub()`（`packages/cli/src/llm/errors.ts`）脱敏，同时掩码 `sk-*` 模式以及非空的 `process.env.QINIU_API_KEY` / `process.env.GITHUB_TOKEN` 环境变量字面量（替换为 `[redacted]`）。
    - Hono 全局 `onError` 返回通用结构化信息，不向客户端暴露底层凭据或完整堆栈。
+
+Git 资产仓仅在唯一真源根目录内初始化。子进程使用参数数组，禁用 shell 和会执行外部代码的 hook、文件监视器与暂存过滤器。自动提交使用仓内临时 index，失败保留原 index；身份回退只写仓库 local config。环境与临时文件规则由受管 `.gitignore` 补齐，已被跟踪的忽略项会拦截提交。GitHub CLI 在自动化测试中使用替身；文本密钥预检只返回规则、文件、行号和脱敏预览。
 3. **零静默写入与零真删除红线**：
    - 未经用户显式授权（终端交互确认 / 非交互 `--yes` / Web 面板或 Agent 审批明确动作），**绝不**搬动或改写用户本地客户端目录里的已有 skill。
    - `links.json` 台账是受管条目的唯一凭证：删除或覆盖 `kind: "copy"` 目录**仅限**台账明确登记为 `kind === "copy"` 的受管条目，绝不删除未登记的用户真实目录；所有移除/放弃操作一律走 `archive`、`archive/drafts/` 或 `.pre-reinit` 旁路，代码库内不存在真删除 skill 资产的路径。
