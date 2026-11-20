@@ -6,12 +6,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { ClientInfo, DoctorResponse, SkillRecord } from "../skills/types.js";
 import type { ShellNav } from "./page.js";
+import { SelfHealSection } from "./SettingsV3Panels.js";
+import type { StoreMaintenance } from "./use-store-maintenance.js";
 import { coverageOf, recentSkills } from "./stats-model.js";
 
 interface OverviewPageProps {
   skills: SkillRecord[];
   clients: ClientInfo[];
   doctor: DoctorResponse | null;
+  maintenance: StoreMaintenance;
   snapshotCount: number;
   doctorLoading?: boolean;
   backupsLoading?: boolean;
@@ -62,6 +65,7 @@ export function OverviewPage({
   skills,
   clients,
   doctor,
+  maintenance,
   snapshotCount,
   doctorLoading = false,
   backupsLoading = false,
@@ -69,14 +73,10 @@ export function OverviewPage({
 }: OverviewPageProps): React.JSX.Element {
   const healthLoading = doctorLoading || backupsLoading;
   const cover = coverageOf(skills);
-  const dangling = doctor?.danglingLinks.length ?? 0;
   const unlinked = skills.filter((s) => s.visibleIn.length === 0).length;
   const issues: IssueItem[] = [];
   if (doctor !== null && (!doctor.store.resolved || !doctor.store.reachable)) {
     issues.push({ text: "库存不可达", go: { settings: true } });
-  }
-  if (dangling > 0) {
-    issues.push({ text: "悬空链接 " + String(dangling) + " 条", go: { page: "skills", tab: "apps" } });
   }
   if (unlinked > 0) {
     issues.push({
@@ -87,6 +87,7 @@ export function OverviewPage({
   if (snapshotCount === 0) {
     issues.push({ text: "还没有备份快照", go: { settings: true } });
   }
+  const needsRepair = maintenance.health !== null && (maintenance.health.danglingCount > 0 || maintenance.health.driftedSkills.length > 0);
   const recent = recentSkills(skills, 5);
   const empty = skills.length === 0;
 
@@ -145,7 +146,7 @@ export function OverviewPage({
                 <Skeleton className="h-11 w-full" />
                 <Skeleton className="h-11 w-full" />
               </div>
-            ) : issues.length === 0 ? (
+            ) : issues.length === 0 && !needsRepair && maintenance.error === null ? (
               <p className="mt-2 text-sm text-ink-mid">没有需要立刻处理的事。</p>
             ) : (
               <ul className="mt-2 space-y-2">
@@ -162,6 +163,15 @@ export function OverviewPage({
                 ))}
               </ul>
             )}
+            {needsRepair && maintenance.health !== null && (
+              <SelfHealSection
+                className="mt-3"
+                {...maintenance.health}
+                onPruneDangling={maintenance.onPruneDangling}
+                onAcceptDrifted={maintenance.onAcceptDrifted}
+              />
+            )}
+            {maintenance.error !== null && <p role="alert" className="mt-2 text-sm text-ink-mid">健康检查失败。{maintenance.error}</p>}
           </section>
           <section>
             <h2 className="text-base font-medium text-ink-strong">近期收录</h2>

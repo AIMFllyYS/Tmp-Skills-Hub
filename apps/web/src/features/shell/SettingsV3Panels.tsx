@@ -134,7 +134,8 @@ export interface MigrateStoreDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentSkillsRoot: string;
-  managedLinkCount: number;
+  managedLinkCount?: number;
+  onPreviewMigration?: (targetSkillsRoot: string) => Promise<{ movedLinks: number; skills: number }>;
   onMigrate: (targetSkillsRoot: string) => Promise<void>;
   nested?: boolean;
 }
@@ -145,15 +146,18 @@ export function MigrateStoreDialog({
   onOpenChange,
   currentSkillsRoot,
   managedLinkCount,
+  onPreviewMigration,
   onMigrate,
   nested = true,
 }: MigrateStoreDialogProps): React.JSX.Element {
   const [targetPath, setTargetPath] = useState("");
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [plan, setPlan] = useState<{ movedLinks: number; skills: number } | null>(null);
 
   const validationError = validateMigrateTargetPath(targetPath, currentSkillsRoot);
   const showError = touched && validationError !== null;
+  const linkCount = plan?.movedLinks ?? managedLinkCount;
 
   const steps: StepItem[] = [
     {
@@ -165,7 +169,9 @@ export function MigrateStoreDialog({
     {
       id: "relink-journal",
       title: "Journal 原子重指全部受管软链接",
-      detail: "安全切换 " + String(managedLinkCount) + " 条客户端软链接至新路径；任一步失败将逆序回滚",
+      detail: linkCount === undefined
+        ? "将客户端软链接切换至新路径；任一步失败将逆序回滚"
+        : "安全切换 " + String(linkCount) + " 条客户端软链接至新路径；任一步失败将逆序回滚",
       status: "idle",
     },
     {
@@ -187,6 +193,7 @@ export function MigrateStoreDialog({
     if (!next) {
       setTargetPath("");
       setTouched(false);
+      setPlan(null);
     }
     onOpenChange(next);
   };
@@ -197,9 +204,14 @@ export function MigrateStoreDialog({
     const trimmed = targetPath.trim();
     setBusy(true);
     try {
+      if (onPreviewMigration !== undefined && plan === null) {
+        setPlan(await onPreviewMigration(trimmed));
+        return;
+      }
       await onMigrate(trimmed);
       setTargetPath("");
       setTouched(false);
+      setPlan(null);
       onOpenChange(false);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -234,6 +246,7 @@ export function MigrateStoreDialog({
               value={targetPath}
               onChange={(e) => {
                 setTargetPath(e.target.value);
+                setPlan(null);
                 if (!touched) setTouched(true);
               }}
               placeholder="例如 D:\skills-hub\skills 或 /Users/name/skills-hub/skills"
@@ -256,7 +269,9 @@ export function MigrateStoreDialog({
           <Separator />
 
           <div className="space-y-2.5 rounded-xl border border-line bg-canvas/70 p-4">
-            <p className="text-xs font-medium text-ink-mid">迁移将按以下 4 步安全执行</p>
+            <p className="text-xs font-medium text-ink-mid" aria-live="polite">
+              {plan === null ? "迁移将按以下 4 步安全执行" : "目标检查通过，将迁移 " + String(plan.skills) + " 个技能"}
+            </p>
             <StepList items={steps} />
           </div>
         </div>
@@ -271,7 +286,8 @@ export function MigrateStoreDialog({
             data-testid="migrate-confirm-button"
             onClick={() => void handleSubmit()}
           >
-            {busy ? "迁移中…" : "确认迁移"}
+            {busy ? (onPreviewMigration !== undefined && plan === null ? "检查中…" : "迁移中…") :
+              onPreviewMigration !== undefined && plan === null ? "检查目标路径" : "确认迁移"}
           </Button>
         </div>
       </DialogContent>

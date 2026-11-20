@@ -75,7 +75,7 @@
   - **depends-on**: T1.1 (#239)
   - **负责模块**: `packages/cli/src/store-shared.ts`, `bootstrap.ts`, `doctor.ts`, `store-query.ts`, `store-migrate.ts`(新增), `ui-server.ts`, `ui-http.ts`, `ui-{groups,drafts,content,links}.ts`, `index.ts`
   - **复用资产**: `performInit`, `writePointerFile`, `collectDoctorReport`, `performVerify`, `findDanglingLinks`, `applyLinkSet`, `hashSkillFolder`, `requireWriteAuth`
-- [ ] **T1.3** `[web]` 设置面板升级：目录分离展示、真源路径迁移、空间清理与自愈入口（直引 `/playbook` 组件） — [#241](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/241) | [PRD.md#L150-L170](./PRD.md#L150-L170)
+- [x] **T1.3** `[web]` 设置面板升级：目录分离展示、真源路径迁移、空间清理与自愈入口（直引 `/playbook` 组件） — [#241](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/241) | [PRD.md#L150-L170](./PRD.md#L150-L170)
   - **depends-on**: T1.2 (#240)
   - **负责模块**: `apps/web/src/features/shell/{StoreOnboarding.tsx,SettingsDialog.tsx,OverviewPage.tsx}`, `features/skills/{api.ts,types.ts}`
   - **复用资产**: `/playbook` 预制 `DualPathOnboardingView`, `DualPathSettingsSection`, `MigrateStoreDialog`, `SelfHealSection`, `DesktopAutoLaunchSection`, `formatBytes`, `useCatalog`

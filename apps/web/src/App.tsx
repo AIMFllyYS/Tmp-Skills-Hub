@@ -8,9 +8,8 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
-import { OverviewPage } from "./features/shell/OverviewPage.js";
 import { Sidebar } from "./features/shell/Sidebar.js";
-import { StoreOnboarding } from "./features/shell/StoreOnboarding.js";
+import { useStoreMaintenance } from "./features/shell/use-store-maintenance.js";
 import type { AppPage, ShellNav, SkillsTab } from "./features/shell/page.js";
 import {
   readShellPrefs,
@@ -29,6 +28,8 @@ const PlaybookPage = lazy(() =>
 const SettingsDialog = lazy(() =>
   import("./features/shell/SettingsDialog.js").then((m) => ({ default: m.SettingsDialog })),
 );
+const OverviewPage = lazy(() => import("./features/shell/OverviewPage.js").then((m) => ({ default: m.OverviewPage })));
+const StoreOnboarding = lazy(() => import("./features/shell/StoreOnboarding.js").then((m) => ({ default: m.StoreOnboarding })));
 const SkillsPage = lazy(() => import("./features/shell/SkillsPage.js").then((m) => ({ default: m.SkillsPage })));
 const StatsPage = lazy(() => import("./features/shell/StatsPage.js").then((m) => ({ default: m.StatsPage })));
 
@@ -74,6 +75,7 @@ function MainShellApp() {
   const motionTimer = useRef<number | null>(null);
   const sidebarMotionRef = useRef(false);
   const catalog = useCatalog({ loadClientStates: page === "skills" && skillsTab === "apps" });
+  const maintenance = useStoreMaintenance(catalog.status === "ready" && (page === "overview" || settingsOpen), catalog.storeRoot, catalog.reload);
 
   useEffect(() => {
     writeShellPrefs({ collapsed, width: sidebarWidth });
@@ -233,6 +235,7 @@ function MainShellApp() {
                           skills={catalog.skills}
                           clients={catalog.clients}
                           doctor={catalog.doctor}
+                          maintenance={maintenance}
                           snapshotCount={catalog.snapshotCount}
                           doctorLoading={catalog.doctorLoading}
                           backupsLoading={catalog.backupsLoading}
@@ -288,7 +291,8 @@ function MainShellApp() {
             clients={catalog.clients}
             latestSnapshotId={catalog.latestSnapshotId}
             backupsLoading={catalog.backupsLoading}
-            onResetDone={catalog.reload}
+            maintenance={maintenance}
+            onResetDone={maintenance.reload}
           />
         </Suspense>
       </div>
