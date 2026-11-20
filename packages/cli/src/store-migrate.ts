@@ -5,6 +5,7 @@ import {
   copyTreeJunctionSafe,
   discoverClientRoots,
   hashSkillFolder,
+  linkSkillDirName,
   readHubConfig,
   readLinksLedger,
   readLinkTarget,
@@ -101,7 +102,7 @@ export async function performMigrate({ home, paths, targetSkillsRoot, dryRun = f
     linkGroups.set(entry.targetDir, batch);
     if (entry.kind === "copy") continue;
     const link = await readLinkTarget(path.join(entry.targetDir, entry.entryName));
-    const expected = path.join(sourceRoot, entry.entryName);
+    const expected = path.join(sourceRoot, linkSkillDirName(entry));
     if (link === null || path.relative(expected, await canonical(link)) !== "") {
       return { ok: false, code: "conflict", message: "链接落点已变化，请检查并清理台账: " + path.join(entry.targetDir, entry.entryName) } as const;
     }

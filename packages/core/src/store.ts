@@ -5,6 +5,7 @@ import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { hashSkillFolder } from "./hash.js";
 import { migrateVersionedData, type MigrationStep } from "./migrate.js";
 import { readSkillMeta } from "./skill-md.js";
+import { isPortableSkillName } from "./skill-name.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 import type { SkillMeta, SkillRecord, SkillSource } from "./types.js";
@@ -131,6 +132,8 @@ export async function writeStoreIndex(
 export interface AdoptOptions {
   /** 预演模式:只计算与报告,不复制、不写清单、不追加来源。 */
   dryRun?: boolean;
+  /** 接管计划携带预览时的指纹和目录名，复制期间变化则中止。 */
+  expected?: { hash: string; dirName: string };
 }
 
 export async function adoptSkillFolder(
@@ -144,8 +147,14 @@ export async function adoptSkillFolder(
   if (meta === null) {
     return { kind: "invalid", folderPath, reason: "缺少 name 或 description(SKILL.md 未达标)" };
   }
+  if (!isPortableSkillName(meta.name)) {
+    return { kind: "invalid", folderPath, reason: "SKILL.md 中的 name 必须是可移植的目录名" };
+  }
 
   const incomingHash = await hashSkillFolder(folderPath);
+  if (options?.expected && (options.expected.hash !== incomingHash || options.expected.dirName !== meta.name)) {
+    return { kind: "invalid", folderPath, reason: "收录来源与接管计划不一致，请重新扫描" };
+  }
   const skills = await readStoreIndex(storeRoot);
   const byHash = skills.find((s) => s.hash === incomingHash);
   if (byHash !== undefined) {
@@ -188,12 +197,21 @@ export async function adoptSkillFolder(
     const tmpDir = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR, "adopt." + uniqueTmpId());
     try {
       await cp(folderPath, tmpDir, { recursive: true });
+      if (options?.expected && await hashSkillFolder(tmpDir) !== incomingHash) {
+        return { kind: "invalid", folderPath, reason: "收录来源在复制期间变化，请重新扫描" };
+      }
       await moveDirSafe(tmpDir, dest);
+      skills.push(record);
+      try {
+        await writeStoreIndex(storeRoot, skills);
+      } catch (error) {
+        try { await moveDirSafe(dest, tmpDir); }
+        catch (cause) { throw new AggregateError([error, cause], "收录清单写入失败，且无法恢复暂存副本", { cause }); }
+        throw error;
+      }
     } finally {
       await unlinkNoFollow(tmpDir);
     }
-    skills.push(record);
-    await writeStoreIndex(storeRoot, skills);
   }
   return { kind: "adopted", record };
 }

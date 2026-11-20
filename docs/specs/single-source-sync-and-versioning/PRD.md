@@ -235,7 +235,7 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
          - 先用 `moveDirSafe` 将真实目录移入 `<stateRoot>/tmp/reconcile-aside-<runId>/<clientId>/<name>/`；
          - 紧接着调用 `applyLinkSet`（或逐客户端一次集合切换）在原落点创建指向 `skillsRoot/<name>/` 的 Junction/symlink 并更新 `links.json`；
          - 若遇到 Windows 文件锁（`EBUSY`/`EPERM`）或建链失败：**按 journal 逆序恢复已移出的真实目录回原客户端位置**，并把该条失败结构化汇报；
-       - 仅当某个客户端全部链接切换成功后，才清理该客户端在 `tmp/reconcile-aside-<runId>` 的暂存副本（原文件仍完整存在于 `backups/` 与 `skillsRoot/`/`conflicts/` 中，满足零真删除）。
+       - 客户端链接切换成功后，把 `tmp/reconcile-aside-<runId>` 的原目录归档到 `archive/reconcile/<runId>/`。原因是 blob 备份和内容哈希会跳过 `.git` 等条目，保留完整原目录才能覆盖这些内容。
     4. 可选附带清理 `danglingLinks` 台账记录。
 - **验收标准**：
   - 单测在沙箱构造混合场景（已有受管链接 + 新增野生目录 + 被覆盖的 `replaced-link-real-dir` + 2 个客户端同名不同版本 + `.system` 非 skill 目录 + `ego-browser` 外部软链接），验证执行后：① 客户端中所有有效 skill 100% 变为指向 `skillsRoot` 的 Junction；② `.system` 与 `ego-browser` 毫发无损；③ 冲突池留存全部异版、`maxMtime` 最新者成为真源；④ 注入失败时原目录无损回滚。

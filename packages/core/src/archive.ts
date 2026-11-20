@@ -4,7 +4,7 @@ import path from "node:path";
 import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { hashSkillFolder } from "./hash.js";
 import { applyLinkSet } from "./link-switch.js";
-import { readLinksLedger } from "./links.js";
+import { linkSkillDirName, readLinksLedger } from "./links.js";
 import { readSkillMeta } from "./skill-md.js";
 import { readStoreIndex, writeStoreIndex } from "./store.js";
 import { STORE_ARCHIVE_DIR, STORE_TMP_DIR } from "./store-layout.js";
@@ -53,7 +53,7 @@ export async function archiveSkill(storeRoot: string | HubPaths, dirName: string
 
   // 2. 摘全部受管链接(按落点分组,逐个集合切换;任一失败 → 整体中止,不半归档)
   const ledger = await readLinksLedger(storeRoot);
-  const affected = ledger.filter((e) => e.entryName === dirName);
+  const affected = ledger.filter((e) => linkSkillDirName(e) === dirName);
   if (affected.length > 0) {
     const byDir = new Map<string, typeof ledger>();
     for (const e of affected) {
@@ -62,8 +62,8 @@ export async function archiveSkill(storeRoot: string | HubPaths, dirName: string
       byDir.set(e.targetDir, list);
     }
     for (const targetDir of byDir.keys()) {
-      const desired = ledger.filter((x) => x.targetDir === targetDir && x.entryName !== dirName);
-      const res = await applyLinkSet(storeRoot, { targetDir, entries: desired });
+      const entryNames = new Set(affected.filter((entry) => entry.targetDir === targetDir).map((entry) => entry.entryName));
+      const res = await applyLinkSet(storeRoot, { targetDir, entries: [] }, { entryNames });
       if (!res.ok) {
         return {
           ok: false,

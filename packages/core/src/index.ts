@@ -3,11 +3,17 @@ export type { StorageProvider, SourceProvider, ClientAdapter, IdentityProvider }
 export { hashSkillFolder } from "./hash.js";
 export { scanClientDriftL1, inspectDriftL2 } from "./reconcile-scan.js";
 export type { DriftEntry, DriftEntryKind, DriftIncomplete, DriftL1Report, DriftL2Report, DriftSkill, DriftVariant } from "./reconcile-scan.js";
+export { executeReconcile, planReconcile } from "./reconcile.js";
+export type { ReconcileError, ReconcilePlan, ReconcileResult } from "./reconcile.js";
+export { conflictVariantPath, CONFLICTS_FILE_VERSION, readConflicts, writeConflicts } from "./conflicts.js";
+export type { ConflictRecord, ConflictVariant } from "./conflicts.js";
 export { isGitHubUrl, parseGitHubUrl } from "./github-url.js";
 export type { GitHubUrlParts } from "./github-url.js";
 export { isSafeRelativePath, writeGitHubEntries } from "./github-files.js";
 export type { GitHubFileEntry } from "./github-files.js";
 export { parseSkillMeta, readSkillMeta } from "./skill-md.js";
+export { isPortableSkillName } from "./skill-name.js";
+export { linkSkillDirName } from "./links.js";
 export { discoverClientRoots, discoverClientRootsAt, isExcludedRoot, isOwnClientId } from "./clients.js";
 export type { ClientRoot, DiscoverRootsOptions } from "./clients.js";
 export { resolveStoreRoot, readPointerStoreRoot, normalizeHubPaths, resolveHubPaths, readHubConfig, writeHubConfig } from "./store-location.js";

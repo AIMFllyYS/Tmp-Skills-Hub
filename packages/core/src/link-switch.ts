@@ -3,7 +3,8 @@ import path from "node:path";
 import { normalizeHubPaths, type HubPaths } from "./store-location.js";
 import { unlinkNoFollow } from "./fs-atomic.js";
 import { readLinkTarget } from "./link-probe.js";
-import { readLinksLedger, writeLinksLedger, type LinkEntry } from "./links.js";
+import { linkSkillDirName, readLinksLedger, writeLinksLedger, type LinkEntry } from "./links.js";
+import { isPortableSkillName } from "./skill-name.js";
 import { STORE_TMP_DIR } from "./store-layout.js";
 import { uniqueTmpId } from "./tmp-id.js";
 
@@ -62,6 +63,8 @@ export interface ApplyOptions {
   preserveCopies?: boolean;
   /** 重定向期间失败时，用原真源重建已摘除的条目。 */
   previousSkillsRoot?: string;
+  /** 接管只触碰本次已经备份和移出的落点。 */
+  entryNames?: ReadonlySet<string>;
 }
 
 export async function applyLinkSet(
@@ -80,14 +83,19 @@ export async function applyLinkSet(
 
   const oldLedger = await readLinksLedger(storeRoot);
   const sameDir = (e: LinkEntry) => e.targetDir === plan.targetDir;
+  const selected = (e: LinkEntry) => options?.entryNames?.has(e.entryName) ?? true;
+  const desired = plan.entries.filter(selected);
   const entries = options?.preserveCopies
-    ? plan.entries.filter((entry) => entry.kind !== "copy")
-    : plan.entries;
+    ? desired.filter((entry) => entry.kind !== "copy")
+    : desired;
 
   // 0. 计划合法性:全部条目必须落在 plan.targetDir
   for (const entry of plan.entries) {
     if (!sameDir(entry)) {
       return { ok: false, code: "io-error", message: "计划条目 targetDir 与 plan.targetDir 不一致", at: entry.id };
+    }
+    if (!isPortableSkillName(entry.entryName) || !isPortableSkillName(linkSkillDirName(entry))) {
+      return { ok: false, code: "io-error", message: "落点名或真源目录名不合法", at: entry.id };
     }
   }
 
@@ -102,12 +110,16 @@ export async function applyLinkSet(
   }
 
   // 2. 计算摘除集 = 旧台账中该落点、不在新计划里的条目 + 被更新替换的旧条目
-  const newIds = new Set(plan.entries.map((e) => e.id));
-  const removedEntries = oldLedger.filter((e) => sameDir(e) && !newIds.has(e.id));
-  const replacedEntries = oldLedger.filter((e) => sameDir(e) && newIds.has(e.id) && !(options?.preserveCopies && e.kind === "copy"));
+  const newIds = new Set(desired.map((e) => e.id));
+  const prior = oldLedger.filter((e) => sameDir(e) && selected(e));
+  const removedEntries = prior.filter((e) => !newIds.has(e.id));
+  const replacedEntries = prior.filter((e) => newIds.has(e.id) && !(options?.preserveCopies && e.kind === "copy"));
 
   // 3. 预检摘除:磁盘上必须是链接(或已缺失),或台账显式登记为 kind === "copy";用户占名 → 中止
   for (const entry of [...removedEntries, ...replacedEntries]) {
+    if (!isPortableSkillName(entry.entryName) || !isPortableSkillName(linkSkillDirName(entry))) {
+      return { ok: false, code: "io-error", message: "台账包含非法目录名", at: entry.id };
+    }
     const p = path.join(entry.targetDir, entry.entryName);
     if (!(await exists(p))) continue;
     if ((await readLinkTarget(p)) === null) {
@@ -166,7 +178,7 @@ export async function applyLinkSet(
         }
         removedPaths.push(p);
       }
-      const storeSkill = path.join(skillsRoot, entry.entryName);
+      const storeSkill = path.join(skillsRoot, linkSkillDirName(entry));
       if (entry.kind === "copy") {
         await copyDir(storeSkill, p);
       } else {
@@ -175,8 +187,8 @@ export async function applyLinkSet(
       }
       createdPaths.push(p);
     }
-    const kept = oldLedger.filter((e) => !sameDir(e));
-    const next = [...kept, ...plan.entries];
+    const kept = oldLedger.filter((e) => !sameDir(e) || !selected(e));
+    const next = [...kept, ...desired];
     await writeLinksLedger(storeRoot, next);
     await rm(journalFile, { force: true }).catch(() => undefined);
     return { ok: true, created: createdPaths, removed: removedPaths, ledger: next };
@@ -204,7 +216,7 @@ async function rollback(journal: Journal, createdPaths: string[], removedPaths: 
   for (const old of journal.removed) {
     const p = path.join(old.targetDir, old.entryName);
     if (!removedPaths.has(p) || await exists(p)) continue;
-    const storeSkill = path.join(journal.skillsRoot, old.entryName);
+    const storeSkill = path.join(journal.skillsRoot, linkSkillDirName(old));
     if (old.kind === "copy") {
       await copyDir(storeSkill, p).catch(() => undefined);
     } else {

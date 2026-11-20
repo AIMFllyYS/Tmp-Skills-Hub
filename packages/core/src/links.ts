@@ -29,6 +29,8 @@ export interface LinkEntry {
   targetDir: string;
   /** 条目名(= 链接名,通常等于 skill 的 dirName) */
   entryName: string;
+  /** Client-side directory names can differ from the single source name. */
+  skillDirName?: string;
   /** 指向库存里的哪个 skill(内容哈希,与 index.json 记录一致) */
   skillHash: string;
   /** 落盘形态 */
@@ -39,6 +41,10 @@ export interface LinkEntry {
 export interface LinksLedgerFile {
   version: number;
   entries: LinkEntry[];
+}
+
+export function linkSkillDirName(entry: LinkEntry): string {
+  return entry.skillDirName ?? entry.entryName;
 }
 
 /** 读台账:文件缺失或 init 占位 {} → 空台账;损坏/版本不符 → 抛错不重置。 */
@@ -89,7 +95,7 @@ export async function writeLinksLedger(storeRoot: string | HubPaths, entries: Li
  * index.json 的 visibleIn 不是权威来源;JSON 边界用本函数(或 attachVisibleIn)填入。
  */
 export function visibleInFromLedger(dirName: string, ledger: readonly LinkEntry[]): string[] {
-  return [...new Set(ledger.filter((e) => e.entryName === dirName).map((e) => e.clientId))].sort();
+  return [...new Set(ledger.filter((e) => linkSkillDirName(e) === dirName).map((e) => e.clientId))].sort();
 }
 
 /** 把库存记录的 visibleIn 替换为台账推导值,不写盘。 */
@@ -147,7 +153,7 @@ export async function checkLinksLedger(storeRoot: string | HubPaths, entries: Li
   const checks: LinkEntryCheck[] = [];
   for (const entry of entries) {
     const linkPath = path.join(entry.targetDir, entry.entryName);
-    const expectedDir = path.join(normalizeHubPaths(storeRoot).skillsRoot, entry.entryName);
+    const expectedDir = path.join(normalizeHubPaths(storeRoot).skillsRoot, linkSkillDirName(entry));
     const disk = await inspectClientPath(linkPath);
     const expectedTarget = await realpathIfExists(expectedDir);
     if (disk.kind === "missing") {

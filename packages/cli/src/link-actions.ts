@@ -3,6 +3,7 @@ import { type HubPaths } from "@skills-hub/core";
 import {
   applyLinkSet,
   classifyClientLink,
+  linkSkillDirName,
   readLinksLedger,
   readStoreIndex,
   recordUsage,
@@ -67,32 +68,34 @@ export async function performLinkChange(
   const now = new Date().toISOString();
 
   let desired: LinkEntry[];
+  const affected = new Set(existing.filter((entry) => dirNames.includes(linkSkillDirName(entry))).map((entry) => entry.entryName));
   if (action === "enable") {
-    const planNames = new Set(dirNames);
-    const keep = existing.filter((e) => !planNames.has(e.entryName));
-    desired = [
-      ...keep,
-      ...dirNames.map((name) => {
-        const record = skills.find((s) => s.dirName === name)!;
-        const prev = existing.find((e) => e.entryName === name);
-        return {
-          id: prev?.id ?? clientId + ":" + scope + ":" + name,
-          clientId,
-          scope,
-          targetDir: skillsDir,
-          entryName: name,
-          skillHash: record.hash,
-          kind: prev?.kind ?? kind,
-          createdAt: prev?.createdAt ?? now,
-        } satisfies LinkEntry;
-      }),
-    ];
+    const occupied = existing.find((entry) => dirNames.includes(entry.entryName) &&
+      linkSkillDirName(entry) !== entry.entryName && !existing.some((item) => linkSkillDirName(item) === entry.entryName));
+    if (occupied) {
+      return { ok: false, code: "link-failed", message: "客户端落点已供另一技能使用: " + occupied.entryName };
+    }
+    desired = dirNames.flatMap((name) => {
+      const record = skills.find((s) => s.dirName === name)!;
+      const previous = existing.filter((e) => linkSkillDirName(e) === name);
+      if (previous.length > 0) return previous.map((entry) => ({ ...entry, skillHash: record.hash }));
+      affected.add(name);
+      return [{
+        id: clientId + ":" + scope + ":" + name,
+        clientId,
+        scope,
+        targetDir: skillsDir,
+        entryName: name,
+        skillHash: record.hash,
+        kind,
+        createdAt: now,
+      } satisfies LinkEntry];
+    });
   } else {
-    const drop = new Set(dirNames);
-    desired = existing.filter((e) => !drop.has(e.entryName));
+    desired = [];
   }
 
-  const result = await applyLinkSet(storeRoot, { targetDir: skillsDir, entries: desired });
+  const result = await applyLinkSet(storeRoot, { targetDir: skillsDir, entries: desired }, { entryNames: affected });
   if (!result.ok) {
     const extra =
       result.code === "unregistered-conflict"
@@ -106,7 +109,8 @@ export async function performLinkChange(
   if (action === "enable") {
     for (const p of result.created) {
       const name = path.basename(p);
-      const record = skills.find((s) => s.dirName === name);
+      const linked = desired.find((entry) => entry.entryName === name);
+      const record = linked && skills.find((s) => s.dirName === linkSkillDirName(linked));
       if (record !== undefined) await recordUsage(storeRoot, record.hash, "enable").catch(() => undefined);
     }
   }
@@ -126,8 +130,9 @@ export async function previewLinkChange(
   for (const name of req.dirNames) {
     const record = skills.find((s) => s.dirName === name);
     if (record === undefined) continue;
-    const dest = path.join(req.skillsDir, name);
-    const inLedger = ledger.some((e) => e.clientId === req.clientId && e.entryName === name);
+    const registered = ledger.find((e) => e.targetDir === req.skillsDir && linkSkillDirName(e) === name);
+    const dest = path.join(req.skillsDir, registered?.entryName ?? name);
+    const inLedger = registered !== undefined;
     const status = await classifyClientLink(dest, inLedger);
     const item: LinkDiffItem = { hash: record.hash, dirName: name, clientId: req.clientId, dest };
     if (action === "enable") {
