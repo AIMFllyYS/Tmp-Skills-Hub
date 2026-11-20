@@ -74,6 +74,10 @@
 | GET /api/reconcile/scan | — | `{ ok, command: "reconcile-scan", clientsScanned, managedLinks, unmanagedRealDirs, replacedLinks, newConflicts, externalSymlinks, danglingLinks, nonSkillEntries, scanDurationMs, scannedAt }` | 503 store-not-configured |
 | POST /api/reconcile/preview | `{ includeExternalLinks? }` | `{ ok, command: "reconcile-preview", backupRequired, backupDir, skillsRoot, toAdopt, toRelinkIdentical, conflicts, skippedExternalLinks, untouchedNonSkill, danglingToPrune }`（只读） | 400 bad-usage; 503 store-not-configured |
 | POST /api/reconcile/apply | JSON 对象 `{ includeExternalLinks? }` | `{ ok, command: "reconcile-apply", snapshotId, backupVerified, adoptedCount, relinkedCount, conflictCount, linksCreated, externalLinksAdopted, skippedExternalLinks, danglingPruned, failures }`。部分客户端失败由 `failures` 报告 | 400 bad-usage; 409 verify-failed; 500 io-error; 503 store-not-configured |
+| GET /api/conflicts | — | `{ ok, command: "conflicts-list", conflicts }`。每项含真源哈希、各变体来源、`maxMtimeMs` 和 `shorterContentWarning` | 503 store-not-configured |
+| GET /api/conflicts/:name/diff | `?a=&b=`（默认当前真源与首个异版） | `{ ok, command: "conflicts-diff", skillName, variantA, variantB, files, truncated }` | 400 bad-usage; 404 not-found; 503 |
+| GET /api/conflicts/:name/file | 必填 `?variant=&path=`，`variant` 可为 `active` | `{ ok, command: "conflicts-file", variant, path, content, sizeBytes, binary: false }`。文本输出脱敏 | 400 outside\|bad-usage; 404 not-found; 422 binary\|too-large; 503 |
+| POST /api/conflicts/:name/resolve | `{ mode: "pick", winnerVariantId }`、`{ mode: "merge", mergedFiles, deletePaths? }` 或 `{ mode: "split", variantId, newName }`，可附 `summary` | `{ ok, command: "conflicts-resolve", skillName, mode, activeHash, archives, remainingVariants, newSkill? }` | 400 outside\|bad-usage; 404 not-found; 409 conflict; 503 |
 | POST /api/skills/:hash/enable | `{ clientId, scope? }` | `{ ok, command: "enable", clientId, scope, targetDir, created, removed }` | 400 bad-usage(缺 clientId); 404 not-found(客户端或 skill 不存在); 409 link-failed; 503 |
 | POST /api/skills/:hash/disable | 同上 | `{ ok, command: "disable", ... }` | 同上 |
 | POST /api/links/preview | `{ hashes, clientIds, action: enable\|disable, scope? }` | `{ ok, command: "links-preview", action, add, remove, conflictCount, wouldCreate, wouldRemove, conflicts }`(不写盘) | 400 bad-usage; 404 not-found; 503 |
@@ -102,10 +106,6 @@
 
 | 端点 | 方法 / 参数 | 响应与用途 | 关键失败码 |
 | --- | --- | --- | --- |
-| `/api/conflicts` | `GET` | 列出所有待解决冲突及变体元数据（含 `maxMtime` 与 `shorterContentWarning`） | 503 |
-| `/api/conflicts/:name/diff` | `GET ?a=&b=` | 返回两个变体间逐文件差异 | 404; 503 |
-| `/api/conflicts/:name/file` | `GET ?variant=&path=` | 读取指定冲突变体内的文本文件 | 400 outside; 404; 422; 503 |
-| `/api/conflicts/:name/resolve` | `POST { mode: "pick"\|"merge"\|"split", ... }` | 落盘冲突决议并归档旧版/落选变体 | 400; 404; 409; 503 |
 | `/api/git/status` | `GET` | 检测 `git`、`gh` 安装与登录态、真源仓状态、未推送提交数与远端地址 | — |
 | `/api/git/toggle` | `POST { enabled: boolean }` | 开启（初始化真源 `.git` + `.gitignore`）或关闭 Git 版本控制 | 409 git-unavailable; 503 |
 | `/api/git/log` | `GET ?skill=&limit=` | 查询真源仓或单 skill 提交历史 | 409 git-unavailable; 503 |

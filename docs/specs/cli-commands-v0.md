@@ -44,6 +44,7 @@
 | `new list` | 列出当前草稿（`drafts[]`），只读 | AI / 面板 |
 | `bootstrap` | 选择真源、预览并确认接管，备份校验后入库和建软链接，再启用自身 skill 并启动面板；已初始化时直接启动 | 人 |
 | `reconcile` | `--dry-run` 预演，确认后备份、接管与建纯软链接；可用 `--include-external-links` 显式纳入外链 | 人 / AI |
+| `conflicts` | `list` 列出冲突，`diff <name> [--a active\|<id>] [--b <id>]` 查看逐文件差异，`resolve <name> --mode pick [--winner <id>]` 选版并默认保留真源，`resolve <name> --mode split --winner <id> --new-name <name>` 拆分。写操作在非交互环境下需要 `--yes`，文本合并走 HTTP 或 Agent | 人 / AI |
 
 新库存的 `--home <X>` 或 `SKILLS_HUB_HOME=<X>` 用于重定向客户端发现和控制中心，指针位于 `<X>/.skills-hub/config.json`。旧沙箱仍支持直接使用含 `manifest.json` 的单根布局。修订缘由是让 `init`、`bootstrap` 和运行时读取遵循同一双目录契约。
 
@@ -51,7 +52,6 @@
 
 > 以下为 v0.3 正式定案的预留命令名，各 Sub-Issue 实现并注册至 `packages/cli/src/index.ts` 后，同步移入 §1 命令表（§1 表格受 `spec-conformance.test.ts` 严格校验，确保表内命令均已落地）：
 >
-> - `conflicts list` / `conflicts diff <name>` / `conflicts resolve <name> --mode pick|merge|split`（T3.2）：列出、对比与无损解决同名多版本冲突（`list`/`diff` 只读，`resolve` 需 `--yes` / TTY）
 > - `git status | enable | disable | log [name] | commit [-m msg]`（T5.2）：检测/开关唯一真源目录 Git 版本控制、查看历史、执行规范化提交（`status`/`log` 只读，其余需 `--yes` / TTY）
 > - `git cloud init [--private|--public] [--repo <name>]` / `git cloud push`（T5.2）：经 `gh` CLI 设备码登录、安全扫描、一键创建 GitHub 仓库并推送云端备份（写操作，需 `--yes` / TTY，绝不 `--force`）
 

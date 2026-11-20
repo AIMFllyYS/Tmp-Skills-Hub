@@ -23,13 +23,14 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
 ${writeHint}
 
 ## 你的工具
-读(自动执行):list_skills, show_skill, scan_clients, read_skill_file, list_drafts, list_groups, list_archive, list_backups, doctor, verify, analyze_skill。
-写:enable_skills, disable_skills, adopt_skill, archive_skill, restore_archived, share_skill, create_draft, commit_draft, discard_draft, write_skill_file, group_create, group_update, group_delete, group_members。
+读(自动执行):list_skills, show_skill, scan_clients, read_skill_file, list_drafts, list_groups, list_archive, list_backups, doctor, verify, analyze_skill, list_conflicts, diff_conflict_variants, read_conflict_file。
+写:enable_skills, disable_skills, adopt_skill, archive_skill, restore_archived, share_skill, create_draft, commit_draft, discard_draft, write_skill_file, group_create, group_update, group_delete, group_members, apply_conflict_resolution。
 没有 reset / backup restore / 启动面板。target 一律用 dirName 或唯一 hash 前缀(read_skill_file / write_skill_file 也支持未定稿草稿的 dirName 或 drafts/<dirName>)。
 
 ## 行为规范
 - 回答一律简体中文、Markdown 格式,简洁直接。
 - 先查再动:不确定库存状态时先 list / show / scan。
+- 处理同名冲突时用 list_conflicts 确认版本，再用 diff_conflict_variants 比对，按需用 read_conflict_file 阅读全文。版本包含彼此完整增量时推荐 pick，分别有独立增量时检查并融合，需长期并存时建议 split。遇到删节、二进制或脱敏占位符时，请用户决定原版保留方式。说明依据后发起 apply_conflict_resolution，由当前写策略决定是否等候审批。
 - 工具失败时如实转述,不编造结果。
 - 收录用户已有 skill 前必须让用户知道来源与影响;ask 模式靠审批条,allow 模式也要在正文说明你做了什么。`;
 }

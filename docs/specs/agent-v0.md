@@ -49,6 +49,9 @@
 | `doctor` | 环境自检 |
 | `verify` | 重算哈希、报告漂移（严格只读） |
 | `analyze_skill` | 相近/冲突建议,不写盘(复用 `performAnalyze`) |
+| `list_conflicts` | 列出冲突记录、变体来源与内容缩短告警 |
+| `diff_conflict_variants` | `{ skillName, variantA?, variantB }`，逐文件比对，左侧默认 `active` |
+| `read_conflict_file` | `{ skillName, variantId, path }`，读取变体内 UTF-8 文件，返回脱敏文本 |
 
 ### 4.2 写(`ask` 时审批)
 
@@ -61,19 +64,14 @@
 | `create_draft` / `commit_draft` / `discard_draft` | 创建路径的占位 / 定稿 / 放弃 |
 | `write_skill_file` | 写回已定稿 skill（同 `PUT /api/skills/:hash/file` 经 `saveSkillFile`）或未定稿草稿目录内的文本文件 |
 | `group_create` / `group_update` / `group_delete` / `group_members` | 现有分组 `perform*` |
+| `apply_conflict_resolution` | 必填 `skillName`、`mode` 与 `summary`。选版填 `winnerVariantId`，合并填 `mergedFiles` 与可选 `deletePaths`，拆分填 `variantId` 与 `newName`。执行时归档旧版并同步索引，`ask` 模式先等批准 |
 
 不做:`run_cli` 逃生舱、`reset`、`backup restore`。
 
-### 4.3 v0.3 演进预留工具（冲突分析合并 + Git 版本历史，见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
+### 4.3 v0.3 Git 版本历史预留工具（见 [single-source-sync-and-versioning/PRD.md](./single-source-sync-and-versioning/PRD.md)）
 
-- **新增读工具（永不审批）**：
-  - `list_conflicts`：列出所有待解决的同名多版本冲突及各变体来源、`maxMtime` 与告警标记；
-  - `diff_conflict_variants`：计算指定冲突 skill 两个变体间的逐文件 Diff；
-  - `read_conflict_file`：按需读取指定冲突变体内的单个文本文件；
-  - `git_status` / `git_log` / `git_diff`：读取唯一真源仓库的 Git 状态、提交历史与变更差异（未开启 Git 时返回可读降级提示）。
-- **新增写工具（受 `writePolicy` 审批门禁保护，`ask` 模式下必须经人点击批准）**：
-  - `apply_conflict_resolution`：落地 `pick` / `merge` / `split` 冲突决议（自动快照旧真源至 `archive/versions/`、归档落选变体至 `archive/conflicts/` 并同步元数据哈希）；
-  - `git_commit`：为 Agent 刚完成的改动/合并执行带语义摘要的 Git 提交（仅在 Git 开关开启时可用）。
+- **读** `git_status` / `git_log` / `git_diff` 查询唯一真源仓库的状态、历史与差异。未开启 Git 时返回降级提示。
+- **写** `git_commit` 为 Agent 的改动执行带语义摘要的提交。仅在 Git 开启时可用，并遵循 `writePolicy` 审批。
 
 ## 5. HTTP 流契约
 
