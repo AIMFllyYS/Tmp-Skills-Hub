@@ -60,7 +60,7 @@ async function runBackupCreate(args: BackupArgs): Promise<void> {
         dryRun: true,
         verb: "create",
         mode,
-        storeRoot,
+        storeRoot: storeRoot.stateRoot,
         home,
         clientRoots: roots.length,
         latestSnapshotId: latest,
@@ -68,7 +68,7 @@ async function runBackupCreate(args: BackupArgs): Promise<void> {
       return;
     }
     console.log(
-      "预演:将备份 " + roots.length + " 个客户端 root 到 " + storeRoot + "/backups (" + mode + "),不写盘。",
+      "预演:将备份 " + roots.length + " 个客户端 root 到 " + storeRoot.stateRoot + "/backups (" + mode + "),不写盘。",
     );
     return;
   }
@@ -80,7 +80,7 @@ async function runBackupCreate(args: BackupArgs): Promise<void> {
     emitOk("backup", {
       verb: "create",
       mode,
-      storeRoot,
+      storeRoot: storeRoot.stateRoot,
       snapshotId: result.snapshotId,
       snapshotDir: result.snapshotDir,
       files: result.manifest.files.length,
@@ -106,7 +106,7 @@ async function runBackupList(args: BackupArgs): Promise<void> {
   const latest = await readLatestSnapshotId(storeRoot);
   const snapshots = await listBackupSnapshots(storeRoot);
   if (args.json === true) {
-    emitOk("backup", { verb: "list", storeRoot, latest, snapshots });
+    emitOk("backup", { verb: "list", storeRoot: storeRoot.stateRoot, latest, snapshots });
     return;
   }
   if (snapshots.length === 0) {
@@ -158,7 +158,7 @@ async function runBackupVerify(args: BackupArgs): Promise<void> {
   if (args.json === true) {
     emitOk("backup", {
       verb: "verify",
-      storeRoot,
+      storeRoot: storeRoot.stateRoot,
       snapshotId: report.snapshotId,
       checked: report.checked,
       passed: true,
@@ -186,7 +186,7 @@ async function runBackupRestore(args: BackupArgs): Promise<void> {
       emitOk("backup", {
         dryRun: true,
         verb: "restore",
-        storeRoot,
+        storeRoot: storeRoot.stateRoot,
         snapshotId: preview.snapshotId,
         clients: preview.clients,
         skills: preview.skills,
@@ -211,7 +211,7 @@ async function runBackupRestore(args: BackupArgs): Promise<void> {
   if (args.json === true) {
     emitOk("backup", {
       verb: "restore",
-      storeRoot,
+      storeRoot: storeRoot.stateRoot,
       snapshotId: result.snapshotId,
       clients: result.clients,
       skills: result.skills,

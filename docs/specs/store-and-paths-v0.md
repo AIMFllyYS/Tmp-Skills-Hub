@@ -32,7 +32,7 @@
 3. 指针配置文件 `<home>/.skills-hub/config.json`
 4. 都没有 → 报错，提示先跑 `skills-hub init`
 
-**`ui` / `bootstrap` 拉起面板时不要走第 1 条。** 这时传入的 `home` 只是客户端发现基座和 `.skills-hub/config.json` 所在处，不是库存根。面板按配置文件（其次 `SKILLS_HUB_HOME`）解析路径。
+CLI 和面板使用相同的 home 基座和指针。新初始化时 `stateRoot` 固定为 `<home>/.skills-hub`，旧 `POST /api/store/init` 的 `{ storeRoot }` 参数兼容旧单根布局。迁移唯一真源保持原状态目录及设置，拒绝与控制中心、原真源或已发现的客户端目录重叠的目标（可迁回默认 `<stateRoot>/skills`）。迁移对软链接重新定向，历史登记为 `copy` 的客户端副本原地保留。原目录重命名为 `.pre-migrate-<timestamp>` 旁路。修订缘由是消除早期 CLI 与面板对同一 home 使用不同库存位置的问题。
 
 ## 2. 目录布局
 

@@ -48,8 +48,8 @@ describe("runBootstrap", () => {
     const home = await newHome();
     const ask = answers(["", "Y", "Y"]);
     await runBootstrap({ home }, { readLine: ask as never, ui: false });
-    const store = home;
-    const pointer = JSON.parse(await readFile(path.join(store, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string };
+    const store = path.join(home, ".skills-hub");
+    const pointer = JSON.parse(await readFile(path.join(store, "config.json"), "utf8")) as { storeRoot: string };
     expect(pointer.storeRoot).toBe(store);
     const skills = await import("node:fs/promises").then((m) => m.readdir(path.join(store, "skills")));
     expect(skills).toContain("sample-a");
@@ -71,9 +71,9 @@ describe("runBootstrap", () => {
     const home = await newHome();
     const ask = answers(["", "N", "Y"]);
     await runBootstrap({ home }, { readLine: ask as never, ui: false });
-    const backupsDir = path.join(home, STORE_BACKUPS_DIR);
+    const backupsDir = path.join(home, ".skills-hub", STORE_BACKUPS_DIR);
     await expect(import("node:fs/promises").then((m) => m.readdir(backupsDir))).rejects.toThrow();
-    const skills = await import("node:fs/promises").then((m) => m.readdir(path.join(home, "skills")));
+    const skills = await import("node:fs/promises").then((m) => m.readdir(path.join(home, ".skills-hub", "skills")));
     expect(skills.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -87,11 +87,11 @@ describe("runBootstrap", () => {
   it("幂等:库存已就绪时零交互,直接返回", async () => {
     const home = await newHome();
     await runBootstrap({ home }, { readLine: answers(["", "Y", "Y"]) as never, ui: false });
-    const snaps1 = await snapshotIds(home);
+    const snaps1 = await snapshotIds(path.join(home, ".skills-hub"));
     const ask2 = answers(["should-not-be-called"]);
     await runBootstrap({ home }, { readLine: ask2 as never, ui: false });
     expect(ask2.called.length).toBe(0);
-    expect(await snapshotIds(home)).toEqual(snaps1);
+    expect(await snapshotIds(path.join(home, ".skills-hub"))).toEqual(snaps1);
   });
 
   it("非 TTY 且无 --yes:拒绝执行", async () => {
@@ -114,8 +114,9 @@ describe("runBootstrap", () => {
     expect(captured).toHaveLength(1);
     expect(captured[0]!.home).toBe(home);
     expect(captured[0]!.home).not.toBe(path.resolve(storeRoot));
-    const pointer = JSON.parse(await readFile(path.join(home, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string };
-    expect(pointer.storeRoot).toBe(path.resolve(storeRoot));
+    const pointer = JSON.parse(await readFile(path.join(home, ".skills-hub", "config.json"), "utf8")) as { storeRoot: string; skillsRoot: string };
+    expect(pointer.storeRoot).toBe(path.join(home, ".skills-hub"));
+    expect(pointer.skillsRoot).toBe(path.resolve(storeRoot));
     expect(captured[0]!.home).not.toBe(pointer.storeRoot);
     expect(await resolveUiStoreRoot(captured[0]!.home!)).toBe(pointer.storeRoot);
   });
@@ -132,7 +133,7 @@ describe("runBootstrap", () => {
     expect(await resolveUiStoreRoot(home)).toBe(storeRoot);
   });
 
-  it("库存内链接只记引用;悬空链接不炸", async () => {
+  it("客户端之间的链接包含回滚内容;悬空链接不炸", async () => {
     const home = await newHome();
     const realDir = path.join(home, ".agents", "skills", "linked-skill");
     await mkdir(realDir, { recursive: true });
@@ -141,13 +142,13 @@ describe("runBootstrap", () => {
     await symlink(path.join(home, ".agents", "skills", "ghost"), path.join(home, ".claude", "skills", "dangling-skill"), "junction");
     const ask = answers(["", "Y", "Y"]);
     await runBootstrap({ home }, { readLine: ask as never, ui: false });
-    const snaps = await snapshotIds(home);
-    const manifest = await readBackupManifest(path.join(home, STORE_BACKUPS_DIR, snaps[0]!));
+    const snaps = await snapshotIds(path.join(home, ".skills-hub"));
+    const manifest = await readBackupManifest(path.join(home, ".skills-hub", STORE_BACKUPS_DIR, snaps[0]!));
     const rels = manifest.links.map((l) => l.rel);
     expect(rels).toContain("linked-skill");
     expect(rels).toContain("dangling-skill");
-    expect(manifest.links.find((l) => l.rel === "linked-skill")!.inStore).toBe(true);
-    expect(manifest.files.filter((f) => f.clientId === "claude").some((f) => f.rel.includes("linked-skill"))).toBe(false);
+    expect(manifest.links.find((l) => l.rel === "linked-skill")!.inStore).toBe(false);
+    expect(manifest.files.filter((f) => f.clientId === "claude").some((f) => f.rel.includes("linked-skill"))).toBe(true);
   });
 
   it("三客户端指向库存外同一内容时只写一份 blob,源目录零写入", async () => {

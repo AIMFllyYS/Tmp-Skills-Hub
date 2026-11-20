@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { type HubPaths } from "@skills-hub/core";
 import {
   discoverClientRoots,
   hashSkillFolder,
@@ -19,7 +20,7 @@ export interface DiscoveredSkill {
  * 扫描 home 下全部客户端 skills 根目录(按目录形状发现,不维护品牌名单),
  * 返回达到收录最低要求的 skill。home 由调用方显式传入(scan 是只读命令,默认真实 home)。
  */
-export async function scanKnownClients(home: string, storeRoot?: string | null): Promise<DiscoveredSkill[]> {
+export async function scanKnownClients(home: string, storeRoot?: string | HubPaths | null): Promise<DiscoveredSkill[]> {
   const opts = storeRoot !== undefined && storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined;
   const roots = await discoverClientRoots(home, opts);
   const discovered: DiscoveredSkill[] = [];

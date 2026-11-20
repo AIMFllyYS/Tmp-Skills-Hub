@@ -1,4 +1,5 @@
 import path from "node:path";
+import { type HubPaths } from "@skills-hub/core";
 import {
   applyLinkSet,
   classifyClientLink,
@@ -16,7 +17,7 @@ import {
  */
 
 export interface LinkChangeRequest {
-  storeRoot: string;
+  storeRoot: string | HubPaths;
   clientId: string;
   /** global(默认,home 下)/ project(cwd 下) */
   scope: "global" | "project";

@@ -9,6 +9,7 @@ export {
   MAX_API_BODY_BYTES,
   MAX_TRANSLATE_CHARS,
   resolveUiStoreRoot,
+  resolveUiHubPaths,
   startUiServer,
   TRANSLATE_SYSTEM_PROMPT,
 } from "./ui-server.js";

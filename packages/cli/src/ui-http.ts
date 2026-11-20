@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import {
   discoverClientRoots,
   discoverClientRootsAt,
+  type HubPaths,
 } from "@skills-hub/core";
 import { type ResolveSkillFailure } from "./resolve-skill.js";
 
@@ -14,7 +15,14 @@ export { attachVisibleIn } from "@skills-hub/core";
 
 export interface UiRouteContext {
   storeRoot: string | null;
+  paths: HubPaths | null;
+  desktop: boolean;
   home: string;
+}
+
+export function setUiPaths(ctx: UiRouteContext, paths: HubPaths | null): void {
+  ctx.paths = paths;
+  ctx.storeRoot = paths?.stateRoot ?? null;
 }
 
 export type ApiErrorStatus = 400 | 403 | 404 | 409 | 413 | 415 | 422 | 500 | 502 | 503;
@@ -64,11 +72,11 @@ export function withStore(
   ctx: UiRouteContext,
   c: Context,
   command: string,
-  fn: (root: string) => Promise<Response>,
+  fn: (root: HubPaths) => Promise<Response>,
 ): Promise<Response> {
-  return ctx.storeRoot === null
+  return ctx.paths === null
     ? Promise.resolve(err(c, command, "store-not-configured", "库存未配置。先运行 skills-hub init --home <path> --yes。"))
-    : fn(ctx.storeRoot);
+    : fn(ctx.paths);
 }
 
 
@@ -78,7 +86,7 @@ export async function resolveClientSkillsDirAt(
   home: string,
   clientId: string,
   scope: "global" | "project",
-  storeRoot?: string | null,
+  storeRoot?: string | HubPaths | null,
 ): Promise<{ clientId: string; skillsDir: string } | null> {
   const base = scope === "project" ? process.cwd() : home;
   const opts = storeRoot !== undefined && storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined;
@@ -87,6 +95,6 @@ export async function resolveClientSkillsDirAt(
   return root === undefined ? null : { clientId: root.clientId, skillsDir: root.skillsDir };
 }
 
-export function clientDiscoverOpts(storeRoot: string | null): { storeRoot: string } | undefined {
+export function clientDiscoverOpts(storeRoot: string | HubPaths | null): { storeRoot: string | HubPaths } | undefined {
   return storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined;
 }

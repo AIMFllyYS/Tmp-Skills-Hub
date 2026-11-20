@@ -106,7 +106,8 @@ export function isExcludedRoot(skillsDir: string, home: string, storeRoot?: stri
   if (storeRoot !== undefined && storeRoot !== "") {
     const paths = normalizeHubPaths(storeRoot);
     if (isInside(skillsDir, paths.skillsRoot)) return true;
-    if (paths.layoutMode === "split" ? isInside(skillsDir, paths.stateRoot) : isStoreOwnedSkillsDir(skillsDir, paths.stateRoot)) {
+    const excludeStateTree = paths.layoutMode === "split" && !samePath(home, paths.stateRoot);
+    if (excludeStateTree ? isInside(skillsDir, paths.stateRoot) : isStoreOwnedSkillsDir(skillsDir, paths.stateRoot)) {
       return true;
     }
   }

@@ -36,6 +36,7 @@ export function resolveDesktopTransport(env: NodeJS.ProcessEnv = process.env): D
 export async function startDesktopHttpTransport(opts: DesktopHttpTransportOptions): Promise<UiServerHandle> {
   return startUiServer({
     port: 0,
+    desktop: true,
     home: opts.home,
     webRoot: opts.webRoot,
   });

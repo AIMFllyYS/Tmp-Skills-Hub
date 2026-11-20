@@ -80,6 +80,11 @@ async function writeStats(storeRoot: string | HubPaths, stats: StatsFile): Promi
   await rename(tmp, target);
 }
 
+/** 替换已校验的计数快照，与普通计数写入使用同一把锁。 */
+export async function writeUsageStats(storeRoot: string | HubPaths, stats: StatsFile): Promise<void> {
+  await withStatsLock(storeRoot, () => writeStats(storeRoot, stats));
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**

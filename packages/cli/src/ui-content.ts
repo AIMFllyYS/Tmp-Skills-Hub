@@ -1,16 +1,16 @@
 import path from "node:path";
 import type { Hono } from "hono";
-import { listSkillFiles, readSkillFile, readStoreIndex, saveSkillFile } from "@skills-hub/core";
+import { listSkillFiles, readSkillFile, readStoreIndex, saveSkillFile, type HubPaths } from "@skills-hub/core";
 import { resolveSkill, type ResolveSkillFailure } from "./resolve-skill.js";
 import { err, skillLookupErr, withStore, type UiRouteContext } from "./ui-http.js";
 
 async function resolveSkillDir(
-  root: string,
+  root: HubPaths,
   needle: string,
 ): Promise<{ ok: true; skillDir: string } | ResolveSkillFailure> {
   const hit = resolveSkill(needle, await readStoreIndex(root));
   if (!hit.ok) return hit;
-  return { ok: true, skillDir: path.join(root, "skills", hit.skill.dirName) };
+  return { ok: true, skillDir: path.join(root.skillsRoot, hit.skill.dirName) };
 }
 
 export function registerContentRoutes(app: Hono, ctx: UiRouteContext): void {

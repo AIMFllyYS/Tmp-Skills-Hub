@@ -71,7 +71,7 @@
   - **depends-on**: 无（全专项起点，可直接开工）
   - **负责模块**: `packages/core/src/store-location.ts`, `store-layout.ts`, `fs-atomic.ts`(新增), 现有 core 模块 `normalizeHubPaths` 兼容适配, `index.ts`
   - **复用资产**: `resolveStoreRoot`, `readPointerStoreRoot`, `initializeStoreLayout`, `uniqueTmpId`, `migrateVersionedData`, `unlinkNoFollow`
-- [ ] **T1.2** `[cli]` 初始化路径统一、真源目录迁移 (`migrate`) 与自愈命令 (`doctor --prune` / `verify --accept`) — [#240](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/240) | [PRD.md#L128-L149](./PRD.md#L128-L149)
+- [x] **T1.2** `[cli]` 初始化路径统一、真源目录迁移 (`migrate`) 与自愈命令 (`doctor --prune` / `verify --accept`) — [#240](https://github.com/AIMFllyYS/Tmp-Skills-Hub/issues/240) | [PRD.md#L128-L149](./PRD.md#L128-L149)
   - **depends-on**: T1.1 (#239)
   - **负责模块**: `packages/cli/src/store-shared.ts`, `bootstrap.ts`, `doctor.ts`, `store-query.ts`, `store-migrate.ts`(新增), `ui-server.ts`, `ui-http.ts`, `ui-{groups,drafts,content,links}.ts`, `index.ts`
   - **复用资产**: `performInit`, `writePointerFile`, `collectDoctorReport`, `performVerify`, `findDanglingLinks`, `applyLinkSet`, `hashSkillFolder`, `requireWriteAuth`

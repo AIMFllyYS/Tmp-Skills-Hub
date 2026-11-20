@@ -19,7 +19,8 @@ import {
   readStoreIndexFile,
   restoreArchivedSkill,
   saveSkillFile,
-  STORE_SKILLS_DIR,
+  normalizeHubPaths,
+  type HubPaths,
 } from "@skills-hub/core";
 import type { AnalyzeGenerate } from "../analyze.js";
 import { performAnalyze } from "../analyze.js";
@@ -61,6 +62,7 @@ export const WRITE_TOOL_NAMES: ReadonlySet<string> = new Set([
 export interface ToolEnv {
   home: string;
   storeRoot: string | null;
+  paths?: HubPaths | null;
   fetchImpl?: typeof fetch;
   analyzeGenerate?: AnalyzeGenerate;
 }
@@ -93,18 +95,18 @@ export function safeToolExecute<INPUT, OUTPUT>(
   };
 }
 
-function needStore(env: ToolEnv): string | { ok: false; message: string } {
+function needStore(env: ToolEnv): HubPaths | { ok: false; message: string } {
   if (env.storeRoot === null) return fail("库存未配置:先运行 skills-hub init。");
-  return env.storeRoot;
+  return env.paths ?? normalizeHubPaths(env.storeRoot);
 }
 
-async function resolveDirName(root: string, target: string): Promise<string | { ok: false; message: string }> {
+async function resolveDirName(root: HubPaths, target: string): Promise<string | { ok: false; message: string }> {
   const hit = resolveSkill(target.trim(), await readStoreIndex(root));
   if (!hit.ok) return fail(hit.message);
   return hit.skill.dirName;
 }
 
-async function resolveSkillOrDraftDirName(root: string, target: string): Promise<string | { ok: false; message: string }> {
+async function resolveSkillOrDraftDirName(root: HubPaths, target: string): Promise<string | { ok: false; message: string }> {
   const needle = target.trim();
   const index = await readStoreIndexFile(root);
   const hit = resolveSkill(needle, index.skills);
@@ -116,7 +118,7 @@ async function resolveSkillOrDraftDirName(root: string, target: string): Promise
   return fail(hit.message);
 }
 
-async function resolveDirNames(root: string, targets: string[]): Promise<string[] | { ok: false; message: string }> {
+async function resolveDirNames(root: HubPaths, targets: string[]): Promise<string[] | { ok: false; message: string }> {
   const names: string[] = [];
   for (const t of targets) {
     const one = await resolveDirName(root, t);
@@ -134,7 +136,7 @@ async function linkChange(
   scope: "global" | "project",
 ): Promise<unknown> {
   const root = needStore(env);
-  if (typeof root !== "string") return root;
+  if ("ok" in root) return root;
   const dirNames = await resolveDirNames(root, targets);
   if (!Array.isArray(dirNames)) return dirNames;
   const client = await resolveClientSkillsDirAt(env.home, clientId, scope, root);
@@ -153,7 +155,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({}),
       execute: safeToolExecute(async () => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const skills = attachVisibleIn(await readStoreIndex(root), await readLinksLedger(root));
         return dump(
           skills.map((s) => ({
@@ -170,7 +172,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ target: z.string() }),
       execute: safeToolExecute(async ({ target }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const hit = resolveSkill(target, attachVisibleIn(await readStoreIndex(root), await readLinksLedger(root)));
         if (!hit.ok) return fail(hit.message);
         return dump(hit.skill);
@@ -180,7 +182,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       description: "扫描各客户端目录里已有的 skill,只读不入库。",
       inputSchema: z.object({}),
       execute: safeToolExecute(async () => {
-        const found = await scanKnownClients(env.home, env.storeRoot);
+        const found = await scanKnownClients(env.home, env.paths ?? env.storeRoot);
         return dump(
           found.map((s) => ({
             clientId: s.clientId,
@@ -196,10 +198,10 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ target: z.string(), path: z.string() }),
       execute: safeToolExecute(async ({ target, path: rel }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const dirName = await resolveSkillOrDraftDirName(root, target);
         if (typeof dirName !== "string") return dirName;
-        const res = await readSkillFile(path.join(root, STORE_SKILLS_DIR, dirName), rel);
+        const res = await readSkillFile(path.join(root.skillsRoot, dirName), rel);
         if (!res.ok) return fail(res.message);
         return { ok: true, path: rel, content: clip(res.content) };
       }),
@@ -209,7 +211,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({}),
       execute: safeToolExecute(async () => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await listDrafts(root));
       }),
     }),
@@ -218,7 +220,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({}),
       execute: safeToolExecute(async () => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await readGroups(root));
       }),
     }),
@@ -227,7 +229,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({}),
       execute: safeToolExecute(async () => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await listArchivedSkills(root));
       }),
     }),
@@ -236,21 +238,21 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({}),
       execute: safeToolExecute(async () => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await listBackupSnapshots(root));
       }),
     }),
     doctor: tool({
       description: "环境自检:库存可达性、客户端 root、链接能力、悬空链接。",
       inputSchema: z.object({}),
-      execute: safeToolExecute(async () => dump(await collectDoctorReport(env.home, env.storeRoot))),
+      execute: safeToolExecute(async () => dump(await collectDoctorReport(env.home, env.paths ?? env.storeRoot))),
     }),
     verify: tool({
       description: "重算库存哈希,报告漂移。",
       inputSchema: z.object({}),
       execute: safeToolExecute(async () => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await performVerify(root));
       }),
     }),
@@ -259,7 +261,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ target: z.string() }),
       execute: safeToolExecute(async ({ target }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const opts = env.analyzeGenerate !== undefined ? { generate: env.analyzeGenerate } : {};
         return dump(await performAnalyze(root, target, opts));
       }),
@@ -291,7 +293,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ source: z.string() }),
       execute: safeToolExecute(async ({ source }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const adoptOpts = env.fetchImpl !== undefined ? { fetchImpl: env.fetchImpl } : {};
         const res = await performAdopt(root, [source], adoptOpts);
         if (res.fetchFailed) return fail(res.fetchMessage ?? "拉取失败");
@@ -310,7 +312,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ target: z.string() }),
       execute: safeToolExecute(async ({ target }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const dirName = await resolveDirName(root, target);
         if (typeof dirName !== "string") return dirName;
         return dump(await archiveSkill(root, dirName));
@@ -321,7 +323,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ name: z.string() }),
       execute: safeToolExecute(async ({ name }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await restoreArchivedSkill(root, name));
       }),
     }),
@@ -330,7 +332,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ target: z.string(), repo: z.string().optional() }),
       execute: safeToolExecute(async ({ target, repo }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const shareOpts: { dryRun: false; fetchImpl?: typeof fetch; repo?: string } = { dryRun: false };
         if (env.fetchImpl !== undefined) shareOpts.fetchImpl = env.fetchImpl;
         if (repo !== undefined && repo.trim() !== "") shareOpts.repo = repo.trim();
@@ -342,7 +344,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ dirName: z.string(), description: z.string().optional() }),
       execute: safeToolExecute(async ({ dirName, description }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const seed = description !== undefined && description.trim() !== "" ? { description: description.trim() } : {};
         return dump(await performAllocate(root, dirName, seed));
       }),
@@ -352,7 +354,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ dirName: z.string() }),
       execute: safeToolExecute(async ({ dirName }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await performCommit(root, dirName));
       }),
     }),
@@ -361,7 +363,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ dirName: z.string() }),
       execute: safeToolExecute(async ({ dirName }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await performDiscard(root, dirName));
       }),
     }),
@@ -370,12 +372,12 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ target: z.string(), path: z.string(), content: z.string() }),
       execute: safeToolExecute(async ({ target, path: rel, content }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const dirName = await resolveSkillOrDraftDirName(root, target);
         if (typeof dirName !== "string") return dirName;
         const res = await saveSkillFile({
           storeRoot: root,
-          skillDir: path.join(root, STORE_SKILLS_DIR, dirName),
+          skillDir: path.join(root.skillsRoot, dirName),
           relPath: rel,
           content,
         });
@@ -388,7 +390,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ id: z.string(), name: z.string().optional(), description: z.string().optional() }),
       execute: safeToolExecute(async ({ id, name, description }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const payload: { id: string; name?: string; description?: string } = { id };
         if (name !== undefined) payload.name = name;
         if (description !== undefined) payload.description = description;
@@ -400,7 +402,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ id: z.string(), name: z.string().optional(), description: z.string().optional() }),
       execute: safeToolExecute(async ({ id, name, description }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         const payload: { id: string; name?: string; description?: string } = { id };
         if (name !== undefined) payload.name = name;
         if (description !== undefined) payload.description = description;
@@ -412,7 +414,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       inputSchema: z.object({ id: z.string() }),
       execute: safeToolExecute(async ({ id }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await performDeleteGroup(root, id));
       }),
     }),
@@ -425,7 +427,7 @@ export function createAgentTools(env: ToolEnv): ToolSet {
       }),
       execute: safeToolExecute(async ({ id, targets, action }) => {
         const root = needStore(env);
-        if (typeof root !== "string") return root;
+        if ("ok" in root) return root;
         return dump(await performGroupMembers(root, { id, needles: targets, action }));
       }),
     }),

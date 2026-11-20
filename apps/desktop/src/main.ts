@@ -6,7 +6,7 @@ import {
   createUiApp,
   loadEnvFile,
   resolveHome,
-  resolveUiStoreRoot,
+  resolveUiHubPaths,
   type UiServerHandle,
 } from "@skills-hub/cli";
 import {
@@ -162,8 +162,8 @@ async function bootstrapDesktop(): Promise<void> {
     serverHandle = await startDesktopHttpTransport({ home, webRoot });
     resolvedEntryUrl = serverHandle.url.endsWith("/") ? serverHandle.url : `${serverHandle.url}/`;
   } else {
-    const storeRoot = await resolveUiStoreRoot(home);
-    const honoApp = createUiApp({ storeRoot, home, webRoot });
+    const paths = await resolveUiHubPaths(home);
+    const honoApp = createUiApp({ paths, home, webRoot, desktop: true });
     protocol.handle(APP_SCHEME, createAppProtocolHandler(honoApp));
     resolvedEntryUrl = APP_ENTRY_URL;
   }

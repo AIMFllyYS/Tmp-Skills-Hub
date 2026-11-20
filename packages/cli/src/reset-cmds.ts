@@ -2,7 +2,6 @@ import { mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import {
   previewRestoreClientSkills,
-  readPointerStoreRoot,
   restoreClientSkills,
   STORE_ARCHIVE_DIR,
   STORE_BACKUPS_DIR,
@@ -10,6 +9,7 @@ import {
   STORE_SKILLS_DIR,
   STORE_TMP_DIR,
 } from "@skills-hub/core";
+import { resolveConfiguredHubPaths } from "./store-shared.js";
 import { migrateAllSkills } from "./bootstrap.js";
 import { resolveHome } from "./home.js";
 import { emitError, emitOk } from "./json-out.js";
@@ -120,22 +120,31 @@ export async function performReset(input: {
   snapshotId?: string;
 }): Promise<ResetSuccess | ResetFailure> {
   const home = resolveHome(input.home);
-  const pointerFile = path.join(home, POINTER_REL);
-  const storeRoot = await readPointerStoreRoot(pointerFile);
-  if (storeRoot === null) {
+  const resolved = await resolveConfiguredHubPaths(home);
+  if (!resolved.ok) {
     return { ok: false, code: "store-not-configured", message: "库存未配置。先运行 skills-hub bootstrap 或 init。" };
   }
+  const paths = resolved.paths;
+  const storeRoot = paths.stateRoot;
   const snapshotId = input.snapshotId === undefined || input.snapshotId === "" ? undefined : input.snapshotId;
   const restored = snapshotId === undefined
-    ? await restoreClientSkills(storeRoot, home)
-    : await restoreClientSkills(storeRoot, home, snapshotId);
+    ? await restoreClientSkills(paths, home)
+    : await restoreClientSkills(paths, home, snapshotId);
   if (!restored.ok) {
     return { ok: false, code: restored.code, message: restored.message };
   }
   const { asideStore, asidePointer } = planAside(storeRoot, home);
   try {
-    await asideInventory(storeRoot, home, asideStore, asidePointer);
-    const migrated = await migrateAllSkills(home, storeRoot);
+    const externalAssets = !isInside(paths.skillsRoot, storeRoot);
+    const asideAssets = paths.skillsRoot + ".pre-reinit-" + stamp();
+    if (externalAssets) await rename(paths.skillsRoot, asideAssets);
+    try {
+      await asideInventory(storeRoot, home, asideStore, asidePointer);
+    } catch (error) {
+      if (externalAssets) await rename(asideAssets, paths.skillsRoot);
+      throw error;
+    }
+    const migrated = await migrateAllSkills(home, paths);
     return {
       ok: true,
       storeRoot,
@@ -152,16 +161,17 @@ export async function performReset(input: {
 /** reset:还原客户端 → 旁路指针与旧库存 → 用确认前 storeRoot 再收录。 */
 export async function runReset(args: ResetArgs, opts: ResetOptions = {}): Promise<void> {
   const home = resolveHome(args.home);
-  const pointerFile = path.join(home, POINTER_REL);
-  const storeRoot = await readPointerStoreRoot(pointerFile);
-  if (storeRoot === null) {
+  const resolved = await resolveConfiguredHubPaths(home);
+  if (!resolved.ok) {
     emitError(args.json === true, "reset", "store-not-configured", "库存未配置。先运行 skills-hub bootstrap 或 init。");
     return;
   }
+  const paths = resolved.paths;
+  const storeRoot = paths.stateRoot;
   const snapshotId = args.snapshot === undefined || args.snapshot === "" ? undefined : args.snapshot;
   const preview = snapshotId === undefined
-    ? await previewRestoreClientSkills(storeRoot, home)
-    : await previewRestoreClientSkills(storeRoot, home, snapshotId);
+    ? await previewRestoreClientSkills(paths, home)
+    : await previewRestoreClientSkills(paths, home, snapshotId);
   if (!preview.ok) {
     emitError(args.json === true, "reset", preview.code, preview.message);
     return;

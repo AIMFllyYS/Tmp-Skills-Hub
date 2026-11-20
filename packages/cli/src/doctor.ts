@@ -7,13 +7,16 @@ import {
   probeLinkTypes,
   readLinksLedger,
   readStoreIndex,
-  resolveStoreRoot,
+  resolveHubPaths,
+  normalizeHubPaths,
+  writeLinksLedger,
   type DanglingLink,
   type LinkEntry,
   type LinkTypeProbe,
   type StoreRootOptions,
+  type HubPaths,
 } from "@skills-hub/core";
-import { POINTER_REL } from "./store-cmds.js";
+import { resolveConfiguredHubPaths } from "./store-shared.js";
 
 export interface DoctorStoreInfo {
   resolved: boolean;
@@ -29,7 +32,7 @@ export interface DoctorReport {
   danglingLinks: DanglingLink[];
 }
 
-async function probeStore(storeRoot: string): Promise<{ reachable: boolean; error: string | null }> {
+async function probeStore(storeRoot: HubPaths): Promise<{ reachable: boolean; error: string | null }> {
   try {
     await readStoreIndex(storeRoot);
     return { reachable: true, error: null };
@@ -41,40 +44,37 @@ async function probeStore(storeRoot: string): Promise<{ reachable: boolean; erro
 /** 环境自检。只读:不改库存、不修链接。 */
 export async function collectDoctorReport(
   home: string,
-  injectedStoreRoot?: string | null,
+  injectedStoreRoot?: string | HubPaths | null,
   storeOpts?: StoreRootOptions,
 ): Promise<DoctorReport> {
-  let store: DoctorStoreInfo;
-  if (injectedStoreRoot !== undefined) {
-    if (injectedStoreRoot === null) {
-      store = { resolved: false, storeRoot: null, reachable: false, error: "库存未配置" };
-    } else {
-      const probe = await probeStore(injectedStoreRoot);
-      store = { resolved: true, storeRoot: injectedStoreRoot, reachable: probe.reachable, error: probe.error };
-    }
-  } else {
-    const opts: StoreRootOptions = storeOpts ?? { pointerFilePath: path.join(home, POINTER_REL) };
-    const resolved = await resolveStoreRoot(opts);
-    if (!resolved.ok) {
-      store = { resolved: false, storeRoot: null, reachable: false, error: resolved.message };
-    } else {
-      const probe = await probeStore(resolved.storeRoot);
-      store = { resolved: true, storeRoot: resolved.storeRoot, reachable: probe.reachable, error: probe.error };
-    }
-  }
-
-  const storeRoot = store.storeRoot;
-  const roots = await discoverClientRoots(home, storeRoot !== null && storeRoot !== "" ? { storeRoot } : undefined);
+  const resolved = injectedStoreRoot === undefined
+    ? await (storeOpts ? resolveHubPaths(storeOpts) : resolveConfiguredHubPaths(home))
+    : null;
+  const paths = resolved?.ok ? resolved.paths : injectedStoreRoot ? normalizeHubPaths(injectedStoreRoot) : null;
+  const store: DoctorStoreInfo = paths === null
+    ? { resolved: false, storeRoot: null, reachable: false, error: resolved && !resolved.ok ? resolved.message : "库存未配置" }
+    : { resolved: true, storeRoot: paths.stateRoot, ...await probeStore(paths) };
+  const roots = await discoverClientRoots(home, paths === null ? undefined : { storeRoot: paths });
   const probeDir = await mkdtemp(path.join(os.tmpdir(), "skills-hub-linkprobe-"));
   const linkTypes = await probeLinkTypes(probeDir);
   await rm(probeDir, { recursive: true, force: true });
   let ledger: LinkEntry[] = [];
-  if (store.reachable && storeRoot !== null && storeRoot !== "") {
-    ledger = await readLinksLedger(storeRoot).catch(() => []);
+  if (store.reachable && paths !== null) {
+    ledger = await readLinksLedger(paths).catch(() => []);
   }
   const danglingLinks = await findDanglingLinks(
     roots.map((r) => r.skillsDir),
     ledger,
   );
   return { store, roots: roots.map((r) => ({ clientId: r.clientId, skillsDir: r.skillsDir })), linkTypes, danglingLinks };
+}
+
+export async function performPrune(paths: HubPaths, dryRun: boolean) {
+  const ledger = await readLinksLedger(paths);
+  const dangling = await findDanglingLinks([], ledger);
+  const pathsToPrune = new Set(dangling.map((entry) => path.resolve(entry.linkPath)));
+  const pruned = ledger.filter((entry) => pathsToPrune.has(path.resolve(entry.targetDir, entry.entryName)));
+  const ids = new Set(pruned.map((entry) => entry.id));
+  if (!dryRun && ids.size > 0) await writeLinksLedger(paths, ledger.filter((entry) => !ids.has(entry.id)));
+  return { dryRun, count: pruned.length, pruned };
 }

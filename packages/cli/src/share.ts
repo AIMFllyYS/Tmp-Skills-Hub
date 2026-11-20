@@ -6,13 +6,13 @@
 
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { normalizeHubPaths, type HubPaths } from "@skills-hub/core";
 import {
   hashSkillFolder,
   listSkillFiles,
   parseGitHubUrl,
   readSkillFile,
   readStoreIndex,
-  STORE_SKILLS_DIR,
   STORE_TMP_DIR,
   writeGitHubEntries,
 } from "@skills-hub/core";
@@ -64,16 +64,16 @@ export function shareTreeUrl(owner: string, repo: string, branch: string, dirNam
   return "https://github.com/" + owner + "/" + repo + "/tree/" + branch + "/skills/" + dirName;
 }
 
-export async function readTrustedRepoFromManifest(storeRoot: string): Promise<string | null> {
+export async function readTrustedRepoFromManifest(storeRoot: string | HubPaths): Promise<string | null> {
   try {
-    const raw = JSON.parse(await readFile(path.join(storeRoot, "manifest.json"), "utf8")) as { trustedRepo?: unknown };
+    const raw = JSON.parse(await readFile(path.join(normalizeHubPaths(storeRoot).stateRoot, "manifest.json"), "utf8")) as { trustedRepo?: unknown };
     return typeof raw.trustedRepo === "string" && raw.trustedRepo.trim() !== "" ? raw.trustedRepo.trim() : null;
   } catch {
     return null;
   }
 }
 
-export async function performShare(storeRoot: string, target: string, opts: PerformShareOptions = {}): Promise<ShareResult> {
+export async function performShare(storeRoot: string | HubPaths, target: string, opts: PerformShareOptions = {}): Promise<ShareResult> {
   const needle = target.trim();
   if (needle === "") return { ok: false, code: "bad-usage", message: "用法: skills-hub share <name|hash> [--repo owner/repo]" };
 
@@ -100,7 +100,7 @@ export async function performShare(storeRoot: string, target: string, opts: Perf
   }
   const dirName = hit.skill.dirName;
 
-  const skillDir = path.join(storeRoot, STORE_SKILLS_DIR, dirName);
+  const skillDir = path.join(normalizeHubPaths(storeRoot).skillsRoot, dirName);
   const localFiles = await readLocalSkillFiles(skillDir);
   if (localFiles.ok === false) return localFiles;
   const localHash = await hashSkillFolder(skillDir);
@@ -273,9 +273,9 @@ async function hashRemoteSkill(
   branch: string,
   prefix: string,
   remotePaths: string[],
-  storeRoot: string,
+  storeRoot: string | HubPaths,
 ): Promise<{ ok: true; hash: string } | { ok: false; code: ShareFailCode; message: string }> {
-  const tmp = path.join(storeRoot, STORE_TMP_DIR, "share-cmp-" + process.pid + "-" + Date.now());
+  const tmp = path.join(normalizeHubPaths(storeRoot).stateRoot, STORE_TMP_DIR, "share-cmp-" + process.pid + "-" + Date.now());
   await mkdir(tmp, { recursive: true });
   try {
     const entries: Array<{ path: string; contents: string }> = [];

@@ -22,6 +22,7 @@ export type JsonErrorCode =
   | "restore-failed"
   | "github-push-failed"
   | "remote-conflict"
+  | "conflict"
   | "draft-exists"
   | "draft-not-found"
   | "draft-incomplete"

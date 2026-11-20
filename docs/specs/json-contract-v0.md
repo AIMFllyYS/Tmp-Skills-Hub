@@ -43,7 +43,7 @@ v0 不分页。list 返回全部命中;`total` 恒等于 `skills.length`。将�
 
 ## 2. 命令结构
 
-> 库存根解析(`list` / `adopt` 等):--home 是**显式库存根**(同时作沙箱 home 重定向);其次 SKILLS_HUB_HOME;最后指针文件。解析失败 → store-not-configured。`ui` / `bootstrap` 拉起的面板进程例外:传入的 home 只作指针基座,库存读指针(或 SKILLS_HUB_HOME),见 [store-and-paths-v0.md](store-and-paths-v0.md) §1。
+> `--home` 或 `SKILLS_HUB_HOME` 重定向 home 和其下的控制中心指针。指针提供状态路径和唯一真源路径。旧单根沙箱继续兼容。对外信封中的 `storeRoot` 保留为状态目录路径。解析失败返回 `store-not-configured`，见 [store-and-paths-v0.md](store-and-paths-v0.md) §1。
 
 ### 2.1 list
 
@@ -213,6 +213,7 @@ dry-run 附加 `"dryRun": true`,含将旁路的指针/库存路径与 restore �
 | store-not-configured | 库存根未配置 |
 | store-not-reachable | 指针可解析但库存不可读 |
 | not-found | show/list 未命中、enable 组不存在等 |
+| conflict | 迁移目标非空、受管落点已变化，或接受漂移会生成重复内容 |
 | group-exists | 分组重复创建 |
 | group-not-found | rename/delete/add/remove 目标组不存在 |
 | group-empty | 按空分组启用/停用 |

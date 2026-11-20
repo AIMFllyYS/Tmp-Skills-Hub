@@ -1,3 +1,4 @@
+import type { HubPaths } from "@skills-hub/core";
 import path from "node:path";
 import type { Context, Hono } from "hono";
 import {
@@ -58,7 +59,7 @@ const parseLinksBatch = async (c: Context): Promise<LinksBatchBody | { error: st
 
 export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
   const resolveLinkTarget = async (
-    root: string,
+    root: HubPaths,
     needle: string,
     body: LinkBody,
   ): Promise<
@@ -66,7 +67,7 @@ export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
     | { ok: false; kind: "client" }
     | ResolveSkillFailure
   > => {
-    const client = await resolveClientSkillsDirAt(ctx.home, body.clientId, body.scope, ctx.storeRoot);
+    const client = await resolveClientSkillsDirAt(ctx.home, body.clientId, body.scope, ctx.paths);
     if (client === null) return { ok: false, kind: "client" };
     const hit = resolveSkill(needle, await readStoreIndex(root));
     if (!hit.ok) return hit;
@@ -99,7 +100,7 @@ export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
     });
 
   const resolveBatchRequests = async (
-    root: string,
+    root: HubPaths,
     body: LinksBatchBody,
   ): Promise<
     | { ok: true; action: "enable" | "disable"; items: LinkChangeRequest[] }
@@ -116,7 +117,7 @@ export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
     }
     const items: LinkChangeRequest[] = [];
     for (const clientId of body.clientIds) {
-      const client = await resolveClientSkillsDirAt(ctx.home, clientId, body.scope, ctx.storeRoot);
+      const client = await resolveClientSkillsDirAt(ctx.home, clientId, body.scope, ctx.paths);
       if (client === null) return { ok: false, code: "not-found", message: "未找到客户端: " + clientId };
       items.push({ storeRoot: root, clientId: client.clientId, scope: body.scope, skillsDir: client.skillsDir, dirNames });
     }
@@ -130,7 +131,7 @@ export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
       const hit = resolveSkill(needle, skills);
       if (!hit.ok) return skillLookupErr(c, "skill-links", hit);
       const ledger = await readLinksLedger(root);
-      const roots = await discoverClientRoots(ctx.home, clientDiscoverOpts(ctx.storeRoot));
+      const roots = await discoverClientRoots(ctx.home, clientDiscoverOpts(ctx.paths));
       const links = [];
       for (const r of roots) {
         const inLedger = ledger.some((e) => e.clientId === r.clientId && e.entryName === hit.skill.dirName);
@@ -144,7 +145,7 @@ export function registerLinkRoutes(app: Hono, ctx: UiRouteContext): void {
   app.get("/api/clients/:clientId/skill-states", (c) =>
     withStore(ctx, c, "client-skill-states", async (root) => {
       const clientId = c.req.param("clientId");
-      const roots = await discoverClientRoots(ctx.home, clientDiscoverOpts(ctx.storeRoot));
+      const roots = await discoverClientRoots(ctx.home, clientDiscoverOpts(ctx.paths));
       const found = roots.find((r) => r.clientId === clientId);
       if (found === undefined) return err(c, "client-skill-states", "not-found", "未找到客户端: " + clientId);
       const skills = await readStoreIndex(root);
