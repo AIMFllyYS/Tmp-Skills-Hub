@@ -6,10 +6,10 @@ import { readdir } from "node:fs/promises";
 import { openBrowser } from "./open-console.js";
 import {
   adoptSkillFolder,
-  createBackupSnapshot,
   discoverClientRoots,
   ensureBuiltinGroups,
   initializeStoreLayout,
+  planReconcile,
   type HubPaths,
   readSkillMeta,
 } from "@skills-hub/core";
@@ -17,11 +17,12 @@ import { resolveHome } from "./home.js";
 import { performLinkChange } from "./link-actions.js";
 import { planInitialPaths, resolveConfiguredHubPaths } from "./store-shared.js";
 import { validateSkillsRoot } from "./store-migrate.js";
+import { performReconcile, reconcilePreview } from "./reconcile-cmds.js";
 import { performAdopt, printAdoptSummary, writePointerFile } from "./store-cmds.js";
 import { DEFAULT_UI_PORT, startUiServer, type StartUiServerOptions } from "./ui-server.js";
 
 /**
- * bootstrap:真机一键体验——交互确认(库存位置/备份/迁移)→ 备份 → 收录全部本机 skills → 自动启动面板。
+ * bootstrap:预览并确认接管，备份校验后将客户端技能收敛为纯软链接，再启动面板。
  * 幂等:库存已配置时跳过全部交互,直接启动面板。
  * 写操作铁律不变:交互中的 Y 即显式授权;非 TTY 且无 --yes 拒绝执行。
  */
@@ -109,49 +110,42 @@ export async function runBootstrap(args: BootstrapArgs, opts: BootstrapOptions =
     process.exitCode = 2;
     return;
   }
-  const rlHandle = opts.readLine === undefined ? defaultReadLine() : null;
-  const ask = opts.readLine ?? rlHandle!.ask;
-
+  const rlHandle = opts.readLine === undefined && args.yes !== true ? defaultReadLine() : null;
+  const ask = opts.readLine ?? rlHandle?.ask;
   const defaults = planInitialPaths(base);
   let storeRoot: HubPaths;
   try {
     console.log("控制与备份中心（固定）: " + defaults.stateRoot);
-    const requested = args.yes === true ? "" : (await ask(`唯一真源目录（回车使用 ${defaults.skillsRoot}） > `)).trim();
+    const requested = ask === undefined || args.yes === true
+      ? "" : (await ask(`唯一真源目录（回车使用 ${defaults.skillsRoot}） > `)).trim();
     storeRoot = planInitialPaths(base, requested === "" ? {} : { skillsRoot: requested });
     const validation = await validateSkillsRoot(base, storeRoot.stateRoot, storeRoot.skillsRoot);
     if (!validation.ok) throw new Error(validation.message);
-    // 2. 备份确认
-    const doBackup = args.yes === true ||
-      (await ask(`\n${RED}${BOLD}⚠ 即将把本机全部客户端(如 .claude/.cursor/.codex 等)的 skills 收录进统一库存。${RESET}\n先帮你备份一份保险,如果出现问题可以一键恢复。\n是否自动备份?(Y=备份后继续 / N=跳过备份) > `)).trim().toUpperCase() === "Y";
+    storeRoot = { ...storeRoot, skillsRoot: validation.target };
 
-    if (doBackup) {
-      const backupDir = path.join(storeRoot.stateRoot, "backups");
-      console.log("正在备份(只读源目录,写入 " + backupDir + ")…");
-      const bak = await createBackupSnapshot(storeRoot, base);
-      warn(
-        "✓ 已备份快照 " + bak.snapshotId +
-          " (" + bak.manifest.files.length + " 个文件, " + bak.manifest.links.length + " 条链接, 新增 blob " +
-          bak.manifest.blobsWritten + ")\n  校验: skills-hub backup verify。还原: skills-hub backup restore，或面板「恢复到初始化前」。",
-      );
-    } else {
-      console.log("已跳过备份。");
-    }
-
-    // 3. 迁移确认
-    const doMigrate = args.yes === true ||
-      (await ask(`${RED}${BOLD}⚠ 即将把全部 skills 收录进库存 ${storeRoot.skillsRoot}(重复内容自动去重,冲突绝不覆盖)。${RESET}\n输入 Y 开始迁移,输入其他任意键取消 > `)).trim().toUpperCase() === "Y";
-    if (!doMigrate) {
-      console.log("已取消,未做任何改动。");
+    const preview = reconcilePreview(await planReconcile(base, storeRoot));
+    console.log(`待接管：新增 ${preview.toAdopt.length}，同指纹 ${preview.toRelinkIdentical.length}，同名冲突 ${preview.conflicts.length}；保留外链 ${preview.skippedExternalLinks.length}。`);
+    console.log("确认后先生成并校验备份，再把已接管落点改为指向唯一真源的软链接。");
+    if (args.yes !== true && (await ask!("输入 Y 确认备份和接管，其他键取消 > ")).trim().toUpperCase() !== "Y") {
+      console.log("已取消，未写入库存或客户端。");
       return;
     }
   } finally {
     rlHandle?.close();
   }
 
-  // 4. 自动执行:建布局 → 收录全部 → 完成提示
-  const result = await migrateAllSkills(base, storeRoot);
-  warn(`✓ 全部完成:库存位于 ${storeRoot.skillsRoot},收录 ${result.adopted} 份(新增/重复/冲突见上方统计)。`);
-  if (result.discovered === 0) console.log("未发现任何达标 skill(缺 name/description 的目录不计入)。");
+  await initializeStoreLayout(storeRoot);
+  await ensureBuiltinGroups(storeRoot);
+  const result = await performReconcile(base, storeRoot, false);
+  if (!result.ok) {
+    warn("接管失败: " + result.message);
+    process.exitCode = 2;
+    return;
+  }
+  await writePointerFile(base, storeRoot);
+  warn(`✓ 备份 ${result.snapshotId} 已校验。入库 ${result.adoptedCount} 份，保留 ${result.conflictCount} 组冲突，建立 ${result.linksCreated} 条客户端链接。`);
+  for (const failure of result.failures) console.error(`[${failure.clientId}] ${failure.skillName} ${failure.reason}`);
+  if (result.failures.length > 0) console.error("部分落点未接管，可再次运行 skills-hub reconcile。");
 
   // 4b. 收录并启用自身 skill(#169)
   await adoptAndEnableSelfSkill(base, storeRoot, opts.selfSkillDir);
