@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.dialog-scroll { scrollbar-width: thin; scrollbar-gutter: stable; padding-inline-end: .35rem; }
+.dialog-scroll::-webkit-scrollbar { display: block; width: 7px; }
+.dialog-scroll::-webkit-scrollbar-thumb { background: #c2c5ca; border-radius: 5px; }
+
 html, body, #root {
   height: 100%;
   overflow: hidden;

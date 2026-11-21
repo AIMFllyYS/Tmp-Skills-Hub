@@ -12,6 +12,8 @@ import type { ConflictAgentHandoff } from "./features/conflicts/types.js";
 import { useConflictCatalog } from "./features/conflicts/use-conflict-catalog.js";
 import { ReconcileBanner } from "./features/reconcile/ReconcileBanner.js";
 import { useReconcile } from "./features/reconcile/use-reconcile.js";
+import { useThreads } from "./features/agent/threads.js";
+import { FirstRunDialog } from "./features/shell/FirstRunDialog.js";
 import { Sidebar } from "./features/shell/Sidebar.js";
 import { useStoreMaintenance } from "./features/shell/use-store-maintenance.js";
 import type { AppPage, ShellNav, SkillsTab } from "./features/shell/page.js";
@@ -69,10 +71,19 @@ export default function App() {
 }
 
 function MainShellApp() {
+  const chats = useThreads();
+  const [aiRevision, setAiRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setAiRevision(v => v + 1);
+    window.addEventListener("skills-hub-ai-changed", refresh);
+    return () => window.removeEventListener("skills-hub-ai-changed", refresh);
+  }, []);
   const [prefs] = useState<ShellPrefs>(readShellPrefs);
   const [page, setPage] = useState<AppPage>("overview");
   const [skillsTab, setSkillsTab] = useState<SkillsTab>("apps");
   const [agentHandoff, setAgentHandoff] = useState<ConflictAgentHandoff | null>(null);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [firstScan, setFirstScan] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [desktopReconcileRequest, setDesktopReconcileRequest] = useState(
     () => window.skillsHubDesktop?.isDesktop === true && window.location.hash === "#reconcile" ? 1 : 0,
@@ -151,6 +162,7 @@ function MainShellApp() {
       return;
     }
     if (target.page !== undefined) {
+      if (target.agentHandoff) chats.create();
       setAgentHandoff(target.agentHandoff ?? null);
       setPage(target.page);
     }
@@ -217,6 +229,7 @@ function MainShellApp() {
             }}
           >
             <Sidebar
+              chats={chats} onChat={id => { setAgentHandoff(null); if (id) chats.select(id); else chats.create(); setPage("agent"); }}
               page={page}
               collapsed={collapsed}
               settingsOpen={settingsOpen}
@@ -266,12 +279,12 @@ function MainShellApp() {
                   <Suspense fallback={<PageSkeleton />}>
                     <div key={page} className="motion-enter flex min-h-0 flex-1 flex-col">
                       {page === "agent" ? (
-                        <AgentPage onMutated={catalog.refresh} />
+                        <AgentPage key={chats.current} threadId={chats.current} onTitle={chats.title} aiRevision={aiRevision} onMutated={catalog.refresh} />
                       ) : (
                         <StoreOnboarding
                           title={PAGE_LABELS[page]}
                           clients={catalog.clients}
-                          onInit={catalog.initializeStore}
+                          onInit={async enabled => { await catalog.initializeStore(enabled); setFirstScan(true); }}
                           onOpenAgent={() => setPage("agent")}
                         />
                       )}
@@ -335,7 +348,7 @@ function MainShellApp() {
                         />
                       )}
                       {page === "agent" && (
-                        <AgentPage onMutated={() => void refreshConflictState()} initialPrompt={agentHandoff?.prompt} />
+                        <AgentPage key={chats.current} threadId={chats.current} onTitle={chats.title} aiRevision={aiRevision} onMutated={() => void refreshConflictState()} initialPrompt={agentHandoff?.prompt} />
                       )}
                     </div>
                   </Suspense>
@@ -344,6 +357,15 @@ function MainShellApp() {
             </main>
           </ResizablePanel>
         </ResizablePanelGroup>
+        {catalog.firstRun && !welcomeDismissed && (catalog.status === "loading" || catalog.status === "unconfigured") && <FirstRunDialog
+          title={catalog.status === "loading" ? "正在查找技能文件夹" : "欢迎使用 Skills Hub"}
+          detail={catalog.status === "loading" ? "正在查找 Codex、WorkBuddy 等客户端的技能目录。" : `已找到 ${catalog.clients.length} 个客户端目录。接下来选择技能文件夹并初始化，扫描完成后，你可以预览要接管的技能。`}
+          waiting={catalog.status === "loading"} action={catalog.status === "loading" ? "后台继续" : "选择技能文件夹"} onClose={() => setWelcomeDismissed(true)} />}
+        {firstScan && catalog.status === "ready" && <FirstRunDialog
+          title={reconcile.scanError ? "扫描未完成" : reconcile.summary ? "首次扫描完成" : "正在扫描客户端技能文件夹"}
+          detail={reconcile.scanError ?? (reconcile.summary ? `已扫描 ${reconcile.summary.clientsScanned} 个客户端，发现 ${reconcile.summary.unmanagedRealDirs} 个未接管目录。可以查看接管预览后再决定。` : "正在检查技能目录、链接和同名版本。扫描只读取文件。")}
+          waiting={!reconcile.scanError && !reconcile.summary} action={reconcile.scanError ? "重试扫描" : reconcile.summary ? "查看接管预览" : "后台继续"}
+          onAction={() => { if (reconcile.scanError) { void reconcile.rescan().catch(() => undefined); return; } setFirstScan(false); if (reconcile.summary) openReconcile(); }} onClose={() => setFirstScan(false)} />}
         {reconcile.dialog.open && (
           <Suspense fallback={null}>
             <ReconcileDialog {...reconcile.dialog} />

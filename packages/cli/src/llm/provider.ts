@@ -3,6 +3,7 @@
  * 密钥只从环境变量读;enable_thinking 经 transformRequestBody 注入 false。
  */
 
+import { activeConnection } from "./connection.js";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 
@@ -11,23 +12,23 @@ export const DEFAULT_MODEL = "deepseek/deepseek-v4-flash-20260731";
 export const STREAM_IDLE_TIMEOUT_MS = 60_000;
 
 export function qiniuApiKey(): string | undefined {
-  const key = process.env.QINIU_API_KEY;
+  const key = activeConnection.getStore()?.apiKey ?? process.env.QINIU_API_KEY;
   return key === undefined || key === "" ? undefined : key;
 }
 
 export function llmBaseUrl(): string {
-  return (process.env.QINIU_BASE_URL ?? DEFAULT_QINIU_BASE_URL).replace(/\/$/, "");
+  return (activeConnection.getStore()?.baseUrl ?? process.env.QINIU_BASE_URL ?? DEFAULT_QINIU_BASE_URL).replace(/\/$/, "");
 }
 
 /** 缺省模型:explicit > QINIU_MODEL > DEFAULT_MODEL。 */
 export function resolveModel(explicit?: string): string {
   if (explicit !== undefined && explicit !== "") return explicit;
-  const env = process.env.QINIU_MODEL;
+  const env = activeConnection.getStore()?.model ?? process.env.QINIU_MODEL;
   return env !== undefined && env !== "" ? env : DEFAULT_MODEL;
 }
 
 export function notConfiguredMessage(): string {
-  return "未配置 QINIU_API_KEY:请在 .env 中填写后重试(功能不可用但不崩溃)。";
+  return "请在「设置 → AI 连接」填写服务信息，或设置环境变量 QINIU_API_KEY。";
 }
 
 /** 给请求体补 enable_thinking:false(七牛思考开关)。导出供单测。 */
@@ -53,8 +54,9 @@ export function createQiniuModel(modelId: string, opts: QiniuModelOptions = {}):
     apiKey,
     // 七牛云 OpenAI 兼容端点以 json_object 模式为准;配合 prompt 内显式 JSON 约束使用 Output.object
     supportsStructuredOutputs: false,
-    transformRequestBody: (body) => injectThinkingOff(body as Record<string, unknown>),
+
   };
+  if (llmBaseUrl() === DEFAULT_QINIU_BASE_URL) settings.transformRequestBody = (body) => injectThinkingOff(body as Record<string, unknown>);
   if (opts.fetch !== undefined) settings.fetch = opts.fetch;
   return createOpenAICompatible(settings).chatModel(modelId);
 }

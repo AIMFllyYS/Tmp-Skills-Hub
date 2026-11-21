@@ -6,6 +6,10 @@
 > **#216 修订（2026-08-24）**：`POST /api/agent/chat` 改为 AI SDK UI message stream；翻译 SSE 与 Agent 解绑。
 > **2026-11-20 修订**：补齐本机安全中间件（`Host` / `Origin` / `Content-Type` / body 大小上限）、全局 `onError`、`/api/*` 404 JSON 兜底、缺失 `/assets/*` 404、`POST /api/store/init` 与动态 `ctx.storeRoot`、统一 `auth-required` 与完整状态码映射。
 
+### GUI 的 AI 连接设置
+
+`GET /api/settings/ai` 返回来源 `mode`、`baseUrl`、`model`、`hasKey` 和是否支持加密持久化 `persistent`。`PUT /api/settings/ai` 接受 `{ mode: "custom", baseUrl, model, apiKey }` 或 `{ mode: "environment" }`。切回环境变量会清除手动保存的凭据。两个端点均可在库存初始化前使用。
+
 ## 1. 基础
 
 - 服务:`skills-hub ui [--port <n>] [--home <path>]`（或由 `apps/desktop` 进程内调用 `startUiServer` / `createUiApp`）;Hono,`hostname: "127.0.0.1"`(固定,不接受外部绑定;支持 `port: 0`)

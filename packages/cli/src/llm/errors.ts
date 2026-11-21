@@ -3,6 +3,7 @@
  * 返回的 message 绝不含密钥。
  */
 
+import { activeConnection } from "./connection.js";
 import {
   APICallError,
   JSONParseError,
@@ -21,17 +22,18 @@ export type LlmFailureCode =
 
 const ERROR_HINTS: Record<number, string> = {
   400: "请求格式错误(按提示修正请求体)",
-  401: "认证失败(检查 QINIU_API_KEY)",
+  401: "认证失败，请检查「设置 → AI 连接」中的密钥或 QINIU_API_KEY",
   402: "账户余额不足",
   422: "请求参数无效",
   429: "请求过于频繁(限流),请稍后重试",
-  500: "七牛云服务端错误,请稍后重试",
-  503: "七牛云服务过载,请稍后重试",
+  500: "AI 服务端错误,请稍后重试",
+  503: "AI 服务过载,请稍后重试",
 };
 
 /** 脱敏:遮罩 sk-* 与进程环境中的真实密钥(长度 >= 8)。 */
 export function scrub(text: string): string {
-  let out = text;
+  const customKey = activeConnection.getStore()?.apiKey;
+  let out = customKey ? text.split(customKey).join("[redacted]") : text;
   for (const envKey of ["QINIU_API_KEY", "GITHUB_TOKEN"] as const) {
     const secret = process.env[envKey];
     if (secret !== undefined && secret.length >= 8 && out.includes(secret)) {

@@ -6,6 +6,10 @@
 > **#216 修订（2026-08-24）**：调用封装从自制 `chatCompletion` / `chatCompletionStream`(手写 OpenAI SSE 与 tool_calls 累积)改为 Vercel AI SDK。七牛云仍是唯一供应商;密钥铁律不变。
 > **2026-11-20 修订（AI SDK v7 迁移对齐）**：升级为 `ai@7` / `@ai-sdk/openai-compatible@3` / `@ai-sdk/react@4`；补齐 `result.fullStream` 翻译流错误处理与缓存门禁、`analyze` `"JSON"` 提示词约束、`RetryError` 解包、`TimeoutError`/`AbortError` 分离、`invalid-response` 映射与凭据字面量脱敏。
 
+## 2026-11 桌面设置修订
+
+GUI 默认使用进程环境与已加载的 `.env`，也可显式切换到自定义 OpenAI 兼容服务。自定义 URL、Model ID、API Key 必须作为一组配置，适用于 Agent、翻译和分析。更换地址必须重新输入对应密钥。Windows 桌面使用 Electron safeStorage 加密保存；独立 Web 服务仅在进程内保留自定义配置。读取设置只返回密钥是否已配置。七牛专属参数仅发送到七牛官方端点。下述仅环境变量与固定模型列表的旧限制适用于默认七牛配置。
+
 ## 1. 事实清单
 
 | 项 | 值 |

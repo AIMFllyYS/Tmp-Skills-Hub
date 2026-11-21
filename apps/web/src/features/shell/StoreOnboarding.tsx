@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { GitSettingsPanel } from "../git/GitSettingsPanel.js";
 import { initStore } from "../skills/api.js";
 import type { ClientInfo, StoreInitResponse } from "../skills/types.js";
+import { FirstRunDialog } from "./FirstRunDialog.js";
 import { DualPathOnboardingView } from "./DualPathOnboardingView.js";
 
 interface StoreOnboardingProps {
@@ -19,18 +20,24 @@ export function StoreOnboarding({ onInit, clients, ...props }: StoreOnboardingPr
   const [report, setReport] = useState<NonNullable<StoreInitResponse["guide"]> | null>(null);
   const [root, setRoot] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
   const desktop = globalThis.window?.skillsHubDesktop;
   const stateRoot = desktop?.stateFolder;
   const targets = clients.map(client => client.skillsDir);
 
   const install = async (skillsRoot: string | undefined, dirs: string[]): Promise<void> => {
-    const result = await initStore(skillsRoot, dirs);
-    if (!result.guide) throw new Error("服务端未返回指南安装结果");
-    const latest = result.guide;
-    setReport(previous => ({
-      ...latest, clients: [...(previous?.clients ?? []).filter(item => !dirs.includes(item.skillsDir)), ...latest.clients],
-    }));
-    setRoot(skillsRoot);
+    setInstalling(true);
+    setShowProgress(true);
+    try {
+      const result = await initStore(skillsRoot, dirs);
+      if (!result.guide) throw new Error("服务端未返回指南安装结果");
+      const latest = result.guide;
+      setReport(previous => ({
+        ...latest, clients: [...(previous?.clients ?? []).filter(item => !dirs.includes(item.skillsDir)), ...latest.clients],
+      }));
+      setRoot(skillsRoot);
+    } finally { setInstalling(false); }
   };
 
   if (report) {
@@ -59,7 +66,7 @@ export function StoreOnboarding({ onInit, clients, ...props }: StoreOnboardingPr
     );
   }
   return (
-    <DualPathOnboardingView {...props} clientCount={clients.length} showGitOptions={false}
+    <><DualPathOnboardingView {...props} clientCount={clients.length} showGitOptions={false}
       {...(stateRoot ? { defaultStateRoot: stateRoot, defaultSkillsRoot: stateRoot + (stateRoot.includes("\\") ? "\\" : "/") + "skills" } : {})}
       {...(desktop?.initialFolder ? { initialSkillsRoot: desktop.initialFolder } : {})}
       gitOptions={<>
@@ -74,5 +81,6 @@ export function StoreOnboarding({ onInit, clients, ...props }: StoreOnboardingPr
       </>}
       onInit={({ skillsRoot }) => install(skillsRoot, targets)}
     />
+    {installing && showProgress && <FirstRunDialog title="正在准备技能文件夹" detail="正在创建库存并为选定客户端安装管理指南。完成后可以查看每个客户端的安装结果。" waiting action="收起进度" onClose={() => setShowProgress(false)} />}</>
   );
 }

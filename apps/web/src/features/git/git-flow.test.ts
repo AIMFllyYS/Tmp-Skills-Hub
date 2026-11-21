@@ -35,16 +35,16 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("shows both install hints and disables the toggle when Git is unavailable during onboarding", async () => {
+it("offers local Git installation and defers GitHub setup during onboarding", async () => {
   const fetch = vi.fn().mockResolvedValue(payload({ ...dependencies, enabled: false, gitInstalled: false, ghInstalled: false }));
   vi.stubGlobal("fetch", fetch);
   await act(async () => root.render(element(GitSettingsPanel, { enableOnInit: false, onEnabledChange: changed })));
-  expect(find("git-env-git")?.textContent).toContain("winget install Git.Git");
-  expect(find("git-env-gh")?.textContent).toContain("winget install GitHub.cli");
-  expect(find("git-env-git")?.querySelector("a")?.href).toBe("https://git-scm.com/downloads");
+  expect(find("git-settings-section")?.textContent).toContain("winget install Git.Git");
+  expect(find("git-env-gh")).toBeNull();
+  expect(find("git-settings-section")?.querySelector("a")?.href).toBe("https://git-scm.com/downloads");
   expect(find("git-enable-switch")?.getAttribute("aria-disabled")).toBe("true");
   await click("git-enable-switch");
-  expect(find("git-settings-section")?.textContent).toContain("可跳过");
+  expect(find("git-settings-section")?.textContent).toContain("可以直接初始化");
   expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/git/status"]);
   expect(changed).not.toHaveBeenCalled();
 });

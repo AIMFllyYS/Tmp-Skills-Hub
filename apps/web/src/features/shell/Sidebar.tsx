@@ -1,5 +1,5 @@
-import { BarChart3, Blocks, Bot, LayoutDashboard, PanelLeft, PanelLeftClose, Settings } from "lucide-react";
-import type { CSSProperties } from "react";
+import { BarChart3, Blocks, MessagesSquare, FolderOpen, SquarePen, ChevronRight, LayoutDashboard, PanelLeft, PanelLeftClose, Settings } from "lucide-react";
+import { useState, type CSSProperties } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,13 +8,14 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { RescanTriggerButton, type RescanTriggerButtonProps } from "../reconcile/ReconcileBanner.js";
 import type { AppPage } from "./page.js";
+import type { Thread } from "../agent/threads.js";
 import { SIDEBAR_ICON_PX } from "./shell-prefs.js";
 
 const NAV: { id: AppPage; label: string; testId: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "总览", testId: "nav-overview", icon: LayoutDashboard },
   { id: "stats", label: "统计", testId: "nav-stats", icon: BarChart3 },
   { id: "skills", label: "Skills 管理", testId: "nav-skills", icon: Blocks },
-  { id: "agent", label: "Agent", testId: "nav-agent", icon: Bot },
+  { id: "agent", label: "Agent", testId: "nav-agent", icon: MessagesSquare },
 ];
 
 /** 图标列固定 48px；文案在第二列。收起只裁切第二列，图标中心始终在 24px。 */
@@ -24,6 +25,8 @@ const RAIL_GRID: CSSProperties = {
 };
 
 interface SidebarProps {
+  chats: { current: string; threads: Thread[] };
+  onChat: (id?: string) => void;
   page: AppPage;
   collapsed: boolean;
   settingsOpen: boolean;
@@ -87,8 +90,9 @@ export function Sidebar({
   onSettings,
   onToggleCollapsed,
   rescan,
-  conflictCount = 0,
+  conflictCount = 0, chats, onChat,
 }: SidebarProps): React.JSX.Element {
+  const [expanded, setExpanded] = useState(true);
   return (
     <aside
       data-testid="shell-sidebar"
@@ -130,6 +134,18 @@ export function Sidebar({
               onClick={() => onPage(item.id)}
             />
           ))}
+          {page === "agent" && !collapsed && <div className="mx-2 mt-2 min-w-0">
+            <div className="flex items-center rounded-lg bg-surface">
+              <Button variant="ghost" className="min-w-0 flex-1 justify-start gap-1 px-2" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}>
+                <ChevronRight className={cn("size-3", expanded && "rotate-90")} /><FolderOpen className="size-4" />我的对话
+              </Button>
+              <Button variant="ghost" size="sm" title="新建对话" aria-label="新建对话" onClick={() => { setExpanded(true); onChat(); }}><SquarePen size={15}/></Button>
+            </div>
+            {expanded && <ul className="ml-4 mt-1 space-y-0.5 border-l border-line pl-2">{chats.threads.map(t => <li key={t.id}>
+              <Button variant="ghost" size="sm" title={t.title} aria-current={chats.current === t.id ? "page" : undefined} className={cn("w-full justify-start px-2", chats.current === t.id && "bg-surface font-medium")} onClick={() => onChat(t.id)}><span className="truncate">{t.title}</span></Button>
+            </li>)}</ul>}
+          </div>}
+          {page === "agent" && collapsed && <Button variant="ghost" title="新建对话" aria-label="新建对话" onClick={() => onChat()}><SquarePen size={16} /></Button>}
         </nav>
       </ScrollArea>
       <Separator />

@@ -36,5 +36,6 @@ export type { DesktopPreferences } from "./ui-http.js";
 export { createGhDeviceLogin } from "./git/index.js";
 export type { GitRuntime } from "./git-ops.js";
 export type { DoctorReport, DoctorStoreInfo } from "./doctor.js";
+export type { AiConnectionStorage } from "./llm/connection.js";
 export { AGENT_MODELS, DEFAULT_AGENT_MODEL } from "./agent/models.js";
 export type { AgentModel } from "./agent/models.js";

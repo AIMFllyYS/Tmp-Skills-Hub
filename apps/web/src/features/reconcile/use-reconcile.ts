@@ -10,6 +10,7 @@ import {
 
 export function useReconcile(storeRoot: string | null, refresh: () => void, openConflicts: () => void) {
   const [summary, setSummary] = useState<ReconcileScanSummary | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -26,6 +27,7 @@ export function useReconcile(storeRoot: string | null, refresh: () => void, open
     const request = scanReconcile();
     scanRequest.current = request;
     setScanning(true);
+    setScanError(null);
     try {
       const result = await request;
       if (request === scanRequest.current) {
@@ -33,6 +35,9 @@ export function useReconcile(storeRoot: string | null, refresh: () => void, open
         setDismissed(false);
       }
       return result;
+    } catch (error) {
+      if (request === scanRequest.current) setScanError(error instanceof Error ? error.message : String(error));
+      throw error;
     } finally {
       if (request === scanRequest.current) {
         scanRequest.current = null;
@@ -47,7 +52,9 @@ export function useReconcile(storeRoot: string | null, refresh: () => void, open
     scanRequest.current = null;
     setSummary(null);
     setScanning(false);
-    if (storeRoot !== null) void scan().catch(() => undefined);
+    if (storeRoot !== null) void Promise.resolve().then(() => {
+      if (lastStore.current === storeRoot) return scan();
+    }).catch(() => undefined);
   }, [scan, storeRoot]);
 
   useEffect(() => () => previewRequest.current?.abort(), []);
@@ -113,7 +120,7 @@ export function useReconcile(storeRoot: string | null, refresh: () => void, open
   };
 
   return {
-    summary, scanning, rescan, dismissed, dismiss: () => setDismissed(true), showPreview,
+    summary, scanning, scanError, rescan, dismissed, dismiss: () => setDismissed(true), showPreview,
     dialog: {
       open, preview, loading, includeExternalLinks, externalLinks, onApply: apply,
       onIncludeExternalLinksChange: (include: boolean) => void loadPreview(include),
