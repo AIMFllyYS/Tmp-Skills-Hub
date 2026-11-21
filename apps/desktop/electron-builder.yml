@@ -9,15 +9,27 @@ files:
   - "package.json"
   - "!node_modules/**"
 extraResources:
+  - from: "build/icon.ico"
+    to: "icon.ico"
   - from: "../web/dist"
     to: "web"
   - from: "../../packages/cli/self-skill"
     to: "self-skill"
 win:
+  icon: "build/icon.ico"
   target:
     - "nsis"
     - "portable"
-  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  allowElevation: false
+  installerLanguages: ["zh_CN"]
+  language: "2052"
+  include: "build/installer.nsh"
+  installerIcon: "build/icon.ico"
+  uninstallerIcon: "build/icon.ico"
+  installerHeaderIcon: "build/icon.ico"
+  deleteAppDataOnUninstall: false
 mac:
   target:
     - "dmg"

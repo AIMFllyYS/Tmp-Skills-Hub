@@ -120,7 +120,7 @@ export function GitSettingsSection({
         <div className="min-w-0 flex-1 space-y-0.5">
           <h3 className="text-base font-semibold tracking-tight text-ink-strong">Git 版本控制与云端备份</h3>
           <p className="text-xs leading-relaxed text-ink-mid">
-            可跳过，随时在设置中开启。启用后会在唯一真源目录记录变更历史，可通过 GitHub CLI 备份到个人仓库。
+            可跳过，随时在设置中开启。启用后会在技能文件夹记录变更历史，可通过 GitHub CLI 备份到个人仓库。
           </p>
         </div>
       </div>
@@ -158,7 +158,7 @@ export function GitSettingsSection({
               )}
             </div>
             {status.gitInstalled ? (
-              <p className="mt-2 text-xs text-ink-faint">可用于唯一真源本地自动提交与历史对比。</p>
+              <p className="mt-2 text-xs text-ink-faint">可以自动记录技能修改，并对比历史版本。</p>
             ) : (
               <InstallHintRow command={gitCmd} downloadUrl={gitUrl} toolName="Git" />
             )}
@@ -210,7 +210,7 @@ export function GitSettingsSection({
                 ? "检测到本机未安装 Git，请先按上方指引安装后再开启。"
                 : status.enabled
                   ? showCloud ? "保存、收录、冲突合并与归档后会自动提交。" : "库存初始化后即开启本地版本控制。"
-                  : "开启后仅初始化唯一真源目录，绝不修改全局 ~/.gitconfig。"}
+                  : "开启后会在技能文件夹中记录版本。"}
             </p>
           </div>
           <Switch
@@ -347,7 +347,7 @@ export function GitSettingsSection({
                   surface="card"
                   testId="git-remote-diverged-banner"
                   title="远端仓库存在本地未拉取的新提交，已阻止推送"
-                  description="请先在唯一真源目录执行 git pull --rebase，处理远端提交后再点击「立即推送备份」。"
+                  description="请先在技能文件夹执行 git pull --rebase，处理远端提交后再点击「立即推送备份」。"
                 />
               )}
             </div>

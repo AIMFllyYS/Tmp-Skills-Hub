@@ -55,7 +55,7 @@ it("adds the hidden Windows login flag, while development and sandbox builds lea
 
 it("keeps a clean scan silent and opens the reconcile preview from an alert", () => {
   const handlers = actions();
-  const tray = createDesktopTray(handlers, false, "win32");
+  const tray = createDesktopTray(handlers, false, "icon.ico", "win32");
   expect(scanAlert(null)).toBeNull();
   tray.report(clearScan);
   expect(os.notice.show).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ it("keeps a clean scan silent and opens the reconcile preview from an alert", ()
 it("uses the Windows balloon when native notifications are unavailable and reflects preference changes", () => {
   const handlers = actions();
   os.notificationSupported.mockReturnValue(false);
-  const tray = createDesktopTray(handlers, false, "win32");
+  const tray = createDesktopTray(handlers, false, "icon.ico", "win32");
   const original = os.tray.setContextMenu.mock.lastCall?.[0];
   expect(original?.find((item) => item.type === "checkbox")).toMatchObject({ checked: false });
   tray.setAutoLaunch(true);

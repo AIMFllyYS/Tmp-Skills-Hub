@@ -1,6 +1,6 @@
 {
   "name": "@skills-hub/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "skill-hub 命令行:确定性内核的终端入口",
   "type": "module",

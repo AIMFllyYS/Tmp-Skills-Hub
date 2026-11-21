@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from "electron";
@@ -31,6 +31,18 @@ let shuttingDown = false;
 let desktopPreferences: DesktopPreferences = { autoLaunch: false, silentTray: false };
 let tray: ReturnType<typeof createDesktopTray> | null = null;
 let windowRequested = false;
+
+function desktopIcon(): string {
+  if (process.platform !== "win32") return path.join(resolveResourcePaths().webRoot, "assets", "skills-hub.png");
+  return app.isPackaged ? path.join(process.resourcesPath, "icon.ico") : path.join(resolveAppDir(), "build", "icon.ico");
+}
+
+async function initialFolder(): Promise<string> {
+  if (!app.isPackaged || process.platform !== "win32") return "";
+  if (process.env.SKILLS_HUB_HOME && !app.commandLine.hasSwitch("user-data-dir")) return "";
+  const hint = await readFile(path.join(app.getPath("userData"), "setup-folder.txt"), "utf16le").catch(() => "");
+  return path.isAbsolute(hint) ? hint : "";
+}
 
 function resolveAppDir(): string {
   return app.isPackaged ? app.getAppPath() : path.resolve(currentDir, "..");
@@ -136,12 +148,17 @@ async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
     minWidth: 900,
     minHeight: 600,
     title: "Skills Hub",
+    icon: desktopIcon(),
     backgroundColor: "#ffffff",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       preload: preloadPath,
+      additionalArguments: [
+        "--hub-initial-folder=" + encodeURIComponent(await initialFolder()),
+        "--hub-state-folder=" + encodeURIComponent(path.join(resolveHome(), ".skills-hub")),
+      ],
     },
   });
 
@@ -261,7 +278,7 @@ async function bootstrapDesktop(): Promise<void> {
     rescan,
     setAutoLaunch: (enabled) => void setAutoLaunch(enabled),
     quit: () => app.quit(),
-  }, desktopPreferences.autoLaunch);
+  }, desktopPreferences.autoLaunch, desktopIcon());
   registerIpcHandlers();
   rescan();
   if (windowRequested || !startInTray(process.argv, openedAtLogin)) await showMainWindow();

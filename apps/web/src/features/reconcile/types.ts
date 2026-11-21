@@ -173,7 +173,7 @@ export function formatReconcileBannerCopy(summary: ReconcileScanSummary): Reconc
   if (conflicts > 0) {
     parts.push("合并前将自动备份至 ~/.skills-hub/backups/，全部冲突异版零丢失留存冲突中心。");
   } else if (actionableDirs > 0) {
-    parts.push("建议先自动备份并收敛入唯一真源，原地替换为纯软链接。");
+    parts.push("建议先备份，再把选中的技能复制到技能文件夹，并更新客户端链接。");
   } else {
     parts.push("未发现待接管的野生真目录或同名版本冲突。");
   }

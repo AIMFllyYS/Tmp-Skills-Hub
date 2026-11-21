@@ -72,6 +72,8 @@ apps/desktop ──(import 编程接口)──→ packages/cli ──(import)─
 
 ## 六、构建、打包与无签名社团分发权衡
 
+Windows 安装向导在首次安装时询问「技能文件夹」。每个受管技能只保存一份，各客户端共用这里的原文件。向导只把候选路径保存在当前用户桌面配置的 `setup-folder.txt`，首次引导仍需用户点击「初始化库存」才创建库存、安装指南和建链。已有库存沿用配置。以后可在「设置 → 技能文件夹 → 更换位置」预览迁移。安装器、快捷方式、桌面窗口和托盘取自同一套浅色图标。覆盖安装沿用既有 Windows 应用标识。
+
 - **打包链路**：使用 `esbuild` 将 Electron 主进程与预加载脚本编译打包为单产物，再通过 `electron-builder` 生成各平台安装包/便携版（`apps/desktop/electron-builder.yml`：Windows `nsis` / `portable`、macOS `dmg`、Linux `AppImage`）。
 - **无签名（unsigned）默认策略的权衡**：
   - 现阶段定位是**社团内部试验分发**，购置商业 Windows EV 代码签名证书与 Apple Developer 公证账号会产生持续费用并阻塞自动化打包链路。

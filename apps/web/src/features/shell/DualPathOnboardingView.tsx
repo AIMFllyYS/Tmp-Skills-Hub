@@ -4,13 +4,14 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ICON_STROKE, IconBadge, SingleSourceGlyph } from "@/components/ui/icon";
+import { ICON_STROKE, IconBadge } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PathField } from "@/components/ui/path-field";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { FolderPicker } from "./FolderPicker.js";
 import { cn } from "@/lib/utils";
 
 export interface DualPathInitOptions {
@@ -23,6 +24,7 @@ export interface DualPathOnboardingViewProps {
   clientCount: number;
   defaultStateRoot?: string;
   defaultSkillsRoot?: string;
+  initialSkillsRoot?: string;
   gitDetected?: boolean;
   gitVersion?: string;
   showGitOptions?: boolean;
@@ -38,6 +40,7 @@ export function DualPathOnboardingView({
   clientCount,
   defaultStateRoot = "~/.skills-hub",
   defaultSkillsRoot = "~/.skills-hub/skills",
+  initialSkillsRoot,
   gitDetected = true,
   gitVersion,
   showGitOptions = true,
@@ -46,7 +49,7 @@ export function DualPathOnboardingView({
   onOpenAgent,
   className,
 }: DualPathOnboardingViewProps): React.JSX.Element {
-  const [skillsRoot, setSkillsRoot] = useState(defaultSkillsRoot);
+  const [skillsRoot, setSkillsRoot] = useState(initialSkillsRoot || defaultSkillsRoot);
   const [enableGit, setEnableGit] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -73,13 +76,11 @@ export function DualPathOnboardingView({
     <ScrollArea className={cn("min-h-0 flex-1 bg-canvas/55", className)}>
       <div className="p-6">
         <div className="flex items-start gap-3.5">
-          <IconBadge size="lg" tone="obsidian">
-            <SingleSourceGlyph size={20} />
-          </IconBadge>
+          <img src="/assets/skills-hub.png" alt="" width={48} height={48} />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">{title}</h1>
             <p className="mt-1 text-sm text-ink-mid">
-              本地技能库存尚未初始化。
+              选择技能文件夹，开始管理这台电脑上的技能。
               {clientCount > 0 ? "已检测到 " + String(clientCount) + " 个本机应用。" : ""}
             </p>
           </div>
@@ -87,36 +88,19 @@ export function DualPathOnboardingView({
 
         <Card className="mt-6 max-w-2xl space-y-5">
           <div className="space-y-1">
-            <h2 className="text-base font-semibold tracking-tight text-ink-strong">确认目录布局并初始化库存</h2>
+            <h2 className="text-base font-semibold tracking-tight text-ink-strong">设置技能文件夹</h2>
             <p className="text-sm leading-relaxed text-ink-mid">
-              状态数据与技能资产分离存放，便于唯一真源独立纳入版本控制。
+              每个受管技能只保存一份，Codex、WorkBuddy 等客户端共用这里的原文件。
             </p>
           </div>
 
-          <section className="space-y-1.5" aria-label="控制与备份中心">
-            <PathField
-              label="控制与备份中心"
-              path={defaultStateRoot}
-              tag="默认固定，不建议修改"
-              hint="配置 / 台账 / 备份 / 冲突池"
-              onCopyError={() => toast.error("无法复制路径")}
-              testId="onboarding-state-root"
-            />
-            <p className="text-xs leading-relaxed text-ink-mid">
-              固定存放 <code className="rounded bg-surface px-1 py-0.5 font-mono text-ink-strong">config.json</code>、软链接台账、去重备份快照与冲突变体池，不直接混入技能仓库。
-            </p>
-          </section>
-
-          <Separator />
-
-          <section className="space-y-2.5" aria-label="唯一真源目录">
+          <section className="space-y-2.5" aria-label="技能文件夹">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <IconBadge size="xs" tone="surface">
                   <Folder className="size-3.5" strokeWidth={ICON_STROKE} />
                 </IconBadge>
-                <Label htmlFor="dual-path-skills-root">唯一真源目录（skillsRoot）</Label>
-                <Badge tone="slate">可自定义</Badge>
+                <Label htmlFor="dual-path-skills-root">技能文件夹</Label>
               </div>
               {isCustomSkillsRoot && (
                 <Button
@@ -131,21 +115,25 @@ export function DualPathOnboardingView({
                 </Button>
               )}
             </div>
-            <Input
-              id="dual-path-skills-root"
-              value={skillsRoot}
-              onChange={(e) => setSkillsRoot(e.target.value)}
-              placeholder={defaultSkillsRoot}
-              disabled={busy}
-              data-testid="store-init-path"
-              className="font-mono text-xs"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="dual-path-skills-root"
+                value={skillsRoot}
+                onChange={(e) => setSkillsRoot(e.target.value)}
+                placeholder={defaultSkillsRoot}
+                disabled={busy}
+                data-testid="store-init-path"
+                className="font-mono text-xs"
+              />
+              <FolderPicker disabled={busy} onPick={setSkillsRoot} />
+            </div>
             <p className="text-xs leading-relaxed text-ink-mid">
-              所有活跃 Skill 的唯一实体目录，各应用内仅保留指向此处的纯软链接。默认位于{" "}
-              <code className="rounded bg-surface px-1 py-0.5 font-mono text-ink-strong">{defaultSkillsRoot}</code>
-              ，也可指定到 D 盘等位置的独立目录。
+              选择空文件夹，或填写一个新文件夹的路径。以后可以在设置里更换。
             </p>
           </section>
+
+          <PathField label="设置与备份" path={defaultStateRoot} tag="由应用管理"
+            onCopyError={() => toast.error("无法复制路径")} testId="onboarding-state-root" />
 
           {gitOptions !== undefined && (
             <>
@@ -166,7 +154,7 @@ export function DualPathOnboardingView({
                     </IconBadge>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Label htmlFor="dual-path-git-toggle">为唯一真源开启本地 Git 版本控制</Label>
+                        <Label htmlFor="dual-path-git-toggle">为技能文件夹开启本地 Git 版本控制</Label>
                         {gitDetected ? (
                           <Badge tone="success" dot>
                             {gitVersion !== undefined && gitVersion !== "" ? "Git " + gitVersion : "已检测到 Git"}
@@ -189,7 +177,7 @@ export function DualPathOnboardingView({
                     checked={effectiveGitEnabled}
                     disabled={busy || !gitDetected}
                     onCheckedChange={setEnableGit}
-                    aria-label="为唯一真源开启本地 Git 版本控制"
+                    aria-label="为技能文件夹开启本地 Git 版本控制"
                   />
                 </div>
 

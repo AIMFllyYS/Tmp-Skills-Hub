@@ -73,10 +73,10 @@ describe("validateMigrateTargetPath", () => {
   it("拒绝与当前真源目录等价的路径（含尾斜杠与 Windows 大小写）", () => {
     expect(
       validateMigrateTargetPath("c:/users/alice/.skills-hub/skills/", "C:\\Users\\Alice\\.skills-hub\\skills"),
-    ).toBe("目标路径不能与当前唯一真源目录相同");
+    ).toBe("目标路径不能与当前技能文件夹相同");
     expect(
       validateMigrateTargetPath("/Users/alice/.skills-hub/skills/", "/Users/alice/.skills-hub/skills"),
-    ).toBe("目标路径不能与当前唯一真源目录相同");
+    ).toBe("目标路径不能与当前技能文件夹相同");
   });
 
   it("接受合法的 Windows 盘符、UNC 与 POSIX 绝对路径", () => {
@@ -131,7 +131,8 @@ describe("formatReconcileBannerCopy", () => {
     const copy = formatReconcileBannerCopy(makeSummary({ unmanagedRealDirs: 4 }));
     expect(copy.tone).toBe("neutral");
     expect(copy.title).toContain("4 个本地新增/未接管 Skill");
-    expect(copy.description).toContain("纯软链接");
+    expect(copy.description).toContain("复制到技能文件夹");
+    expect(copy.description).toContain("更新客户端链接");
   });
 
   it("仅有被覆写受管链接时给出精准提示", () => {

@@ -19,6 +19,8 @@ export function StoreOnboarding({ onInit, clients, ...props }: StoreOnboardingPr
   const [report, setReport] = useState<NonNullable<StoreInitResponse["guide"]> | null>(null);
   const [root, setRoot] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const desktop = globalThis.window?.skillsHubDesktop;
+  const stateRoot = desktop?.stateFolder;
   const targets = clients.map(client => client.skillsDir);
 
   const install = async (skillsRoot: string | undefined, dirs: string[]): Promise<void> => {
@@ -38,7 +40,7 @@ export function StoreOnboarding({ onInit, clients, ...props }: StoreOnboardingPr
         <Card className="max-w-2xl space-y-3">
           <h2 className="text-lg font-semibold">管理指南安装结果</h2>
           {report.error && <p role="alert">{report.error}</p>}
-          {!report.error && !report.clients.length && <p>指南已保存到唯一真源。尚未发现客户端。</p>}
+          {!report.error && !report.clients.length && <p>指南已保存到技能文件夹。尚未发现客户端。</p>}
           <ul>{report.clients.map(item => <li key={item.skillsDir} className="break-all">{item.skillsDir} · {item.message}</li>)}</ul>
           {(report.error || failed.length > 0) && <Button disabled={busy} onClick={async () => {
             setBusy(true);
@@ -58,13 +60,15 @@ export function StoreOnboarding({ onInit, clients, ...props }: StoreOnboardingPr
   }
   return (
     <DualPathOnboardingView {...props} clientCount={clients.length} showGitOptions={false}
+      {...(stateRoot ? { defaultStateRoot: stateRoot, defaultSkillsRoot: stateRoot + (stateRoot.includes("\\") ? "\\" : "/") + "skills" } : {})}
+      {...(desktop?.initialFolder ? { initialSkillsRoot: desktop.initialFolder } : {})}
       gitOptions={<>
         <section className="space-y-2">
           <h3 className="font-semibold">安装 Skills Hub 管理指南</h3>
-          <p>点击初始化后，随包的 skills-hub 指南将保存到上方唯一真源，并为以下客户端创建目录链接。</p>
+          <p>点击初始化后，随包的 skills-hub 指南将保存到上方的技能文件夹，并为以下客户端创建目录链接。</p>
           {clients.length ? <ul className="max-h-40 overflow-auto text-xs">{clients.map(client =>
             <li className="break-all" key={client.skillsDir}>{client.clientId} · {client.skillsDir}</li>)}</ul>
-            : <p>尚未发现客户端，将仅安装到唯一真源。</p>}
+            : <p>尚未发现客户端，将仅安装到技能文件夹。</p>}
         </section>
         <GitSettingsPanel enableOnInit={enableGit} onEnabledChange={setEnableGit} />
       </>}

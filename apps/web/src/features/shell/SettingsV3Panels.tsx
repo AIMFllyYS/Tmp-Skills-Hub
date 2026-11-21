@@ -22,6 +22,7 @@ import { SettingGroup, SettingRow } from "@/components/ui/setting-row";
 import { StepList, type StepItem } from "@/components/ui/step-list";
 import { Switch } from "@/components/ui/switch";
 import { TruncateTip } from "@/components/ui/tooltip";
+import { FolderPicker } from "./FolderPicker.js";
 import { cn } from "@/lib/utils";
 
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
@@ -61,7 +62,7 @@ export function validateMigrateTargetPath(targetPath: string, currentPath: strin
   }
 
   if (currentPath.trim() !== "" && normalizePathForCompare(trimmed) === normalizePathForCompare(currentPath)) {
-    return "目标路径不能与当前唯一真源目录相同";
+    return "目标路径不能与当前技能文件夹相同";
   }
   return null;
 }
@@ -94,17 +95,9 @@ export function DualPathSettingsSection({
   return (
     <section className={cn("space-y-4", className)} data-testid="dual-path-settings-section">
       <PathField
-        label="控制与备份中心"
-        path={stateRoot}
-        tag="固定控制与备份中心"
-        {...(stateHint !== undefined ? { hint: stateHint } : {})}
-        onCopyError={handleCopyError}
-        testId="settings-state-root"
-      />
-      <PathField
-        label="唯一真源目录"
+        label="技能文件夹"
         path={skillsRoot}
-        tag="唯一真源"
+        hint="各客户端共用这里的技能原文件"
         onCopyError={handleCopyError}
         testId="settings-skills-root"
         trailing={
@@ -117,13 +110,21 @@ export function DualPathSettingsSection({
             data-testid="settings-migrate-button"
             className="h-7 shrink-0 bg-white px-2.5 text-xs"
           >
-            迁移路径
+            更换位置
           </Button>
         }
       />
+      <PathField
+        label="设置与备份"
+        path={stateRoot}
+        tag="由应用管理"
+        {...(stateHint !== undefined ? { hint: stateHint } : {})}
+        onCopyError={handleCopyError}
+        testId="settings-state-root"
+      />
       {layoutMode === "legacy" && (
         <p className="text-xs text-ink-mid">
-          当前兼容旧版单根目录结构；通过「迁移路径」指定新真源目录后，将自动升级为状态与资产分离布局。
+          当前兼容旧版单根目录结构；通过「更换位置」指定新文件夹后，将自动升级为状态与资产分离布局。
         </p>
       )}
     </section>
@@ -140,7 +141,7 @@ export interface MigrateStoreDialogProps {
   nested?: boolean;
 }
 
-/** 唯一真源目录安全迁移弹窗：路径校验 + 4 步原子迁移预演 + 零真删除保障。 */
+/** 技能文件夹安全迁移弹窗：路径校验 + 4 步原子迁移预演 + 零真删除保障。 */
 export function MigrateStoreDialog({
   open,
   onOpenChange,
@@ -162,13 +163,13 @@ export function MigrateStoreDialog({
   const steps: StepItem[] = [
     {
       id: "copy-verify",
-      title: "拷贝并逐项 SHA-256 校验",
+      title: "复制技能并核对内容",
       detail: "复制全部活跃 Skill 至目标目录，校验字节与内容指纹完全一致",
       status: busy ? "active" : "idle",
     },
     {
       id: "relink-journal",
-      title: "Journal 原子重指全部受管软链接",
+      title: "更新客户端链接",
       detail: linkCount === undefined
         ? "将客户端软链接切换至新路径；任一步失败将逆序回滚"
         : "安全切换 " + String(linkCount) + " 条客户端软链接至新路径；任一步失败将逆序回滚",
@@ -182,8 +183,8 @@ export function MigrateStoreDialog({
     },
     {
       id: "aside-old",
-      title: "旧目录 .pre-migrate-* 旁路留底",
-      detail: "原目录仅重命名旁路保留，绝不执行永久删除",
+      title: "保留原文件夹作为备份",
+      detail: "保留一份迁移前的原文件。Windows 占用旧文件夹时，备份会留在原位置。",
       status: "idle",
     },
   ];
@@ -223,14 +224,14 @@ export function MigrateStoreDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal={busy}>
       <DialogContent nested={nested} className="max-w-lg" data-testid="migrate-store-dialog">
-        <DialogTitle>迁移唯一真源目录</DialogTitle>
+        <DialogTitle>更换技能文件夹</DialogTitle>
         <DialogDescription>
-          将所有受管 Skill 实体迁移到新路径，并自动重指全部客户端软链接。
+          先检查新位置。确认后会复制技能文件、逐项校验内容，并更新客户端链接。
         </DialogDescription>
 
         <div className="mt-4 space-y-4">
           <div className="space-y-1">
-            <span className="text-xs font-medium text-ink-faint">当前唯一真源</span>
+            <span className="text-xs font-medium text-ink-faint">当前技能文件夹</span>
             <div className="rounded-xl border border-line bg-canvas px-3 py-2">
               <TruncateTip
                 text={currentSkillsRoot === "" ? "未配置" : currentSkillsRoot}
@@ -240,21 +241,28 @@ export function MigrateStoreDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="migrate-target-skills-root">新目标路径（绝对路径）</Label>
-            <Input
-              id="migrate-target-skills-root"
-              value={targetPath}
-              onChange={(e) => {
-                setTargetPath(e.target.value);
+            <Label htmlFor="migrate-target-skills-root">新文件夹</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="migrate-target-skills-root"
+                value={targetPath}
+                onChange={(e) => {
+                  setTargetPath(e.target.value);
+                  setPlan(null);
+                  if (!touched) setTouched(true);
+                }}
+                placeholder="例如 D:\skills-hub\skills 或 /Users/name/skills-hub/skills"
+                disabled={busy}
+                aria-invalid={showError}
+                data-testid="migrate-target-path"
+                className="font-mono text-xs"
+              />
+              <FolderPicker disabled={busy} onPick={(folder) => {
+                setTargetPath(folder);
                 setPlan(null);
-                if (!touched) setTouched(true);
-              }}
-              placeholder="例如 D:\skills-hub\skills 或 /Users/name/skills-hub/skills"
-              disabled={busy}
-              aria-invalid={showError}
-              data-testid="migrate-target-path"
-              className="font-mono text-xs"
-            />
+                setTouched(true);
+              }} />
+            </div>
             {showError ? (
               <p className="text-xs text-red-700" role="alert">
                 {validationError}
@@ -431,7 +439,7 @@ export function SelfHealSection({
                       </Badge>
                     </div>
                     <p className="text-xs leading-relaxed text-ink-mid">
-                      认领当前唯一真源文件内容，重算确定性 SHA-256 指纹并同步更新索引与软链接台账。
+                      认领当前技能文件夹文件内容，重算确定性 SHA-256 指纹并同步更新索引与软链接台账。
                     </p>
                   </div>
                 </div>

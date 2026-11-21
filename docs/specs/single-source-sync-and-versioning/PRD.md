@@ -141,7 +141,7 @@ apps/web ───────────────(HTTP 127.0.0.1 /api/*)─
      - 支持 `--dry-run`、`--yes`、`--json`。
   4. **`skills-hub migrate --to <absPath>`** + **`POST /api/store/migrate`**（新文件 `packages/cli/src/store-migrate.ts`）：
      - 校验目标路径为绝对路径、非已有非空目录且非客户端目录；
-     - 步骤：校验目标可写 → 拷贝当前 `skillsRoot` 下所有活跃 skill 至新路径并逐个重算 SHA-256 校验一致 → 按客户端分批调用 `applyLinkSet`（journal 原子切换）将全部受管软链接重定向到新 `skillsRoot` → 原子更新 `config.json`（及运行中 `ui-server` 动态上下文）→ 将旧 `skillsRoot` 重命名为 `<old>.pre-migrate-<timestamp>` 旁路留底（零真删除）；
+     - 步骤：校验目标可写 → 拷贝当前 `skillsRoot` 下所有活跃 skill 至新路径并逐个重算 SHA-256 校验一致 → 按客户端分批调用 `applyLinkSet`（journal 原子切换）将全部受管软链接重定向到新 `skillsRoot` → 原子更新 `config.json`（及运行中 `ui-server` 动态上下文）→ 将旧 `skillsRoot` 重命名为 `<old>.pre-migrate-<timestamp>` 旁路留底（零真删除）。若 Windows 正占用旧目录而拒绝改名，原文件原地保留并返回实际备份路径；
      - 任一步失败逆序回滚软链接并保持旧 `config.json` 不变。
   5. **`GET /api/settings` & `PATCH /api/settings`**：返回 `stateRoot`、`skillsRoot`、`layoutMode`、`stateDiskBytes`、`git` 配置、`autoLaunch`、`silentTray` 及运行环境是否为桌面端；`PATCH` 原子写回可变更项。
 - **验收标准**：

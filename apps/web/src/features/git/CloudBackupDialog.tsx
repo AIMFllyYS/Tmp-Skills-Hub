@@ -102,7 +102,7 @@ export function CloudBackupDialog({
           <div className="min-w-0 flex-1">
             <DialogTitle>一键创建云端备份仓库</DialogTitle>
             <DialogDescription>
-              通过本机 gh CLI 在你的 GitHub 账号下创建仓库，并将唯一真源目录推送至 origin。
+              通过本机 gh CLI 在你的 GitHub 账号下创建仓库，并将技能文件夹推送至 origin。
             </DialogDescription>
           </div>
         </div>
@@ -217,7 +217,7 @@ export function CloudBackupDialog({
                 surface="card"
                 testId="cloud-public-warning"
                 title="公开仓库将向互联网暴露全部 Skill 文件"
-                description="请确认唯一真源目录中不含 API Key、内网地址、私人账号或敏感业务数据。除非明确需要对外分享，强烈建议选择 Private（私有仓库）。"
+                description="请确认技能文件夹中不含 API Key、内网地址、私人账号或敏感业务数据。除非明确需要对外分享，强烈建议选择 Private（私有仓库）。"
               />
             )}
 

@@ -177,7 +177,7 @@ export function ConflictsView({
           icon={<CheckCircle2 className="size-5" strokeWidth={ICON_STROKE} />}
           iconTone="success"
           title="当前没有待处理的同名冲突"
-          description="所有客户端中的同名 Skill 均已收敛至唯一真源，不存在未决版本分叉。"
+          description="各客户端共用已选定的技能版本，当前没有待处理的冲突。"
           className="max-w-md bg-white"
         />
       </div>
@@ -386,7 +386,7 @@ export function ConflictsView({
           body={
             "将保留「" +
             activeConflict.skillName +
-            "」当前唯一真源（" +
+            "」当前版本（" +
             activeConflict.activeHash.slice(0, 12) +
             "），其余 " +
             String(collidingVariants.length) +
@@ -406,11 +406,11 @@ export function ConflictsView({
           <ConfirmDialog
             title="确认将所选变体设为真源"
             body={
-              "操作前会先把当前唯一真源完整快照保存至 archive/versions/，再将变体 " +
+              "操作前会先把当前版本的完整快照保存至 archive/versions/，再将变体 " +
               effectiveVariantId +
               " 扶正为「" +
               activeConflict.skillName +
-              "」的唯一真源，其余落选变体归档至 archive/conflicts/。所有软链接无需重建，会自动指向新内容。"
+              "」的当前版本，其余落选变体归档至 archive/conflicts/。所有软链接无需重建，会自动指向新内容。"
             }
             confirmLabel="设为真源"
             tone="default"

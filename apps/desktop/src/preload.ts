@@ -7,6 +7,8 @@ export interface OpenPathResult {
 
 export interface SkillsHubDesktopBridge {
   isDesktop: true;
+  initialFolder: string;
+  stateFolder: string;
   pickDirectory: () => Promise<string | null>;
   openInExplorer: (targetPath: string) => Promise<OpenPathResult>;
   onReconcileRequested: (callback: () => void) => () => void;
@@ -19,8 +21,14 @@ function subscribe(channel: "desktop:open-reconcile" | "desktop:preferences-chan
   return () => { ipcRenderer.removeListener(channel, listener); };
 }
 
+function folderArgument(prefix: string): string {
+  return decodeURIComponent(process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length) ?? "");
+}
+
 const bridge: SkillsHubDesktopBridge = {
   isDesktop: true,
+  initialFolder: folderArgument("--hub-initial-folder="),
+  stateFolder: folderArgument("--hub-state-folder="),
   pickDirectory: () => ipcRenderer.invoke("desktop:pick-directory") as Promise<string | null>,
   openInExplorer: (targetPath: string) =>
     ipcRenderer.invoke("desktop:open-path", targetPath) as Promise<OpenPathResult>,
