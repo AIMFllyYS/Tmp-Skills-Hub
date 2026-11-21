@@ -49,7 +49,7 @@ import { registerContentRoutes } from "./ui-content.js";
 import { registerLinkRoutes } from "./ui-links.js";
 import { registerReconcileRoutes } from "./ui-reconcile.js";
 import { registerConflictRoutes } from "./ui-conflicts.js";
-import { checkBundledSelfSkill } from "./self-skill.js";
+import { checkBundledSelfSkill, installInitialGuide } from "./self-skill.js";
 import { registerSettingsRoutes } from "./ui-settings.js";
 import { readStorePreferences } from "./store-preferences.js";
 import { registerGitRoutes } from "./ui-git.js";
@@ -131,6 +131,7 @@ async function measureBodyBytes(
  */
 
 export interface UiAppOptions {
+  selfSkillDir?: string;
   /** 库存根;null = 未配置(端点返回 store-not-configured) */
   storeRoot?: string | null;
   paths?: HubPaths | null;
@@ -311,7 +312,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   app.post("/api/store/init", async (c) => {
     const text = await c.req.text().catch(() => "");
-    let raw: { storeRoot?: unknown; skillsRoot?: unknown } = {};
+    let raw: { storeRoot?: unknown; skillsRoot?: unknown; guideTargets?: unknown } = {};
     if (text.trim() !== "") {
       try {
         const parsed = JSON.parse(text) as unknown;
@@ -329,6 +330,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     if (raw.skillsRoot !== undefined && (typeof raw.skillsRoot !== "string" || raw.storeRoot !== undefined)) {
       return err(c, "store-init", "bad-usage", "skillsRoot 必须单独提供字符串路径");
     }
+    const targets = raw.guideTargets;
+    if (targets !== undefined && (!Array.isArray(targets) || !targets.every((v: unknown) => typeof v === "string"))) {
+      return err(c, "store-init", "bad-usage", "guideTargets 必须是客户端目录数组");
+    }
     const res = await performInit(home, typeof raw.skillsRoot === "string" ? { skillsRoot: raw.skillsRoot } : raw.storeRoot);
     if (!res.ok) return err(c, "store-init", res.code, res.message);
     setUiPaths(ctx, res.paths);
@@ -338,6 +343,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       storeRoot: res.storeRoot,
       ...res.paths,
       pointerFile: res.pointerFile,
+      ...(targets === undefined ? {} : { guide: await installInitialGuide(home, res.paths, targets as string[], opts.selfSkillDir) }),
       layoutCreated: res.layoutCreated,
       builtinGroupsWrote: res.builtinGroupsWrote,
     });
@@ -688,6 +694,7 @@ export async function startUiServer(opts: StartUiServerOptions = {}): Promise<Ui
   const appOpts: UiAppOptions = { paths, home: h, desktop: opts.desktop === true, gitRuntime: { ...opts.gitRuntime, deviceLogin } };
   if (opts.onDesktopPreferences !== undefined) appOpts.onDesktopPreferences = opts.onDesktopPreferences;
   if (opts.webRoot !== undefined) appOpts.webRoot = opts.webRoot;
+  if (opts.selfSkillDir !== undefined) appOpts.selfSkillDir = opts.selfSkillDir;
   const app = createUiApp(appOpts);
   const server = createAdaptorServer({ fetch: app.fetch, hostname: "127.0.0.1" });
 

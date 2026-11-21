@@ -89,7 +89,7 @@ export function DualPathOnboardingView({
           <div className="space-y-1">
             <h2 className="text-base font-semibold tracking-tight text-ink-strong">确认目录布局并初始化库存</h2>
             <p className="text-sm leading-relaxed text-ink-mid">
-              状态数据与技能资产分离存放，便于唯一真源独立纳入版本控制。初始化阶段不会修改任何已有客户端文件。
+              状态数据与技能资产分离存放，便于唯一真源独立纳入版本控制。
             </p>
           </div>
 

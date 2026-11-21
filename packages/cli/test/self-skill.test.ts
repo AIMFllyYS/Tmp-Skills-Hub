@@ -101,3 +101,37 @@ it("leaves a locally adopted guide untouched without the bundled origin", async 
   expect(await syncSelfSkill(home, paths, shipped)).toMatchObject({ status: "unmanaged" });
   expect(await readFile(path.join(paths.skillsRoot, "skills-hub", "SKILL.md"), "utf8")).toBe(legacy);
 });
+
+it("installs the guide after explicit GUI consent, reports conflicts, retries only the requested destination and preserves opt-outs", async () => {
+  const codex = path.join(home, ".codex", "skills");
+  const buddy = path.join(home, ".workbuddy", "skills");
+  const occupied = path.join(buddy, "skills-hub");
+  await mkdir(codex, { recursive: true });
+  await mkdir(occupied, { recursive: true });
+  await writeFile(path.join(occupied, "SKILL.md"), "mine");
+  const service = await startUiServer({ home, port: 0, selfSkillDir: shipped });
+  const init = async (dirs: string[]) => {
+    const response = await fetch(service.url + "/api/store/init", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guideTargets: dirs }),
+    });
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{guide: {clients: {ok: boolean; skillsDir: string}[]}}>;
+  };
+  try {
+    await fetch(service.url + "/api/clients");
+    await expect(lstat(path.join(home, ".skills-hub", "config.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await init([codex, buddy])).guide.clients).toMatchObject([
+      { skillsDir: codex, ok: true }, { skillsDir: buddy, ok: false },
+    ]);
+    expect(await readFile(path.join(occupied, "SKILL.md"), "utf8")).toBe("mine");
+    const resolved = await resolveConfiguredHubPaths(home);
+    if (!resolved.ok) throw new Error("missing store");
+    const target = await realpath(path.join(resolved.paths.skillsRoot, "skills-hub"));
+    expect(await realpath(path.join(codex, "skills-hub"))).toBe(target);
+    await performLinkChange({ storeRoot: resolved.paths, clientId: "codex", scope: "global", skillsDir: codex, dirNames: ["skills-hub"] }, "disable");
+    await rm(occupied, { recursive: true });
+    expect((await init([buddy])).guide.clients).toMatchObject([{ skillsDir: buddy, ok: true }]);
+    expect(await realpath(occupied)).toBe(target);
+    await expect(lstat(path.join(codex, "skills-hub"))).rejects.toMatchObject({ code: "ENOENT" });
+  } finally { await service.close(); }
+});

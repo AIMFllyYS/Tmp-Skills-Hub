@@ -65,7 +65,7 @@
 
 | 端点 | body | 成功响应 | 失败 |
 | --- | --- | --- | --- |
-| POST /api/store/init | `{ skillsRoot? }`（缺省 `<home>/.skills-hub/skills`；兼容旧 `{ storeRoot? }` 请求） | `{ ok, command: "store-init", stateRoot, skillsRoot, layoutMode, storeRoot, pointerFile, layoutCreated, builtinGroupsWrote }` | 400 bad-usage（非法路径或已初始化后更换真源）; 500 io-error |
+| POST /api/store/init | `{ skillsRoot?, guideTargets? }`（缺省 `<home>/.skills-hub/skills`；兼容旧 `{ storeRoot? }` 请求） | `{ ok, command: "store-init", stateRoot, skillsRoot, layoutMode, storeRoot, pointerFile, layoutCreated, builtinGroupsWrote, guide? }`。引导页在显式确认后发送所展示的客户端目录数组 `guideTargets`。空数组仅安装到真源；省略则保持原初始化行为。`guide.clients` 逐项目报告结果，可只重试失败的目录。 | 400 bad-usage（非法路径或已初始化后更换真源）; 500 io-error |
 | GET /api/settings | — | `{ ok, command: "settings", stateRoot, skillsRoot, layoutMode, stateDiskBytes, git, autoLaunch, silentTray, isDesktop }` | 503 store-not-configured |
 | PATCH /api/settings | `{ gitEnabled?, autoLaunch?, silentTray? }`（仅布尔值） | 同 GET，配置原子写回。Git 启用行为同 `/api/git/toggle`。桌面模式同步登录项与托盘，系统拒绝时保留旧配置 | 400 bad-usage; 409 git-unavailable; 500 io-error; 503 store-not-configured |
 | POST /api/store/migrate | `{ targetSkillsRoot, dryRun? }` | `{ ok, command: "store-migrate", paths, skills, movedLinks, aside, dryRun }` | 400 bad-usage; 409 conflict; 500 io-error; 503 store-not-configured |

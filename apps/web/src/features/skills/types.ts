@@ -33,6 +33,7 @@ export interface SkillsResponse {
 }
 
 export interface StoreInitResponse {
+  guide?: { error?: string; clients: { skillsDir: string; ok: boolean; message: string }[] };
   ok: true;
   command: string;
   storeRoot: string;

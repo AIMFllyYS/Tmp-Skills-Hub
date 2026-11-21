@@ -33,11 +33,11 @@ export async function fetchCatalog(): Promise<{ storeRoot: string; skills: Skill
 }
 
 /** 初始化技能库存(未配置时由前端引导页触发)。 */
-export async function initStore(skillsRoot?: string): Promise<StoreInitResponse> {
+export async function initStore(skillsRoot?: string, guideTargets?: string[]): Promise<StoreInitResponse> {
   const trimmed = skillsRoot?.trim() ?? "";
   return apiRequest<StoreInitResponse>("/api/store/init", {
     method: "POST",
-    body: trimmed === "" ? {} : { skillsRoot: trimmed },
+    body: { ...(trimmed ? { skillsRoot: trimmed } : {}), ...(guideTargets ? { guideTargets } : {}) },
   });
 }
 
