@@ -12,13 +12,12 @@ import {
 } from "ai";
 import { mapLlmError, scrub } from "../src/llm/errors.js";
 import {
-  createQiniuModel,
+  createAiModel,
   DEFAULT_MODEL,
-  DEFAULT_QINIU_BASE_URL,
   injectThinkingOff,
   llmBaseUrl,
   notConfiguredMessage,
-  qiniuApiKey,
+  aiApiKey,
   resolveModel,
 } from "../src/llm/provider.js";
 import { loadEnvFile } from "../src/env.js";
@@ -42,13 +41,13 @@ function saveEnv(...keys: string[]): void {
 }
 
 describe("qiniu provider 配置", () => {
-  it("未配置密钥:qiniuApiKey 为空,提示可读且不含假 key", () => {
+  it("未配置密钥:aiApiKey 为空,提示可读且不含假 key", () => {
     saveEnv("QINIU_API_KEY");
     delete process.env.QINIU_API_KEY;
-    expect(qiniuApiKey()).toBeUndefined();
-    expect(notConfiguredMessage()).toContain("QINIU_API_KEY");
+    expect(aiApiKey()).toBeUndefined();
+    expect(notConfiguredMessage()).toContain("API Key");
     expect(notConfiguredMessage()).not.toMatch(/sk-[a-z0-9]{8,}/i);
-    expect(() => createQiniuModel(DEFAULT_MODEL)).toThrow(/QINIU_API_KEY/);
+    expect(() => createAiModel(DEFAULT_MODEL)).toThrow(/API Key/);
   });
 
   it("resolveModel:显式 > 环境 > 默认;llmBaseUrl 去尾斜杠", () => {
@@ -61,7 +60,8 @@ describe("qiniu provider 配置", () => {
     process.env.QINIU_BASE_URL = "https://example.com/v1/";
     expect(llmBaseUrl()).toBe("https://example.com/v1");
     delete process.env.QINIU_BASE_URL;
-    expect(llmBaseUrl()).toBe(DEFAULT_QINIU_BASE_URL);
+    delete process.env.QINIU_MODEL;
+    expect(llmBaseUrl()).toBe("https://api.deepseek.com");
   });
 
   it("injectThinkingOff 写入 enable_thinking:false,不覆盖其它字段", () => {
@@ -71,7 +71,7 @@ describe("qiniu provider 配置", () => {
     expect(body.stream).toBe(true);
   });
 
-  it("createQiniuModel 使用定制 fetch 发送 Bearer 认证与 enable_thinking:false", async () => {
+  it("createAiModel 使用定制 fetch 发送 Bearer 认证与 enable_thinking:false", async () => {
     saveEnv("QINIU_API_KEY", "QINIU_BASE_URL");
     process.env.QINIU_API_KEY = "qiniu-dummy-secret-99";
     process.env.QINIU_BASE_URL = "https://api.qnaigc.com/v1/";
@@ -98,7 +98,7 @@ describe("qiniu provider 配置", () => {
       );
     };
 
-    const model = createQiniuModel(DEFAULT_MODEL, { fetch: fakeFetch });
+    const model = createAiModel(DEFAULT_MODEL, { fetch: fakeFetch });
     const res = await generateText({ model, prompt: "ping" });
     expect(res.text).toBe("ok");
     expect(seenUrl).toBe("https://api.qnaigc.com/v1/chat/completions");
@@ -119,7 +119,7 @@ describe("mapLlmError & scrub", () => {
       }),
     );
     expect(mapped.code).toBe("api");
-    expect(mapped.message).toContain("QINIU_API_KEY");
+    expect(mapped.message).toContain("API Key");
     expect(mapped.message).not.toContain("sk-secretvalue");
   });
 

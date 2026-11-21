@@ -1,6 +1,6 @@
 {
   "name": "@skills-hub/desktop",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "skill-hub 桌面端外壳(Electron)",
   "license": "MIT",

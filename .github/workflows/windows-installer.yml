@@ -27,17 +27,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm --filter @skills-hub/desktop exec electron-builder --win --x64 --publish never
-      - name: Upgrade a real v0.3.0 installation on the disposable runner
+      - name: Upgrade a real v0.3.1 installation on the disposable runner
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $installDir = Join-Path $env:RUNNER_TEMP 'Skills Hub'
-          gh release download v0.3.0 --repo AIMFllyYS/Tmp-Skills-Hub --pattern Skills.Hub.Setup.0.3.0.exe --dir $env:RUNNER_TEMP
+          gh release download v0.3.1 --repo AIMFllyYS/Tmp-Skills-Hub --pattern Skills.Hub.Setup.0.3.1.exe --dir $env:RUNNER_TEMP
           if ($LASTEXITCODE) { throw 'Could not download the previous installer' }
-          $old = Join-Path $env:RUNNER_TEMP 'Skills.Hub.Setup.0.3.0.exe'
-          if ((Get-FileHash $old).Hash -ne '1fa9c29086081e62d6291e14bbbdbab66201b9ba4151b5cad9859d066e4845db') { throw 'Unexpected v0.3.0 installer' }
+          $old = Join-Path $env:RUNNER_TEMP 'Skills.Hub.Setup.0.3.1.exe'
+          if ((Get-FileHash $old).Hash -ne '4aef308ade9e1fd9150c130af1fb317c3b50ef9556b10418d930fef3ec8b48fe') { throw 'Unexpected v0.3.1 installer' }
           function Install($file, $arguments) {
             $proc = Start-Process -FilePath $file -ArgumentList $arguments -PassThru -Wait
             if ($proc.ExitCode -ne 0) { throw "Installer exited with $($proc.ExitCode)" }

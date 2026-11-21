@@ -544,7 +544,7 @@ describe("http-api 契约", () => {
     expect(degraded.status).toBe(503);
     const fail = (await degraded.json()) as { code: string; message: string };
     expect(fail.code).toBe("not-configured");
-    expect(fail.message).toContain("QINIU_API_KEY");
+    expect(fail.message).toContain("API Key");
     expect(fail.message).not.toMatch(/sk-|api[_-]?key\s*[:=]/i);
   });
 

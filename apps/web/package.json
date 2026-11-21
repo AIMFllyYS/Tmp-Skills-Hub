@@ -1,6 +1,6 @@
 {
   "name": "@skills-hub/web",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "skill-hub App 壳:统一查看(列表、搜索、来源分类、tag)",
   "type": "module",

@@ -3,6 +3,7 @@
  * 返回的 message 绝不含密钥。
  */
 
+import { AI_PROVIDERS } from "./presets.js";
 import { activeConnection } from "./connection.js";
 import {
   APICallError,
@@ -22,7 +23,7 @@ export type LlmFailureCode =
 
 const ERROR_HINTS: Record<number, string> = {
   400: "请求格式错误(按提示修正请求体)",
-  401: "认证失败，请检查「设置 → AI 连接」中的密钥或 QINIU_API_KEY",
+  401: "认证失败，请检查「设置 → AI 连接」所选服务的 API Key",
   402: "账户余额不足",
   422: "请求参数无效",
   429: "请求过于频繁(限流),请稍后重试",
@@ -34,7 +35,7 @@ const ERROR_HINTS: Record<number, string> = {
 export function scrub(text: string): string {
   const customKey = activeConnection.getStore()?.apiKey;
   let out = customKey ? text.split(customKey).join("[redacted]") : text;
-  for (const envKey of ["QINIU_API_KEY", "GITHUB_TOKEN"] as const) {
+  for (const envKey of [...AI_PROVIDERS.map(provider => provider.env + "_API_KEY"), "GITHUB_TOKEN"]) {
     const secret = process.env[envKey];
     if (secret !== undefined && secret.length >= 8 && out.includes(secret)) {
       out = out.split(secret).join("[redacted]");
@@ -65,7 +66,7 @@ export function mapLlmError(e: unknown): { code: LlmFailureCode; message: string
       return { code: "api", message: "AI 调用失败: " + ERROR_HINTS[401] };
     }
     const hint = status !== undefined ? ERROR_HINTS[status] : undefined;
-    return { code: "api", message: "AI 调用失败: " + (hint ?? "七牛云返回 HTTP " + String(status ?? "未知")) };
+    return { code: "api", message: "AI 调用失败: " + (hint ?? "模型服务返回 HTTP " + String(status ?? "未知")) };
   }
   if (NoObjectGeneratedError.isInstance(err) || JSONParseError.isInstance(err) || TypeValidationError.isInstance(err)) {
     return { code: "invalid-response", message: "AI 返回格式无效,无法解析为预期结构,请重试" };

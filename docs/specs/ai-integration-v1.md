@@ -1,4 +1,8 @@
-# AI 集成 v1——七牛云推理服务
+# AI 集成：OpenAI 兼容的多服务商连接
+
+## 0.3.2 现行口径
+
+DeepSeek、OpenRouter、OpenAI 和七牛云提供预设，也可手动指定兼容接口。新环境默认展示 DeepSeek。环境模式按上面的顺序选择首个有密钥的服务，或通过 `SKILLS_HUB_AI_PROVIDER` 指定服务。只读取该服务前缀下的 `_API_KEY`、`_BASE_URL` 和 `_MODEL`。模型列表和试连由用户显式触发；试连只发送固定的短消息。以下为七牛接入的历史背景。
 
 > 状态:生效 | 取代 [deepseek-integration-v0.md](deepseek-integration-v0.md)
 > 修订理由:供应商从 DeepSeek 官方切换为七牛云聚合推理——统一多模型入口、更便宜、支持 `enable_thinking` 开关、流式与工具调用(function calling),满足翻译流式化与新增 Agent 模块的需求。

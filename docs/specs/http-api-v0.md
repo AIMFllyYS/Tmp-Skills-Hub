@@ -8,6 +8,8 @@
 
 ### GUI 的 AI 连接设置
 
+`GET /api/settings/ai/providers` 返回服务商预设及当前环境选择。`POST /api/settings/ai/models` 和 `POST /api/settings/ai/test` 接受与保存设置相同的连接草案，分别读取模型目录和发送一条固定短消息，不保存草案。
+
 `GET /api/settings/ai` 返回来源 `mode`、`baseUrl`、`model`、`hasKey` 和是否支持加密持久化 `persistent`。`PUT /api/settings/ai` 接受 `{ mode: "custom", baseUrl, model, apiKey }` 或 `{ mode: "environment" }`。切回环境变量会清除手动保存的凭据。两个端点均可在库存初始化前使用。
 
 ## 1. 基础

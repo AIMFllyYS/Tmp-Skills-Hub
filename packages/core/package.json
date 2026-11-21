@@ -1,6 +1,6 @@
 {
   "name": "@skills-hub/core",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "skill-hub 确定性内核:库存、内容哈希、符号链接、接口抽象",
   "type": "module",

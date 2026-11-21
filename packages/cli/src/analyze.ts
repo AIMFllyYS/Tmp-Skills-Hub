@@ -10,7 +10,7 @@ import { readSkillMeta, readStoreIndex, type SkillRecord } from "@skills-hub/cor
 import path from "node:path";
 import { emitError, emitOk } from "./json-out.js";
 import { mapLlmError, type LlmFailureCode } from "./llm/errors.js";
-import { createQiniuModel, notConfiguredMessage, qiniuApiKey, resolveModel } from "./llm/provider.js";
+import { createAiModel, notConfiguredMessage, aiApiKey, resolveModel } from "./llm/provider.js";
 import { resolveSkill } from "./resolve-skill.js";
 
 export const MAX_TARGET_DESC_CHARS = 4_000;
@@ -82,12 +82,12 @@ export async function defaultGenerate(
   input: { system: string; prompt: string },
   opts: { model?: LanguageModel } = {},
 ): Promise<AnalyzeGenerateResult> {
-  if (opts.model === undefined && qiniuApiKey() === undefined) {
+  if (opts.model === undefined && aiApiKey() === undefined) {
     return { ok: false, code: "not-configured", message: notConfiguredMessage() };
   }
   try {
     const result = await generateText({
-      model: opts.model ?? createQiniuModel(resolveModel()),
+      model: opts.model ?? createAiModel(resolveModel()),
       system: input.system,
       prompt: input.prompt,
       output: Output.object({ schema: reportSchema }),
@@ -151,7 +151,7 @@ export async function performAnalyze(storeRoot: string | HubPaths, input: string
   });
   if (!result.ok) {
     if (result.code === "not-configured") {
-      return { ok: false, code: "not-configured", message: "未配置 QINIU_API_KEY,无法分析 — 请配置密钥后重试(不会编造结论)" };
+      return { ok: false, code: "not-configured", message: notConfiguredMessage() };
     }
     return { ok: false, code: "analyze-failed", message: "分析调用失败(" + result.code + "): " + result.message };
   }
