@@ -12,11 +12,18 @@ function displayBaseUrl(raw: string): string {
 }
 
 export function registerAiConnection(app: Hono, storage?: AiConnectionStorage): void {
-  let custom = storage?.load() ?? null;
+  let custom: ReturnType<AiConnectionStorage["load"]> = null;
+  let warning: string | undefined;
+  try { custom = storage?.load() ?? null; }
+  catch {
+    // Require an explicit choice before sending data to a different provider.
+    custom = { baseUrl: "", model: "", apiKey: "" };
+    warning = "无法解密上次保存的连接。请重新填写，或选择环境变量后保存。";
+  }
   const snapshot = () => ({
     ok: true, mode: custom ? "custom" : "environment", persistent: !!storage,
     baseUrl: custom?.baseUrl ?? displayBaseUrl(llmBaseUrl()), model: custom?.model ?? resolveModel(),
-    hasKey: Boolean(custom?.apiKey ?? qiniuApiKey()),
+    hasKey: Boolean(custom?.apiKey ?? qiniuApiKey()), ...(warning ? { warning } : {}),
   });
 
   app.get("/api/settings/ai", c => c.json(snapshot()));
@@ -30,6 +37,7 @@ export function registerAiConnection(app: Hono, storage?: AiConnectionStorage): 
     } else if (input.mode !== "environment") return err(c, "ai-settings", "bad-usage", "未知连接方式");
     storage?.save(next);
     custom = next;
+    warning = undefined;
     return c.json(snapshot());
   });
   app.use("/api/*", (_, next) => activeConnection.run(custom, next));

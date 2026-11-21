@@ -5,6 +5,7 @@ import { app, safeStorage } from "electron";
 import type { AiConnectionStorage } from "@skills-hub/cli";
 
 export function desktopAiStorage(): AiConnectionStorage | undefined {
+  if (process.env.SKILLS_HUB_HOME && !app.commandLine.hasSwitch("user-data-dir")) return undefined;
   if (!safeStorage.isEncryptionAvailable() || (process.platform === "linux" && safeStorage.getSelectedStorageBackend() === "basic_text")) return undefined;
   const file = join(app.getPath("userData"), "ai-connection.bin");
   return {
@@ -13,8 +14,7 @@ export function desktopAiStorage(): AiConnectionStorage | undefined {
         return JSON.parse(safeStorage.decryptString(readFileSync(file))) as ReturnType<AiConnectionStorage["load"]>;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-        // Keep the encrypted file available for recovery. The user can replace it in settings.
-        return null;
+        throw new Error("无法读取已保存的 AI 连接");
       }
     },
     save(connection) {

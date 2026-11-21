@@ -4,6 +4,16 @@ import type { AiConnection } from "../src/llm/connection.js";
 
 afterEach(() => vi.unstubAllEnvs());
 
+it("requires an explicit choice if a previously saved key is unreadable", async () => {
+  vi.stubEnv("QINIU_API_KEY", "environment-fixture");
+  const app = createUiApp({ aiStorage: { load: () => { throw new Error("unreadable"); }, save: () => undefined } });
+  expect(await (await app.request("/api/settings/ai")).json()).toMatchObject({ mode: "custom", hasKey: false, warning: expect.any(String) });
+  const chat = await app.request("/api/agent/chat", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages: [] }),
+  });
+  expect(chat.status).toBe(503);
+});
+
 it("keeps credentials private and scoped to the selected endpoint and local server", async () => {
   vi.stubEnv("QINIU_API_KEY", "environment-test-key");
   vi.stubEnv("QINIU_MODEL", "environment-model");

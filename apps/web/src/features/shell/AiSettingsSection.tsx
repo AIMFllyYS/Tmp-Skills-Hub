@@ -8,6 +8,7 @@ interface Connection {
   ok: true;
   mode: "environment" | "custom";
   persistent: boolean;
+  warning?: string;
   baseUrl: string;
   model: string;
   hasKey: boolean;
@@ -26,7 +27,7 @@ export function AiSettingsSection() {
     const request = new AbortController();
     void apiRequest<Connection>("/api/settings/ai", { signal: request.signal }).then(data => {
       if (request.signal.aborted) return;
-      setSaved(data); setMode(data.mode); setUrl(data.baseUrl); setModel(data.model); setMessage("");
+      setSaved(data); setMode(data.mode); setUrl(data.baseUrl); setModel(data.model); setMessage(data.warning ?? "");
     }).catch((error: Error) => { if (!request.signal.aborted) setMessage(error.message); });
     return () => request.abort();
   }, [revision]);
@@ -57,7 +58,7 @@ export function AiSettingsSection() {
         <Input id="ai-model" value={model} onChange={e => setModel(e.target.value)} placeholder="填写服务商提供的模型 ID" />
         <Label htmlFor="ai-key">API Key</Label>
         <Input id="ai-key" type="password" autoComplete="new-password" value={key} onChange={e => setKey(e.target.value)}
-          placeholder={saved.mode === "custom" && saved.baseUrl === baseUrl ? "已配置，留空沿用" : "输入此服务的密钥"} />
+          placeholder={saved.mode === "custom" && saved.hasKey && saved.baseUrl === baseUrl ? "已配置，留空沿用" : "输入此服务的密钥"} />
         <p className="text-xs text-ink-mid">支持 OpenAI 兼容接口。{saved.persistent ? "密钥由系统加密保存。" : "手动配置仅在本次本地服务运行期间有效。"}</p>
       </> : <div className="space-y-1 rounded-xl bg-surface p-3 text-xs text-ink-mid">
         <p>从环境变量或 .env 读取 QINIU_BASE_URL、QINIU_MODEL 和 QINIU_API_KEY。</p>
