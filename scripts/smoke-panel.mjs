@@ -602,6 +602,9 @@ async function main() {
     scaleCards = await evalJs("document.querySelectorAll('[data-testid=skill-card]').length");
     const scaleApi = await (await fetch(panelUrl + "api/skills")).json();
     const scaleApiCount = Array.isArray(scaleApi.skills) ? scaleApi.skills.length : 0;
+    // CDP counts DOM nodes across documents, including the previous page until GC.
+    // Collect detached documents before sampling the current inventory and retained nodes.
+    await send("HeapProfiler.collectGarbage", {}, sessionId);
     const { metrics: scaleMetrics } = await send("Performance.getMetrics", {}, sessionId);
     const scaleNodes = scaleMetrics.find((m) => m.name === "Nodes")?.value ?? 0;
 
@@ -628,7 +631,27 @@ async function main() {
       "1000 个 skill 时 DOM 超过 3000",
     );
 
-    const checks = [r1, r2, r3, rNav, rHistory, r4, r5, r6, r7, r8, r9];
+    // Exercise the preview in a real scroll viewport after the performance measurements.
+    for (let i = 0; i < 40; i++) {
+      const name = "preview-" + String(i).padStart(2, "0");
+      const dir = path.join(home, ".claude", "skills", name);
+      await mkdir(dir);
+      await writeFile(path.join(dir, "SKILL.md"), "---\nname: " + name + "\ndescription: Scroll fixture\n---\n" + name);
+    }
+    await evalJs('document.querySelector("[data-testid=reconcile-rescan-button]").click()');
+    await waitUntil(evalJs, '!!document.querySelector("[data-testid=reconcile-open-dialog]")', 80, 150);
+    await evalJs('document.querySelector("[data-testid=reconcile-open-dialog]").click()');
+    await waitUntil(evalJs, '!!document.querySelector("[data-testid=reconcile-section-adopt]")', 80, 150);
+    await evalJs('document.querySelector("[data-testid=reconcile-section-adopt]").click()');
+    const region = 'document.querySelector(\'[aria-label="接管方案明细"]\')';
+    const point = await evalJs('(()=>{const r=' + region + '.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()');
+    await send("Input.dispatchMouseEvent", { type: "mouseWheel", ...point, deltaX: 0, deltaY: 9000 }, sessionId);
+    const reachedEnd = await waitUntil(evalJs, region + ".scrollTop > 0 && " + region + ".scrollHeight - " + region + ".scrollTop - " + region + ".clientHeight < 3", 30, 100);
+    await send("Input.dispatchMouseEvent", { type: "mouseWheel", ...point, deltaX: 0, deltaY: -9000 }, sessionId);
+    const reachedTop = await waitUntil(evalJs, region + ".scrollTop === 0", 30, 100);
+    const rScroll = line("接管预览滚轮", reachedEnd && reachedTop ? "到达底部并返回顶部" : "列表无法完整滚动", "双向通过", reachedEnd && reachedTop);
+
+    const checks = [r1, r2, r3, rNav, rHistory, r4, r5, r6, r7, r8, r9, rScroll];
     const passed = checks.filter(Boolean).length;
     console.log("");
     console.log("结果: " + passed + "/" + checks.length + " " + (passed === checks.length ? "通过" : "未通过"));

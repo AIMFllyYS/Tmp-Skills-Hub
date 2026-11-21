@@ -21,6 +21,7 @@ import {
   resolveDesktopTransport,
   startDesktopHttpTransport,
 } from "./protocol.js";
+import { desktopAiStorage } from "./ai-storage.js";
 import { createDesktopTray, loginItemSettings, startInTray } from "./tray.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -258,14 +259,14 @@ async function bootstrapDesktop(): Promise<void> {
     body: JSON.stringify({ autoLaunch: enabled }),
   });
   if (transport === "http") {
-    serverHandle = await startDesktopHttpTransport({ home, webRoot, onDesktopPreferences });
+    serverHandle = await startDesktopHttpTransport({ home, webRoot, aiStorage: desktopAiStorage(), onDesktopPreferences });
     resolvedEntryUrl = serverHandle.url.endsWith("/") ? serverHandle.url : `${serverHandle.url}/`;
     const origin = new URL(resolvedEntryUrl).origin;
     submitPreference = (enabled) => fetch(origin + "/api/settings", preferenceRequest(enabled, origin));
   } else {
     const paths = await resolveUiHubPaths(home);
     if (paths !== null) await checkBundledSelfSkill(home, paths);
-    const honoApp = createUiApp({ paths, home, webRoot, desktop: true, onDesktopPreferences });
+    const honoApp = createUiApp({ paths, home, webRoot, desktop: true, aiStorage: desktopAiStorage(), onDesktopPreferences });
     protocol.handle(APP_SCHEME, createAppProtocolHandler(honoApp));
     resolvedEntryUrl = APP_ENTRY_URL;
     submitPreference = async (enabled) => honoApp.fetch(new Request(

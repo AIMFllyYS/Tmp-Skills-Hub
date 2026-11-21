@@ -111,6 +111,18 @@ export function GitSettingsSection({
     }
   };
 
+  if (!showCloud) return (
+    <section className="rounded-xl border border-line p-4" data-testid="git-settings-section">
+      <div className="flex items-start justify-between gap-3"><div>
+        <Label htmlFor="git-enable-switch">记录技能修改历史（可选）</Label>
+        <p className="mt-1 text-sm text-ink-mid">以后修改技能时，可以查看改了哪些文件，并比较前后两个版本。</p>
+      </div><Switch id="git-enable-switch" data-testid="git-enable-switch" checked={status.enabled} disabled={!status.gitInstalled || effectiveBusy} onCheckedChange={next => void handleToggle(next)} /></div>
+      <p className="mt-3 text-xs text-ink-mid">{status.gitInstalled ? (status.enabled ? "初始化后，Git 会在本机开始记录版本。无需 GitHub 账号。" : "可以先跳过，以后在「设置」里开启。") : "此电脑尚未检测到 Git。可以直接初始化，以后安装 Git 再开启。"}</p>
+      {!status.gitInstalled && <InstallHintRow command={gitCmd} downloadUrl={gitUrl} toolName="Git" />}
+      {actionError && <p role="alert">{actionError}</p>}
+    </section>
+  );
+
   return (
     <section className="space-y-4" data-testid="git-settings-section">
       <div className="flex items-start gap-3">
@@ -118,9 +130,9 @@ export function GitSettingsSection({
           <GitVaultGlyph size={18} />
         </IconBadge>
         <div className="min-w-0 flex-1 space-y-0.5">
-          <h3 className="text-base font-semibold tracking-tight text-ink-strong">Git 版本控制与云端备份</h3>
+          <h3 className="text-base font-semibold tracking-tight text-ink-strong">技能版本与备份</h3>
           <p className="text-xs leading-relaxed text-ink-mid">
-            可跳过，随时在设置中开启。启用后会在技能文件夹记录变更历史，可通过 GitHub CLI 备份到个人仓库。
+            先启用本机版本记录。需要异地备份时，再登录 GitHub 并选择仓库。
           </p>
         </div>
       </div>
@@ -164,7 +176,7 @@ export function GitSettingsSection({
             )}
           </div>
 
-          <div className="rounded-xl border border-line bg-canvas/60 p-3.5" data-testid="git-env-gh">
+          {status.enabled && <div className="rounded-xl border border-line bg-canvas/60 p-3.5" data-testid="git-env-gh">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-ink-strong">GitHub CLI (gh)</span>
               {!status.ghInstalled ? (
@@ -197,14 +209,14 @@ export function GitSettingsSection({
                   : "已安装，开启 Git 后可通过设备码登录云端备份。"}
               </p>
             )}
-          </div>
+          </div>}
         </div>
 
         <Separator />
 
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 space-y-0.5">
-            <Label htmlFor="git-enable-switch">使用 Git 管理 Skills 版本</Label>
+            <Label htmlFor="git-enable-switch">记录本机修改历史</Label>
             <p className="text-xs text-ink-mid">
               {!status.gitInstalled
                 ? "检测到本机未安装 Git，请先按上方指引安装后再开启。"

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { AiSettingsSection } from "./AiSettingsSection.js";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { getAction } from "../actions/registry.js";
@@ -101,8 +101,9 @@ export function SettingsDialog({
       >
         <DialogContent className="flex max-h-[min(36rem,90vh)] max-w-lg flex-col">
           <DialogTitle>设置</DialogTitle>
-          <DialogDescription>不常改、但要找得到的东西。</DialogDescription>
-          <ScrollArea className="mt-4 min-h-0 flex-1">
+          <DialogDescription>管理 AI 连接、技能文件夹和备份。</DialogDescription>
+          <div className="dialog-scroll mt-4 min-h-0 overflow-y-auto overscroll-contain">
+            {open && <AiSettingsSection />}
             {currentSettings !== null ? (
               <>
                 <DualPathSettingsSection
@@ -202,7 +203,7 @@ export function SettingsDialog({
                 </>
               )}
             </section>
-          </ScrollArea>
+          </div>
         </DialogContent>
         {migrateOpen && currentSettings !== null && (
           <MigrateStoreDialog

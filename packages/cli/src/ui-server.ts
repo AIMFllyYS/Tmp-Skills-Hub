@@ -40,7 +40,8 @@ import {
 } from "./llm/provider.js";
 import { readTranslation, writeTranslation } from "./translations.js";
 import { createSkillsHubAgent, parseWritePolicy } from "./agent/agent.js";
-import { AGENT_MODELS, DEFAULT_AGENT_MODEL, resolveAgentModel } from "./agent/models.js";
+import { registerAiConnection, availableModels } from "./ui-ai.js";
+import type { AiConnectionStorage } from "./llm/connection.js";
 import { createAgentTools, type ToolEnv } from "./agent/tools.js";
 import { attachVisibleIn, clientDiscoverOpts, err, skillLookupErr, setUiPaths, withStore, type DesktopPreferences, type UiRouteContext } from "./ui-http.js";
 import { registerGroupRoutes } from "./ui-groups.js";
@@ -131,6 +132,7 @@ async function measureBodyBytes(
  */
 
 export interface UiAppOptions {
+  aiStorage?: AiConnectionStorage | undefined;
   selfSkillDir?: string;
   /** 库存根;null = 未配置(端点返回 store-not-configured) */
   storeRoot?: string | null;
@@ -299,6 +301,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     }
   });
 
+  registerAiConnection(app, opts.aiStorage);
   registerGroupRoutes(app, ctx);
   registerDraftRoutes(app, ctx);
   registerContentRoutes(app, ctx);
@@ -453,7 +456,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
   );
 
   app.get("/api/agent/models", (c) =>
-    c.json({ ok: true, command: "agent-models", defaultModel: DEFAULT_AGENT_MODEL, models: AGENT_MODELS }),
+    c.json({ ok: true, command: "agent-models", ...availableModels() }),
   );
 
   // Agent 对话(agent-v0.md):不包 withStore——库存未配置时仍可对话,工具返回可读文本。
@@ -467,7 +470,8 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     if (messages.some((m) => typeof m === "object" && m !== null && (m as { role?: unknown }).role === "system")) {
       return err(c, "agent-chat", "bad-usage", "body 需要 { messages: UIMessage[] }(不含 system)");
     }
-    const modelId = resolveAgentModel(raw?.model);
+    const choices = availableModels();
+    const modelId = choices.models.find(item => item.id === raw?.model)?.id ?? choices.defaultModel;
     const writePolicy = parseWritePolicy(raw?.writePolicy);
     const currentRoot = ctx.storeRoot;
     const clients = (await discoverClientRoots(home, clientDiscoverOpts(ctx.paths))).map((r) => r.clientId);
@@ -486,6 +490,10 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
     });
     if (!validated.success) {
       return err(c, "agent-chat", "bad-usage", "messages 格式无效: " + scrub(validated.error.message));
+    }
+    if (validated.data.some(message => message.parts.some(part => part.type === "file" &&
+      (!["image/png", "image/jpeg", "image/webp"].includes(part.mediaType) || !part.url.startsWith("data:" + part.mediaType + ";base64,"))))) {
+      return err(c, "agent-chat", "bad-usage", "图片附件必须使用内嵌 PNG、JPEG 或 WebP 数据");
     }
     const agent = createSkillsHubAgent({
       model: opts.languageModel ?? createQiniuModel(modelId),
@@ -656,6 +664,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
 /** 启动参数具名,避免把 storeRoot 按位置误传成 home(见 #95)。 */
 export interface StartUiServerOptions {
+  aiStorage?: AiConnectionStorage | undefined;
   desktop?: boolean;
   onDesktopPreferences?: (preferences: DesktopPreferences) => void;
   gitRuntime?: GitRuntime;
@@ -691,7 +700,7 @@ export async function startUiServer(opts: StartUiServerOptions = {}): Promise<Ui
   const deviceLogin = opts.gitRuntime?.deviceLogin ?? createGhDeviceLogin(
     opts.gitRuntime?.gh === undefined ? {} : { runner: opts.gitRuntime.gh },
   );
-  const appOpts: UiAppOptions = { paths, home: h, desktop: opts.desktop === true, gitRuntime: { ...opts.gitRuntime, deviceLogin } };
+  const appOpts: UiAppOptions = { paths, aiStorage: opts.aiStorage, home: h, desktop: opts.desktop === true, gitRuntime: { ...opts.gitRuntime, deviceLogin } };
   if (opts.onDesktopPreferences !== undefined) appOpts.onDesktopPreferences = opts.onDesktopPreferences;
   if (opts.webRoot !== undefined) appOpts.webRoot = opts.webRoot;
   if (opts.selfSkillDir !== undefined) appOpts.selfSkillDir = opts.selfSkillDir;

@@ -5,16 +5,15 @@ import {
   FolderSync,
   ShieldOff,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DeferredReveal } from "@/components/ui/deferred-reveal";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ICON_STROKE, IconBadge, ShieldAuditGlyph, SymlinkMeshGlyph } from "@/components/ui/icon";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Separator } from "@/components/ui/separator";
 import { Skeleton, SkeletonRowList } from "@/components/ui/skeleton";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -55,10 +54,11 @@ function PreviewSection({
   children: ReactNode;
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(defaultOpen);
+  const panelId = useId();
 
   return (
-    <Collapsible open={expanded} onOpenChange={setExpanded} className="space-y-2">
-      <CollapsibleTrigger data-testid={testId}>
+    <section className="space-y-2">
+      <Button type="button" variant="outline" className="h-auto w-full justify-between gap-2 px-3.5 py-2.5" aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(value => !value)} data-testid={testId}>
         <span className="flex min-w-0 items-center gap-2">
           <ChevronRight
             className={cn("motion-chevron size-4 shrink-0 text-ink-mid", expanded && "rotate-90")}
@@ -71,9 +71,9 @@ function PreviewSection({
         <Badge tone={badgeTone} className="shrink-0">
           {String(count) + " 项"}
         </Badge>
-      </CollapsibleTrigger>
-      <CollapsiblePanel className="space-y-2">{children}</CollapsiblePanel>
-    </Collapsible>
+      </Button>
+      <div id={panelId} hidden={!expanded} className="space-y-2">{expanded && children}</div>
+    </section>
   );
 }
 
@@ -184,7 +184,7 @@ export function ReconcileDialog({
           </div>
         </div>
 
-        <ScrollArea className="mt-4 min-h-0 flex-1">
+        <div role="region" aria-label="接管方案明细" tabIndex={0} className="dialog-scroll mt-4 min-h-0 overflow-y-auto overscroll-contain">
           <DeferredReveal
             loading={loading || preview === null}
             skeleton={
@@ -225,7 +225,7 @@ export function ReconcileDialog({
                     title="新增 / 同内容转纯软链接"
                     count={combinedNewAndRelink.length}
                     icon={<FolderSync className="size-4 shrink-0 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />}
-                    defaultOpen={true}
+                    defaultOpen={false}
                     testId="reconcile-section-adopt"
                   >
                     <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
@@ -268,7 +268,7 @@ export function ReconcileDialog({
                     count={preview.conflicts.length}
                     badgeTone="warning"
                     icon={<AlertTriangle className="size-4 shrink-0 text-amber-700" strokeWidth={ICON_STROKE} aria-hidden />}
-                    defaultOpen={true}
+                    defaultOpen={false}
                     testId="reconcile-section-conflicts"
                   >
                     <p className="px-1 text-xs leading-relaxed text-ink-mid">
@@ -329,7 +329,7 @@ export function ReconcileDialog({
                     title="外部托管软链接（默认跳过不动）"
                     count={listedExternalLinks.length}
                     icon={<ExternalLink className="size-4 shrink-0 text-ink-mid" strokeWidth={ICON_STROKE} aria-hidden />}
-                    defaultOpen={true}
+                    defaultOpen={false}
                     testId="reconcile-section-external"
                   >
                     <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-canvas px-3.5 py-3">
@@ -397,7 +397,7 @@ export function ReconcileDialog({
               </div>
             )}
           </DeferredReveal>
-        </ScrollArea>
+        </div>
 
         <Separator className="mt-4" />
 

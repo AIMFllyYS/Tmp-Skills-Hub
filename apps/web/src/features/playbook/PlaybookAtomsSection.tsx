@@ -593,6 +593,8 @@ export function PlaybookDesignSystemView({
           style={{ width: shellCollapsed ? 48 : 224 }}
         >
           <Sidebar
+            chats={{ current: "demo", threads: [{ id: "demo", title: "技能整理" }] }}
+            onChat={() => onNotice("打开示例对话")}
             page={shellPage}
             collapsed={shellCollapsed}
             settingsOpen={false}

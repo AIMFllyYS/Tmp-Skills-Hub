@@ -44,6 +44,7 @@ export interface UseCatalogOptions {
 /** 远程目录状态与渐进水合:主壳只等 /api/skills + /api/clients,次级数据独立并行填充。 */
 export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   const [status, setStatus] = useState<CatalogLoadState>("loading");
+  const [firstRun, setFirstRun] = useState(false);
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [storeRoot, setStoreRoot] = useState("");
   const [gitEnabled, setGitEnabled] = useState(false);
@@ -162,7 +163,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   useEffect(() => {
     mountedRef.current = true;
     const gen = ++loadGenRef.current;
-    void loadPrimaryCatalog()
+    void loadPrimaryCatalog(() => { if (mountedRef.current && loadGenRef.current === gen) setFirstRun(true); })
       .then((primary) => {
         applyPrimary(primary, gen);
       })
@@ -317,6 +318,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
     refresh,
     reload,
     initializeStore,
+    firstRun,
     restore,
     archive,
   };

@@ -39,8 +39,11 @@ export interface CatalogSnapshot {
 }
 
 /** 首屏主门控:只等待核心技能列表与本机应用列表,区分未配置与离线。 */
-export async function loadPrimaryCatalog(): Promise<PrimaryCatalogResult> {
-  const [catalogResult, clientsResult] = await Promise.allSettled([fetchCatalog(), fetchClients()]);
+export async function loadPrimaryCatalog(onFirstRun?: () => void): Promise<PrimaryCatalogResult> {
+  const [catalogResult, clientsResult] = await Promise.allSettled([fetchCatalog().catch((error: unknown) => {
+    if (isStoreUnconfiguredError(error)) onFirstRun?.();
+    throw error;
+  }), fetchClients()]);
   const clients = clientsResult.status === "fulfilled" ? clientsResult.value : [];
   if (catalogResult.status === "fulfilled") {
     return {
@@ -52,6 +55,7 @@ export async function loadPrimaryCatalog(): Promise<PrimaryCatalogResult> {
     };
   }
   if (isStoreUnconfiguredError(catalogResult.reason)) {
+    if (clientsResult.status === "rejected") throw clientsResult.reason;
     return { kind: "unconfigured", clients };
   }
   throw catalogResult.reason;

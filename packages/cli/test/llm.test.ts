@@ -74,7 +74,7 @@ describe("qiniu provider 配置", () => {
   it("createQiniuModel 使用定制 fetch 发送 Bearer 认证与 enable_thinking:false", async () => {
     saveEnv("QINIU_API_KEY", "QINIU_BASE_URL");
     process.env.QINIU_API_KEY = "qiniu-dummy-secret-99";
-    process.env.QINIU_BASE_URL = "https://mock-qiniu.local/v1/";
+    process.env.QINIU_BASE_URL = "https://api.qnaigc.com/v1/";
 
     let seenUrl = "";
     let seenAuth = "";
@@ -101,7 +101,7 @@ describe("qiniu provider 配置", () => {
     const model = createQiniuModel(DEFAULT_MODEL, { fetch: fakeFetch });
     const res = await generateText({ model, prompt: "ping" });
     expect(res.text).toBe("ok");
-    expect(seenUrl).toBe("https://mock-qiniu.local/v1/chat/completions");
+    expect(seenUrl).toBe("https://api.qnaigc.com/v1/chat/completions");
     expect(seenAuth).toBe("Bearer qiniu-dummy-secret-99");
     expect(seenBody.enable_thinking).toBe(false);
     expect(seenBody.model).toBe(DEFAULT_MODEL);

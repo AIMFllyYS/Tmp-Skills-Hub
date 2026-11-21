@@ -85,6 +85,10 @@
 
 翻译的 `delta/done/error` 是翻译专用契约,见 [http-api-v0.md](http-api-v0.md),不再与 Agent 共用。
 
+## GUI 对话与模型选择修订
+
+侧栏按对话组织历史，已有单会话作为第一条记录。写策略按会话保存。自定义服务仅接受用户配置的 Model ID，环境变量指定的模型同样可选。文本附件在发送前显示名称，随明示发送的消息传给当前服务。
+
 ## 6. 模型白名单
 
 `packages/cli/src/agent/models.ts` 的 `AGENT_MODELS` 常量:默认 `deepseek/deepseek-v4-flash-20260731`,另列能力旗舰 / 编程强 / 最便宜三档。`model` 参数不在白名单时回落默认模型。白名单 ID 以七牛云 `/v1/models` 实际返回为准校准。
