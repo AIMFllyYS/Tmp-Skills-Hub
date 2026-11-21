@@ -32,9 +32,9 @@ import {
 } from "ai";
 import { mapLlmError, scrub } from "./llm/errors.js";
 import {
-  createQiniuModel,
+  createAiModel,
   notConfiguredMessage,
-  qiniuApiKey,
+  aiApiKey,
   resolveModel,
   STREAM_IDLE_TIMEOUT_MS,
 } from "./llm/provider.js";
@@ -165,13 +165,13 @@ async function* defaultTranslateStream(
   text: string,
   opts: { signal?: AbortSignal; model?: LanguageModel } = {},
 ): AsyncGenerator<TranslateStreamEvent> {
-  if (opts.model === undefined && qiniuApiKey() === undefined) {
+  if (opts.model === undefined && aiApiKey() === undefined) {
     yield { type: "error", code: "not-configured", message: notConfiguredMessage() };
     return;
   }
   try {
     const streamOpts: Parameters<typeof streamText>[0] = {
-      model: opts.model ?? createQiniuModel(resolveModel()),
+      model: opts.model ?? createAiModel(resolveModel()),
       system: TRANSLATE_SYSTEM_PROMPT,
       prompt: text,
       timeout: { chunkMs: STREAM_IDLE_TIMEOUT_MS },
@@ -461,7 +461,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
 
   // Agent 对话(agent-v0.md):不包 withStore——库存未配置时仍可对话,工具返回可读文本。
   app.post("/api/agent/chat", async (c) => {
-    if (opts.languageModel === undefined && qiniuApiKey() === undefined) {
+    if (opts.languageModel === undefined && aiApiKey() === undefined) {
       return err(c, "agent-chat", "not-configured", notConfiguredMessage());
     }
     const raw = (await c.req.json().catch(() => null)) as { messages?: unknown; model?: unknown; writePolicy?: unknown } | null;
@@ -496,7 +496,7 @@ export function createUiApp(opts: UiAppOptions = {}): Hono {
       return err(c, "agent-chat", "bad-usage", "图片附件必须使用内嵌 PNG、JPEG 或 WebP 数据");
     }
     const agent = createSkillsHubAgent({
-      model: opts.languageModel ?? createQiniuModel(modelId),
+      model: opts.languageModel ?? createAiModel(modelId),
       env,
       clients,
       writePolicy,

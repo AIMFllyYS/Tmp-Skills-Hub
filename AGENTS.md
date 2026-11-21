@@ -9,7 +9,7 @@
 - **形态**: pnpm monorepo —— 核心库 + CLI 是确定性本体与 Agent 入口；**Web（及 Electron 桌面壳）是人用主界面**
 - **语言**: TypeScript strict mode（全仓统一） | **Node**: ≥22 | **包管理**: pnpm workspace
 - **packages/core**: 纯 TS 库，零框架依赖（确定性内核：库存、哈希、symlink/junction、类型登记）
-- **packages/cli**: citty 命令行 + Hono 本地服务（`skills-hub scan` / `skills-hub ui`）+ 编程接口导出（供桌面端进程内复用）+ 七牛云 AI 推理封装（Vercel AI SDK v7）
+- **packages/cli**: citty 命令行 + Hono 本地服务（`skills-hub scan` / `skills-hub ui`）+ 编程接口导出（供桌面端进程内复用）+ 多服务商 AI 推理封装（Vercel AI SDK v7）
 - **apps/web**: Vite + React 19 + Tailwind CSS 4（人用壳：总览 / 统计 / Skills 管理 / Agent + 设置 Dialog；只消费 CLI 的 `/api`）
 - **apps/desktop**: Electron 桌面封装壳（进程内启动 `packages/cli` 服务 + 静态 `apps/web/dist` + `extraResources` `self-skill/`；`esbuild` + `electron-builder` 打包，社团内部默认无签名分发）
 - **promo/**: 57 秒宣传片与浅色视觉底稿工作区（**不属于 pnpm workspace**，不影响全仓质检；见 `promo/README.md`）
@@ -62,7 +62,7 @@
 
 ```
 packages/core/    确定性内核（纯 TS 库）：类型、函数内核（库存/哈希/链接/归档/备份/草稿）、SKILL.md 解析、客户端发现
-packages/cli/     终端入口（citty）+ Hono 本地服务 + 编程接口导出 + 七牛云 AI 集成（AI SDK v7）
+packages/cli/     终端入口（citty）+ Hono 本地服务 + 编程接口导出 + 多服务商 AI 集成（AI SDK v7）
 apps/web/         人用 Web 壳（Vite + React SPA）：总览 / 统计 / Skills 管理 / Agent + 设置 Dialog；只消费 CLI 的 /api
 apps/desktop/     Electron 桌面封装壳（进程内起 CLI 服务 + 静态 apps/web/dist + self-skill/；esbuild + electron-builder）
 promo/            57s 宣传片与视觉底稿（独立于 pnpm workspace，不参与构建/质检）
@@ -85,7 +85,7 @@ scripts/          辅助脚本（setup/build/dev/smoke-panel.mjs）
   - Windows 目录链接优先用 junction，避免要求用户提权
 - **HTTP 安全与凭据红线**（详见 [http-and-routing.md](docs/conventions/http-and-routing.md) 和 [testing-and-security.md](docs/conventions/testing-and-security.md)）:
   - 本地服务只绑 `127.0.0.1`，强校验 `Host`（含 `skills-hub`）、写请求 `Origin`、写请求 `Content-Type: application/json` 与请求体大小上限（`413`）；Markdown 经 `DOMPurify.sanitize()` 净化后才渲染
-  - `QINIU_API_KEY` / `GITHUB_TOKEN` 只从环境变量或 `.env` 读取，`gh` 云端备份认证完全委托 `gh` CLI（Skills Hub 绝不保存明文 GitHub Token）；异常经 `scrub()` 脱敏，绝不进源码、日志或前端响应
+  - AI 密钥从相应服务的环境变量、`.env` 或用户在 GUI 中显式配置的连接读取。桌面端用系统加密保存，独立 Web 端仅在进程内保留；`GITHUB_TOKEN` 只从环境变量或 `.env` 读取，`gh` 云端备份认证完全委托 `gh` CLI（Skills Hub 绝不保存明文 GitHub Token）；异常经 `scrub()` 脱敏，绝不进源码、日志或前端响应
   - 零静默写入、零真删除（所有移除走 `archive` / `archive/conflicts/` / `archive/drafts/` / `.pre-reinit` 旁路）
 - **TypeScript strict，禁止 `any`** — 用 `unknown` + 类型收窄（ESLint 已设为 error；测试文件经 `tsconfig.test.json` 强制检查）
 - **收录前必须明确告知并获得授权**——绝不静默搬走用户已有技能（产品红线，架构规范 §4）
@@ -160,7 +160,7 @@ scripts/          辅助脚本（setup/build/dev/smoke-panel.mjs）
 - [cli-commands-v0.md](docs/specs/cli-commands-v0.md) — **CLI 命令面与渐进式披露机制**：命令名的唯一口径，不得自行发明
 - [http-api-v0.md](docs/specs/http-api-v0.md) — **HTTP 契约**：本地服务全部读/写端点、安全中间件状态码与信封规则
 - [json-contract-v0.md](docs/specs/json-contract-v0.md) — **JSON 输出契约**：CLI `--json` 信封、字段约定、错误枚举与退出码 `0|1|2`
-- [ai-integration-v1.md](docs/specs/ai-integration-v1.md) — **七牛云 AI 推理服务集成口径**：Vercel AI SDK v7 + `createOpenAICompatible`、密钥铁律、`enable_thinking: false`、错误映射
+- [ai-integration-v1.md](docs/specs/ai-integration-v1.md) — **多服务商 AI 推理服务集成口径**：Vercel AI SDK v7 + `createOpenAICompatible`、密钥铁律、`enable_thinking: false`、错误映射
 - [agent-v0.md](docs/specs/agent-v0.md) — **Agent 模块唯一口径**（v1）：一等工具、`writePolicy`、AI SDK UI message stream、模型白名单、输出契约
 - [single-source-sync-and-versioning/PRD.md](docs/specs/single-source-sync-and-versioning/PRD.md) — **v0.3 单一真源、纯软链收敛、冲突解决、托盘巡检与 Git 云端备份详细 PRD**
 - [single-source-sync-and-versioning/task.md](docs/specs/single-source-sync-and-versioning/task.md) — **v0.3 专项任务总清单（Epic / Sub-Issue / PRD 行号映射 / Agent 打勾进度与执行 SOP）**

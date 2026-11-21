@@ -91,6 +91,8 @@
 
 ## 6. 模型白名单
 
+0.3.2 起，DeepSeek、OpenRouter、OpenAI 与手动兼容地址均使用所选连接的模型；以下预设名单仅用于历史七牛环境。
+
 `packages/cli/src/agent/models.ts` 的 `AGENT_MODELS` 常量:默认 `deepseek/deepseek-v4-flash-20260731`,另列能力旗舰 / 编程强 / 最便宜三档。`model` 参数不在白名单时回落默认模型。白名单 ID 以七牛云 `/v1/models` 实际返回为准校准。
 
 ## 7. 输出契约(系统提示词承诺)

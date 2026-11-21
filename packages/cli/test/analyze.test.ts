@@ -226,7 +226,7 @@ describe("runAnalyze", () => {
     expect(parsed.ok).toBe(false);
     expect(parsed.command).toBe("analyze");
     expect(parsed.code).toBe("not-configured");
-    expect(errs.join(" ")).toContain("QINIU_API_KEY");
+    expect(errs.join(" ")).toContain("API Key");
     expect(process.exitCode).toBe(2);
   });
 
