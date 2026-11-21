@@ -131,7 +131,8 @@ describe("formatReconcileBannerCopy", () => {
     const copy = formatReconcileBannerCopy(makeSummary({ unmanagedRealDirs: 4 }));
     expect(copy.tone).toBe("neutral");
     expect(copy.title).toContain("4 个本地新增/未接管 Skill");
-    expect(copy.description).toContain("纯软链接");
+    expect(copy.description).toContain("复制到技能文件夹");
+    expect(copy.description).toContain("更新客户端链接");
   });
 
   it("仅有被覆写受管链接时给出精准提示", () => {
