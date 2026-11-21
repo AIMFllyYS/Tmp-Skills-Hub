@@ -28,9 +28,9 @@ while ([datetime]::UtcNow -lt $deadline -and !(Test-Path $hint)) {
   $window = $proc.MainWindowHandle
   if ($window -eq [IntPtr]::Zero -or $selected) { continue }
   $form = [System.Windows.Automation.AutomationElement]::FromHandle($window)
-  $input = $form.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
-  if ($input -and !$input.Current.IsOffscreen) {
-    $input.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($choice)
+  $folderEdit = $form.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
+  if ($folderEdit -and !$folderEdit.Current.IsOffscreen) {
+    $folderEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($choice)
     $selected = $true
   }
   $next = [Wizard]::GetDlgItem($window, 1)

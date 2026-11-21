@@ -33,7 +33,7 @@ let tray: ReturnType<typeof createDesktopTray> | null = null;
 let windowRequested = false;
 
 function desktopIcon(): string {
-  if (process.platform !== "win32") return path.join(resolveResourcePaths().webRoot, "skills-hub.png");
+  if (process.platform !== "win32") return path.join(resolveResourcePaths().webRoot, "assets", "skills-hub.png");
   return app.isPackaged ? path.join(process.resourcesPath, "icon.ico") : path.join(resolveAppDir(), "build", "icon.ico");
 }
 

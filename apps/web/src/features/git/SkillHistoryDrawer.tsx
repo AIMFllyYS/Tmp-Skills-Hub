@@ -64,7 +64,7 @@ export function SkillHistoryDrawer({
       title={"历史记录 · " + skillName}
       description={
         gitEnabled
-          ? "按时间倒序展示唯一真源目录中该 Skill 的 Git 提交历史，点击任意提交查看文件变更。"
+          ? "按时间倒序展示技能文件夹中该 Skill 的 Git 提交历史，点击任意提交查看文件变更。"
           : "当前未开启 Git 版本控制，暂不追踪该 Skill 的提交历史。"
       }
       headerExtra={

@@ -52,9 +52,24 @@ Function LeaveSkillsFolder
   ${NSD_GetText} $SkillsInput $SkillsFolder
   StrCpy $0 $SkillsFolder
   System::Call 'shlwapi::PathIsRelativeW(w r0)i.r1'
+  GetFullPathName $2 "$SkillsFolder"
+  System::Call 'shlwapi::PathIsRootW(w r2)i.r3'
   ${If} $SkillsFolder == ""
   ${OrIf} $1 != 0
+  ${OrIf} $3 != 0
     MessageBox MB_ICONEXCLAMATION "请填写完整的文件夹路径，例如 D:\My Skills。"
+    Abort
+  ${EndIf}
+  StrCpy $SkillsFolder $2
+  System::Call 'shlwapi::PathIsPrefixW(w "$INSTDIR", w r2)i.r3'
+  ${If} $3 != 0
+    MessageBox MB_ICONEXCLAMATION "请选择程序安装位置以外的文件夹，以便覆盖安装时保留技能原文件。"
+    Abort
+  ${EndIf}
+  IfFileExists "$SkillsFolder" 0 done
+  System::Call 'shlwapi::PathIsDirectoryW(w r2)i.r3'
+  ${If} $3 == 0
+    MessageBox MB_ICONEXCLAMATION "这个路径是一个文件。请选择空文件夹，或填写新文件夹的路径。"
     Abort
   ${EndIf}
   IfFileExists "$SkillsFolder\*.*" 0 done

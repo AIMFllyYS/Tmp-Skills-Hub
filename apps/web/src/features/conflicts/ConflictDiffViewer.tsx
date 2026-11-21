@@ -99,7 +99,7 @@ export function ConflictDiffViewer({
                     {String(activeVariant.fileCount)} 文件 · {formatConflictBytes(activeVariant.totalBytes)}
                   </span>
                 ) : (
-                  <span className="text-ink-faint">唯一真源活跃副本</span>
+                  <span className="text-ink-faint">当前使用的版本</span>
                 )}
               </div>
             </Card>

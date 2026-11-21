@@ -124,7 +124,7 @@ export function ReconcileDialog({
           },
           {
             id: "ingest",
-            title: "零丢失入唯一真源与冲突池",
+            title: "保存技能文件与冲突版本",
             detail:
               "新收录 " +
               String(preview.toAdopt.length) +
@@ -179,7 +179,7 @@ export function ReconcileDialog({
           <div className="min-w-0 flex-1">
             <DialogTitle>预览备份与一键接管方案</DialogTitle>
             <DialogDescription>
-              将客户端中未接管的真实目录收敛入唯一真源，并原地替换为纯软链接。系统保留目录与未勾选的外部软链接保持原样不动。
+              把选中的技能复制到技能文件夹，并让客户端链接到同一份文件。系统保留目录与未勾选的外部软链接保持原样不动。
             </DialogDescription>
           </div>
         </div>
@@ -273,7 +273,7 @@ export function ReconcileDialog({
                   >
                     <p className="px-1 text-xs leading-relaxed text-ink-mid">
                       所有异版都会完整留存至 <code className="font-mono text-ink-strong">~/.skills-hub/conflicts/</code>
-                      ；按目录内有效文件最新修改时间暂定唯一真源并立即挂回软链，合并后可在「Skills 管理 → 冲突」逐文件 Diff 裁决。
+                      ；按目录内有效文件最新修改时间选出暂用版本并更新客户端链接，合并后可在「Skills 管理 → 冲突」逐文件 Diff 裁决。
                     </p>
                     <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
                       {preview.conflicts.map((item) => (
@@ -343,7 +343,7 @@ export function ReconcileDialog({
                       <div className="min-w-0 flex-1">
                         <span className="text-sm font-medium text-ink-strong">一并拷入总馆接管</span>
                         <p className="mt-0.5 text-xs text-ink-mid">
-                          默认保留外部软链接原样；勾选后将把目标内容复制到唯一真源，并将客户端链接改为指向总馆。
+                          默认保留外部软链接原样；勾选后将把目标内容复制到技能文件夹，并更新客户端链接。
                         </p>
                       </div>
                     </label>

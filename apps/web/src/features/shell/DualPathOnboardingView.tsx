@@ -76,7 +76,7 @@ export function DualPathOnboardingView({
     <ScrollArea className={cn("min-h-0 flex-1 bg-canvas/55", className)}>
       <div className="p-6">
         <div className="flex items-start gap-3.5">
-          <img src="/skills-hub.png" alt="" width={48} height={48} />
+          <img src="/assets/skills-hub.png" alt="" width={48} height={48} />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-ink-strong">{title}</h1>
             <p className="mt-1 text-sm text-ink-mid">
