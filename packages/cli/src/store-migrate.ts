@@ -161,8 +161,17 @@ export async function performMigrate({ home, paths, targetSkillsRoot, dryRun = f
       skillsRoot: next.skillsRoot,
     });
     wroteConfig = true;
-    await rename(paths.skillsRoot, aside);
-    return { ok: true, dryRun, paths: next, movedLinks, skills: names.length, aside } as const;
+    let retained = aside;
+    try {
+      await rename(paths.skillsRoot, aside);
+    } catch (error) {
+      // Windows can keep an open working directory locked even after every client has switched.
+      // Its existing contents are already a complete backup. Return their actual location.
+      if (process.platform !== "win32" || (error as NodeJS.ErrnoException).code !== "EBUSY" ||
+        await realpath(paths.skillsRoot) !== sourceRoot) throw error;
+      retained = paths.skillsRoot;
+    }
+    return { ok: true, dryRun, paths: next, movedLinks, skills: names.length, aside: retained } as const;
   } catch (error) {
     const failures: string[] = [];
     const recover = async (action: () => Promise<unknown>) => {

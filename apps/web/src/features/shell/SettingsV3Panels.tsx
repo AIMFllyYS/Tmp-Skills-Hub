@@ -184,7 +184,7 @@ export function MigrateStoreDialog({
     {
       id: "aside-old",
       title: "保留原文件夹作为备份",
-      detail: "原目录仅重命名旁路保留，绝不执行永久删除",
+      detail: "保留一份迁移前的原文件。Windows 占用旧文件夹时，备份会留在原位置。",
       status: "idle",
     },
   ];

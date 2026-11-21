@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -69,6 +70,24 @@ function cli(...args: string[]) {
   expect(result.stdout, result.stderr).not.toBe("");
   return { code: result.status, payload: JSON.parse(result.stdout) as unknown };
 }
+
+it.runIf(process.platform === "win32")("preserves a locked old folder after changing the active store and client link", async () => {
+  const entry = await enable("codex");
+  const target = path.join(home, "new-folder");
+  const holder = spawn(process.execPath, ["-e", "process.stdin.resume()"], { cwd: paths.skillsRoot, stdio: ["pipe", "ignore", "ignore"] });
+  await once(holder, "spawn");
+  try {
+    const result = await performMigrate({ paths, home, targetSkillsRoot: target, dryRun: false });
+    expect(result).toMatchObject({ ok: true, aside: paths.skillsRoot });
+    expect(JSON.parse(await readFile(path.join(home, POINTER_REL), "utf8"))).toMatchObject({ skillsRoot: await realpath(target) });
+    expect(await realpath(path.join(entry.targetDir, "demo"))).toBe(await realpath(path.join(target, "demo")));
+    expect(await readFile(path.join(paths.skillsRoot, "demo", "SKILL.md"), "utf8")).toBe(body);
+  } finally {
+    const closed = once(holder, "close");
+    holder.stdin.end();
+    await closed;
+  }
+});
 
 it("initializes an independent skills root over HTTP and preserves config preferences across re-init", async () => {
   const fakeHome = path.join(home, "other-home");
