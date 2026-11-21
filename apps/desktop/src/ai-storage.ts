@@ -14,7 +14,7 @@ export function desktopAiStorage(): AiConnectionStorage | undefined {
         return JSON.parse(safeStorage.decryptString(readFileSync(file))) as ReturnType<AiConnectionStorage["load"]>;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-        throw new Error("无法读取已保存的 AI 连接");
+        throw error;
       }
     },
     save(connection) {
