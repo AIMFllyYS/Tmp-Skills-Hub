@@ -270,7 +270,7 @@ function MainShellApp() {
                       ) : (
                         <StoreOnboarding
                           title={PAGE_LABELS[page]}
-                          clientCount={catalog.clients.length}
+                          clients={catalog.clients}
                           onInit={catalog.initializeStore}
                           onOpenAgent={() => setPage("agent")}
                         />

@@ -12,7 +12,6 @@ import {
   fetchDoctor,
   fetchGroups,
   fetchStats,
-  initStore,
 } from "./api.js";
 import { fileResourceKey, invalidateResource, invalidateResourcePrefix, treeResourceKey } from "./async-resource.js";
 import {
@@ -223,8 +222,7 @@ export function useCatalog({ loadClientStates }: UseCatalogOptions) {
   }, [applyPrimary]);
 
   const initializeStore = useCallback(
-    async (customStoreRoot?: string, enableGit = false): Promise<void> => {
-      await initStore(customStoreRoot);
+    async (enableGit = false): Promise<void> => {
       toast.success("库存已初始化");
       if (enableGit) {
         try {

@@ -41,32 +41,63 @@ async function bundledGuide(override?: string) {
   return null;
 }
 
-/** Initial bootstrap is the only automatic client-link creation for the bundled guide. */
-export async function adoptAndEnableSelfSkill(home: string, storeRoot: string | HubPaths, override?: string): Promise<void> {
+export interface GuideInstallReport {
+  error?: string;
+  clients: { skillsDir: string; ok: boolean; message: string }[];
+}
+
+/** Link only explicitly approved, currently discovered client locations. */
+export async function installInitialGuide(home: string, paths: HubPaths, targets?: readonly string[], override?: string): Promise<GuideInstallReport> {
+  const clients: GuideInstallReport["clients"] = [];
   try {
     const bundle = await bundledGuide(override);
-    if (bundle === null) return;
-    const paths = normalizeHubPaths(storeRoot);
-    const outcome = await adoptSkillFolder(paths, bundle.directory, OWNED_ORIGIN);
-    if (outcome.kind !== "adopted") {
-      await checkBundledSelfSkill(home, paths, override);
-      return;
-    }
-    await autoVersionSkillAssets(home, paths, "docs(skills): install bundled Skills Hub guide");
-    for (const root of await discoverClientRoots(home, { storeRoot: paths })) {
-      try {
-        const result = await performLinkChange({
-          storeRoot: paths, clientId: root.clientId, scope: "global",
-          skillsDir: root.skillsDir, dirNames: [outcome.record.dirName],
-        }, "enable");
-        if (!result.ok) console.warn("自身指南启用失败 · " + root.clientId + " · " + scrub(result.message));
-      } catch (error) {
-        console.warn("自身指南启用失败 · " + root.clientId + " · " + scrub(error instanceof Error ? error.message : String(error)));
+    if (!bundle) throw new Error("无法读取随包的 skills-hub 指南");
+    await withConflictWriteLock(paths, async () => {
+      const index = await readStoreIndexFile(paths);
+      const existing = index.skills.find(s => s.dirName === NAME);
+      if (existing) {
+        if (!existing.origins.some(o => o.kind === OWNED_ORIGIN.kind && o.reference === OWNED_ORIGIN.reference) ||
+            (await readConflicts(paths)).some(c => c.skillName === NAME)) throw new Error("真源已有同名指南，请检查现有内容");
+        const active = path.join(paths.skillsRoot, NAME);
+        if (!(await lstat(active)).isDirectory() || !(await lstat(path.join(active, "SKILL.md"))).isFile()) {
+          throw new Error("指南目录已变化，请检查真源");
+        }
+      } else {
+        const adopted = await adoptSkillFolder(paths, bundle.directory, OWNED_ORIGIN);
+        if (adopted.kind !== "adopted") throw new Error("随包指南与现有库存冲突");
+        await autoVersionSkillAssets(home, paths, "docs(skills): install bundled Skills Hub guide");
       }
-    }
+      const roots = await discoverClientRoots(home, { storeRoot: paths });
+      const allowed = new Map(roots.map(root => [root.skillsDir, root]));
+      for (const dir of new Set(targets ?? allowed.keys())) {
+        const root = allowed.get(dir);
+        try {
+          if (!root) throw new Error("客户端目录已变化，请重新检查");
+          const dest = path.join(dir, NAME);
+          const occupied = await lstat(dest).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT") return null;
+            throw error;
+          });
+          if (occupied && !occupied.isSymbolicLink()) throw new Error("已有同名文件或目录，已保留");
+          const result = await performLinkChange({ storeRoot: paths, clientId: root.clientId, scope: "global",
+            skillsDir: dir, dirNames: [NAME] }, "enable");
+          if (!result.ok) throw new Error(result.message);
+          clients.push({ skillsDir: dir, ok: true, message: "已启用" });
+        } catch (error) {
+          clients.push({ skillsDir: dir, ok: false, message: scrub(error instanceof Error ? error.message : String(error)) });
+        }
+      }
+    });
+    return { clients };
   } catch (error) {
-    console.warn("自身指南收录未完成 · " + scrub(error instanceof Error ? error.message : String(error)));
+    return { clients, error: scrub(error instanceof Error ? error.message : String(error)) };
   }
+}
+
+export async function adoptAndEnableSelfSkill(home: string, root: string | HubPaths, override?: string): Promise<void> {
+  const report = await installInitialGuide(home, normalizeHubPaths(root), undefined, override);
+  if (report.error) console.warn(report.error);
+  for (const client of report.clients) if (!client.ok) console.warn(client.message);
 }
 
 type GuideStatus = "absent" | "unmanaged" | "current" | "updated";
