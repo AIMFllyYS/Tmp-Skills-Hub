@@ -52,10 +52,13 @@ Function LeaveSkillsFolder
   ${NSD_GetText} $SkillsInput $SkillsFolder
   StrCpy $0 $SkillsFolder
   System::Call 'shlwapi::PathIsRelativeW(w r0)i.r1'
-  GetFullPathName $2 "$SkillsFolder"
+  ; Resolve new folders too. NSIS GetFullPathName can return an empty string for a missing path.
+  System::Call 'kernel32::GetFullPathNameW(w r0, i ${NSIS_MAX_STRLEN}, w .r2, p 0)i.r4'
   System::Call 'shlwapi::PathIsRootW(w r2)i.r3'
   ${If} $SkillsFolder == ""
   ${OrIf} $1 != 0
+  ${OrIf} $4 == 0
+  ${OrIf} $4 >= ${NSIS_MAX_STRLEN}
   ${OrIf} $3 != 0
     MessageBox MB_ICONEXCLAMATION "请填写完整的文件夹路径，例如 D:\My Skills。"
     Abort
