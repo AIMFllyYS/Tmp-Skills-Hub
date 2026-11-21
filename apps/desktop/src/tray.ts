@@ -1,4 +1,4 @@
-import { Menu, nativeImage, Notification, Tray } from "electron";
+import { Menu, Notification, Tray } from "electron";
 import type { performReconcileScanL1 } from "@skills-hub/cli";
 
 type ScanResult = Awaited<ReturnType<typeof performReconcileScanL1>>;
@@ -25,24 +25,7 @@ export function scanAlert(summary: ScanResult): { count: number; title: string }
   return count === 0 ? null : { count, title: "检测到 " + String(count) + " 个本地 Skill 需要接管" };
 }
 
-function trayIcon(): Electron.NativeImage {
-  const bitmap = Buffer.alloc(16 * 16 * 4);
-  for (let y = 1; y < 15; y++) {
-    for (let x = 1; x < 15; x++) {
-      if ((x === 1 || x === 14) && (y === 1 || y === 14)) continue;
-      const mark = y >= 4 && y <= 11 && (
-        x === 4 || x === 5 || x === 10 || x === 11 || ((y === 7 || y === 8) && x >= 4 && x <= 11)
-      );
-      const color = mark ? 246 : 45;
-      const offset = (y * 16 + x) * 4;
-      bitmap.set([color, color, color, 255], offset);
-    }
-  }
-  return nativeImage.createFromBitmap(bitmap, { width: 16, height: 16 });
-}
-
-export function createDesktopTray(actions: TrayActions, autoLaunch: boolean, platform = process.platform) {
-  const icon = trayIcon();
+export function createDesktopTray(actions: TrayActions, autoLaunch: boolean, icon: string, platform = process.platform) {
   const tray = new Tray(icon);
   let notice: Notification | null = null;
   let destroyed = false;

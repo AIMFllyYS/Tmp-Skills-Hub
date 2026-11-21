@@ -1,0 +1,84 @@
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [dev]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/windows-installer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @skills-hub/desktop exec electron-builder --win --x64 --publish never
+      - name: Upgrade a real v0.2.0 installation on the disposable runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installDir = Join-Path $env:RUNNER_TEMP 'Skills Hub'
+          gh release download v0.2.0 --repo AIMFllyYS/Tmp-Skills-Hub --pattern Skills.Hub.Setup.0.2.0.exe --dir $env:RUNNER_TEMP
+          if ($LASTEXITCODE) { throw 'Could not download the previous installer' }
+          $old = Join-Path $env:RUNNER_TEMP 'Skills.Hub.Setup.0.2.0.exe'
+          if ((Get-FileHash $old).Hash -ne '50b3f2d8e01c5793de418091cee44ff0338e8142f5339dff44f3459da00b3d11') { throw 'Unexpected v0.2.0 installer' }
+          function Install($file, $arguments) {
+            $proc = Start-Process -FilePath $file -ArgumentList $arguments -PassThru -Wait
+            if ($proc.ExitCode -ne 0) { throw "Installer exited with $($proc.ExitCode)" }
+          }
+          Install $old "/S /currentuser /D=$installDir"
+          $exe = Join-Path $installDir 'Skills Hub.exe'
+          if (!(Test-Path -LiteralPath $exe)) { throw 'Previous install missing' }
+          $source = Join-Path $env:RUNNER_TEMP '技能 原文件'
+          node packages/cli/dist/index.js init --skills-root "$source" --yes
+          if ($LASTEXITCODE) { throw 'Could not initialize the fixture' }
+          $config = Join-Path $env:USERPROFILE '.skills-hub/config.json'
+          $configHash = (Get-FileHash $config).Hash
+          $sample = New-Item -ItemType Directory -Path (Join-Path $source 'sample')
+          $skill = Join-Path $sample.FullName 'SKILL.md'
+          Set-Content -LiteralPath $skill -Value '---','name: sample','description: Upgrade fixture','---'
+          $skillHash = (Get-FileHash $skill).Hash
+          $link = Join-Path $env:RUNNER_TEMP 'client-skill'
+          New-Item -ItemType Junction -Path $link -Target $sample.FullName | Out-Null
+          $setup = Get-Item 'apps/desktop/release/*Setup*.exe'
+          Install $setup.FullName '/S /currentuser'
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          if ((Get-Item $exe).VersionInfo.ProductVersion -notlike "$version*") { throw 'Application was not replaced in place' }
+          if ((Get-FileHash $config).Hash -ne $configHash -or (Get-FileHash $skill).Hash -ne $skillHash -or (Get-FileHash (Join-Path $link 'SKILL.md')).Hash -ne $skillHash) { throw 'Upgrade changed the store or its client link' }
+          if ((Get-FileHash (Join-Path $installDir 'resources/icon.ico')).Hash -ne (Get-FileHash apps/desktop/build/icon.ico).Hash) { throw 'Installed tray icon differs from the packaged brand icon' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 3
+
+  first-install:
+    needs: upgrade
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x64
+          path: installers
+      - name: Choose a folder in the native wizard before initialization
+        shell: pwsh
+        run: ./scripts/test-windows-wizard.ps1 -Setup (Get-Item 'installers/*Setup*.exe').FullName

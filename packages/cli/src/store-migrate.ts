@@ -52,6 +52,12 @@ export async function validateSkillsRoot(
   if (!path.isAbsolute(rawTarget)) return { ok: false, code: "bad-usage", message: "唯一真源路径必须是绝对路径。" };
   const dest = path.resolve(rawTarget);
   const realTarget = await canonical(dest);
+  if (process.versions.electron) {
+    const program = await canonical(path.dirname(process.execPath));
+    if (inside(program, realTarget) || inside(realTarget, program)) {
+      return { ok: false, code: "bad-usage", message: "请选择应用安装目录以外的技能文件夹，以便覆盖安装时保留技能文件。" };
+    }
+  }
   const state = await canonical(stateRoot);
   const source = oldSkillsRoot ? await canonical(oldSkillsRoot) : null;
   const clients = await discoverClientRoots(home);

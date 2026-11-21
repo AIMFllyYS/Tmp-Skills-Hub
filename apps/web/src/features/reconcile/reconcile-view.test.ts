@@ -73,10 +73,10 @@ describe("validateMigrateTargetPath", () => {
   it("拒绝与当前真源目录等价的路径（含尾斜杠与 Windows 大小写）", () => {
     expect(
       validateMigrateTargetPath("c:/users/alice/.skills-hub/skills/", "C:\\Users\\Alice\\.skills-hub\\skills"),
-    ).toBe("目标路径不能与当前唯一真源目录相同");
+    ).toBe("目标路径不能与当前技能文件夹相同");
     expect(
       validateMigrateTargetPath("/Users/alice/.skills-hub/skills/", "/Users/alice/.skills-hub/skills"),
-    ).toBe("目标路径不能与当前唯一真源目录相同");
+    ).toBe("目标路径不能与当前技能文件夹相同");
   });
 
   it("接受合法的 Windows 盘符、UNC 与 POSIX 绝对路径", () => {
