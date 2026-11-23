@@ -62,7 +62,7 @@ jobs:
           if ((Get-Item $exe).VersionInfo.ProductVersion -notlike "$version*") { throw 'Application was not replaced in place' }
           if ((Get-FileHash $config).Hash -ne $configHash -or (Get-FileHash $skill).Hash -ne $skillHash -or (Get-FileHash (Join-Path $link 'SKILL.md')).Hash -ne $skillHash) { throw 'Upgrade changed the store or its client link' }
           if ((Get-FileHash (Join-Path $installDir 'resources/icon.ico')).Hash -ne (Get-FileHash apps/desktop/build/icon.ico).Hash) { throw 'Installed tray icon differs from the packaged brand icon' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-x64
           path: apps/desktop/release/*.exe
